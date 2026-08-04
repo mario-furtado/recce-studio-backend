@@ -2,6 +2,7 @@ package org.example.service;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.example.dto.ClickMarkerDto;
 import org.example.entity.NoteEntity;
 import org.example.repository.NoteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -136,4 +137,32 @@ public class NoteExcelParserService {
     public List<NoteEntity> getNotesByPecId(String pecId) {
         return noteRepository.findByPecIdOrderByOriginalTimestampAsc(pecId);
     }
+
+    /**
+     * Sincroniza os timestamps recolhidos no modo Recce (telemóvel) com a BD.
+     */
+    @Transactional
+    public List<NoteEntity> syncRecceTimestamps(String pecId, List<ClickMarkerDto> markers) {
+        if (markers == null || markers.isEmpty()) {
+            return noteRepository.findByPecIdOrderByOriginalTimestampAsc(pecId);
+        }
+
+        List<NoteEntity> notesToSave = new ArrayList<>();
+
+        for (ClickMarkerDto marker : markers) {
+            NoteEntity note = NoteEntity.builder()
+                    .pecId(pecId)
+                    .originalTimestamp(marker.getTimestamp())
+                    .text("") // Fica vazio para o copiloto preencher na app ou no Excel
+                    .speedRating("")
+                    .build();
+            notesToSave.add(note);
+        }
+
+        // Apaga as notas antigas desta PEC e guarda a nova lista sincronizada
+        noteRepository.deleteByPecId(pecId);
+        return noteRepository.saveAll(notesToSave);
+    }
+
+    // ... restantes métodos (parseAndSaveExcelNotes, generateCleanExcelTemplate, etc.)
 }

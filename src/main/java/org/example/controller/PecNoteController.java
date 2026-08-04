@@ -1,5 +1,6 @@
 package org.example.controller;
 
+import org.example.dto.ClickMarkerDto;
 import org.example.entity.NoteEntity;
 import org.example.service.NoteExcelParserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -45,5 +47,16 @@ public class PecNoteController {
     public ResponseEntity<List<NoteEntity>> getNotesForPec(@PathVariable String pecId) {
         List<NoteEntity> notes = excelParserService.getNotesByPecId(pecId);
         return ResponseEntity.ok(notes);
+    }
+
+
+    @PostMapping("/{pecId}/sync-timestamps")
+    public ResponseEntity<List<NoteEntity>> syncTimestamps(
+            @PathVariable("pecId") String pecId,
+            @RequestBody List<ClickMarkerDto> markers) {
+
+        List<NoteEntity> savedNotes = excelParserService.syncRecceTimestamps(pecId, markers);
+        return ResponseEntity.ok(savedNotes);
+
     }
 }
