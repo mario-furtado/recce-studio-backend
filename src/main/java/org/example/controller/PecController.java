@@ -2,6 +2,7 @@ package org.example.controller;
 
 import org.example.dto.NewPecDTO;
 import org.example.dto.PecDTO;
+import org.example.dto.PecOverviewDTO;
 import org.example.dto.PecPatchDTO;
 import org.example.service.PecService;
 import org.springframework.http.HttpStatus;
@@ -27,10 +28,9 @@ public class PecController {
         return ResponseEntity.ok(pecService.getPecsByRally(rallyId));
     }
 
-    // GET: Obter uma PEC por ID
     @GetMapping("/pecs/{id}")
-    public ResponseEntity<PecDTO> getPecById(@PathVariable String id) {
-        return ResponseEntity.ok(pecService.getPecById(id));
+    public ResponseEntity<PecOverviewDTO> getPecById(@PathVariable String id) {
+        return ResponseEntity.ok(pecService.getPecOverview(id));
     }
 
     // POST: Criar uma nova PEC para um Rally
@@ -52,4 +52,5 @@ public class PecController {
         pecService.deletePec(id);
         return ResponseEntity.noContent().build();
     }
+
 }

@@ -28,6 +28,24 @@ public class PecEntity {
     @Column(name = "updated_at")
     private LocalDate updatedAt;
 
+    @Column(name = "video_file_name")
+    private String videoFileName;
+
+    @Column(name = "video_content_type")
+    private String videoContentType;
+
+    @Column(name = "video_storage_path")
+    private String videoStoragePath;
+
+    @Column(name = "gps_file_name")
+    private String gpsFileName;
+
+    @Column(name = "gps_content_type")
+    private String gpsContentType;
+
+    @Column(name = "gps_storage_path")
+    private String gpsStoragePath;
+
     // Relacionamento com o Rally
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rally_id", nullable = false)
@@ -67,6 +85,24 @@ public class PecEntity {
 
     public LocalDate getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDate updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getVideoFileName() { return videoFileName; }
+    public void setVideoFileName(String videoFileName) { this.videoFileName = videoFileName; }
+
+    public String getVideoContentType() { return videoContentType; }
+    public void setVideoContentType(String videoContentType) { this.videoContentType = videoContentType; }
+
+    public String getVideoStoragePath() { return videoStoragePath; }
+    public void setVideoStoragePath(String videoStoragePath) { this.videoStoragePath = videoStoragePath; }
+
+    public String getGpsFileName() { return gpsFileName; }
+    public void setGpsFileName(String gpsFileName) { this.gpsFileName = gpsFileName; }
+
+    public String getGpsContentType() { return gpsContentType; }
+    public void setGpsContentType(String gpsContentType) { this.gpsContentType = gpsContentType; }
+
+    public String getGpsStoragePath() { return gpsStoragePath; }
+    public void setGpsStoragePath(String gpsStoragePath) { this.gpsStoragePath = gpsStoragePath; }
 
     // CORRIGIDO: Nomes dos getters/setters ajustados para bater certo com a propriedade 'rally'
     public RallyEntity getRally() { return rally; }

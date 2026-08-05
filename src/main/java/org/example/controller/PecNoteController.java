@@ -1,6 +1,7 @@
 package org.example.controller;
 
 import org.example.dto.ClickMarkerDto;
+import org.example.dto.NoteOffsetDTO;
 import org.example.entity.NoteEntity;
 import org.example.service.NoteExcelParserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,16 @@ public class PecNoteController {
                 .body(excelBytes);
     }
 
+    @GetMapping("/{pecId}/download-template")
+    public ResponseEntity<byte[]> downloadTemplateWithNotes(@PathVariable String pecId) {
+        byte[] excelBytes = excelParserService.generateExcelTemplate(pecId);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Template_Notas_PEC_" + pecId + ".xlsx")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(excelBytes);
+    }
+
     // 2. UPLOAD EXCEL E GUARDAR NA BD
     @PostMapping("/{pecId}/import-excel")
     public ResponseEntity<List<NoteEntity>> importNotesFromExcel(
@@ -47,6 +58,32 @@ public class PecNoteController {
     public ResponseEntity<List<NoteEntity>> getNotesForPec(@PathVariable String pecId) {
         List<NoteEntity> notes = excelParserService.getNotesByPecId(pecId);
         return ResponseEntity.ok(notes);
+    }
+
+    @PostMapping("/{pecId}/notes")
+    public ResponseEntity<NoteEntity> saveNote(@PathVariable String pecId, @RequestBody NoteEntity note) {
+        return ResponseEntity.ok(excelParserService.saveNote(pecId, note));
+    }
+
+    @PatchMapping("/{pecId}/notes/{noteId}")
+    public ResponseEntity<NoteEntity> updateNote(
+            @PathVariable String pecId,
+            @PathVariable Long noteId,
+            @RequestBody NoteEntity note) {
+        return ResponseEntity.ok(excelParserService.updateNote(pecId, noteId, note));
+    }
+
+    @DeleteMapping("/{pecId}/notes/{noteId}")
+    public ResponseEntity<Void> deleteNote(@PathVariable String pecId, @PathVariable Long noteId) {
+        excelParserService.deleteNote(pecId, noteId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{pecId}/notes/apply-offset")
+    public ResponseEntity<List<NoteEntity>> applyOffset(
+            @PathVariable String pecId,
+            @RequestBody NoteOffsetDTO offsetDTO) {
+        return ResponseEntity.ok(excelParserService.applyOffset(pecId, offsetDTO.getOffsetSeconds()));
     }
 
 

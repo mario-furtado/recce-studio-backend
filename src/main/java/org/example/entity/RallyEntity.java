@@ -34,4 +34,13 @@ public class RallyEntity {
     private String location;
 
     private String icon;
+
+    private String carId;
+
+    private String carClass;
+
+    private String status;
+
+    @Transient
+    private long pecsCount;
 }

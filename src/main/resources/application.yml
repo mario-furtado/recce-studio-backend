@@ -1,0 +1,8 @@
+recce:
+  upload-dir: uploads
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB

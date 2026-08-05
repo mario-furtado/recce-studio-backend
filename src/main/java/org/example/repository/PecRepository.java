@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface PecRepository extends JpaRepository<PecEntity, String> {
     List<PecEntity> findByRallyId(String rallyId);
+    long countByRallyId(String rallyId);
 }

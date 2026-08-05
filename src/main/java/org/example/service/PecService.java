@@ -2,9 +2,11 @@ package org.example.service;
 
 import org.example.dto.NewPecDTO;
 import org.example.dto.PecDTO;
+import org.example.dto.PecOverviewDTO;
 import org.example.dto.PecPatchDTO;
 import org.example.entity.PecEntity;
 import org.example.entity.RallyEntity;
+import org.example.repository.NoteRepository;
 import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.springframework.stereotype.Service;
@@ -19,10 +21,12 @@ public class PecService {
 
     private final PecRepository pecRepository;
     private final RallyRepository rallyRepository;
+    private final NoteRepository noteRepository;
 
-    public PecService(PecRepository pecRepository, RallyRepository rallyRepository) {
+    public PecService(PecRepository pecRepository, RallyRepository rallyRepository, NoteRepository noteRepository) {
         this.pecRepository = pecRepository;
         this.rallyRepository = rallyRepository;
+        this.noteRepository = noteRepository;
     }
 
     public List<PecDTO> getPecsByRally(String rallyId) {
@@ -34,42 +38,36 @@ public class PecService {
 
     public PecDTO getPecById(String id) {
         PecEntity entity = pecRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("PEC não encontrada com ID: " + id));
+                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
         return toDTO(entity);
     }
 
     public PecDTO createPec(String rallyId, NewPecDTO newPecDTO) {
-        // 1. Procurar o Rally na base de dados (se não existir, lança erro antes de guardar a PEC)
         RallyEntity rally = rallyRepository.findById(rallyId)
-                .orElseThrow(() -> new RuntimeException("Rally não encontrado com ID: " + rallyId));
+                .orElseThrow(() -> new RuntimeException("Rally nao encontrado com ID: " + rallyId));
+        ensureRallyCanBeEdited(rally);
 
         PecEntity entity = new PecEntity();
-
-        // 2. Gerar o ID UUID no Backend
         entity.setId(UUID.randomUUID().toString());
-
-        // 3. Associar a entidade Rally e mapear dados do DTO
-        entity.setId(UUID.randomUUID().toString());
-        entity.setRally(rally); // CORRIGIDO: Passa a entidade RallyEntity
+        entity.setRally(rally);
         entity.setNumber(newPecDTO.getNumber() != null ? newPecDTO.getNumber() : 1);
         entity.setName(newPecDTO.getName());
         entity.setDistanceKm(newPecDTO.getDistanceKm() != null ? newPecDTO.getDistanceKm() : 0.0);
-        entity.setStatus(newPecDTO.getStatus());
-
-        // 4. Valores por defeito para nova PEC
+        entity.setStatus(newPecDTO.getStatus() != null ? newPecDTO.getStatus() : "DRAFT");
         entity.setTotalNotes(0);
-        entity.setUpdatedAt(LocalDate.now()); // CORRIGIDO: Tipo LocalDate correto (sem .toString())
+        entity.setUpdatedAt(LocalDate.now());
 
-        // 5. Guardar na BD
-        PecEntity savedEntity = pecRepository.save(entity);
-
-        // 6. Converter para DTO de resposta
-        return toDTO(savedEntity);
+        return toDTO(pecRepository.save(entity));
     }
 
     public PecDTO patchPec(String id, PecPatchDTO patchDTO) {
         PecEntity entity = pecRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("PEC não encontrada com ID: " + id));
+                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
+        ensureRallyCanBeEdited(entity.getRally());
+
+        if ("COMPLETED".equalsIgnoreCase(entity.getStatus()) && hasNonStatusChanges(patchDTO)) {
+            throw new IllegalStateException("PEC concluida. Volte a colocar em rascunho para alterar.");
+        }
 
         if (patchDTO.getName() != null) {
             entity.setName(patchDTO.getName());
@@ -85,26 +83,48 @@ public class PecService {
         }
 
         entity.setUpdatedAt(LocalDate.now());
+        return toDTO(pecRepository.save(entity));
+    }
 
-        PecEntity updated = pecRepository.save(entity);
-        return toDTO(updated);
+    private boolean hasNonStatusChanges(PecPatchDTO patchDTO) {
+        return patchDTO.getName() != null
+                || patchDTO.getDistanceKm() != null
+                || patchDTO.getTotalNotes() != null;
     }
 
     public void deletePec(String id) {
-        if (!pecRepository.existsById(id)) {
-            throw new RuntimeException("PEC não encontrada com ID: " + id);
+        PecEntity entity = pecRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
+        ensureRallyCanBeEdited(entity.getRally());
+        if ("COMPLETED".equalsIgnoreCase(entity.getStatus())) {
+            throw new IllegalStateException("PEC concluida. Volte a colocar em rascunho para eliminar.");
         }
         pecRepository.deleteById(id);
     }
 
-    // Método único para conversão de Entidade para DTO
+    public PecOverviewDTO getPecOverview(String pecId) {
+        PecEntity pec = pecRepository.findById(pecId)
+                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+
+        long count = noteRepository.countByPecId(pecId);
+
+        return new PecOverviewDTO(
+                pec.getId(),
+                pec.getName(),
+                pec.getStatus(),
+                pec.getDistanceKm(),
+                pec.getRally() != null ? pec.getRally().getSurface() : null,
+                count
+        );
+    }
+
     private PecDTO toDTO(PecEntity entity) {
         PecDTO dto = new PecDTO();
         dto.setId(entity.getId());
         dto.setNumber(entity.getNumber());
         dto.setName(entity.getName());
         dto.setDistanceKm(entity.getDistanceKm());
-        dto.setTotalNotes(entity.getTotalNotes());
+        dto.setTotalNotes((int) noteRepository.countByPecId(entity.getId()));
         dto.setStatus(entity.getStatus());
 
         if (entity.getUpdatedAt() != null) {
@@ -116,5 +136,11 @@ public class PecService {
         }
 
         return dto;
+    }
+
+    private void ensureRallyCanBeEdited(RallyEntity rally) {
+        if (rally != null && "COMPLETED".equalsIgnoreCase(rally.getStatus())) {
+            throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar PECs.");
+        }
     }
 }
