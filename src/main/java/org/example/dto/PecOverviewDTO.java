@@ -2,6 +2,7 @@ package org.example.dto;
 
 public class PecOverviewDTO {
     private String id;
+    private Integer number;
     private String name;
     private String status;
     private Double distanceKm;
@@ -11,8 +12,9 @@ public class PecOverviewDTO {
     // Construtores, Getters e Setters
     public PecOverviewDTO() {}
 
-    public PecOverviewDTO(String id, String name, String status, Double distanceKm, String surface, long notesCount) {
+    public PecOverviewDTO(String id, Integer number, String name, String status, Double distanceKm, String surface, long notesCount) {
         this.id = id;
+        this.number = number;
         this.name = name;
         this.status = status;
         this.distanceKm = distanceKm;
@@ -26,6 +28,10 @@ public class PecOverviewDTO {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public void setNumber(Integer number) {
+        this.number = number;
     }
 
     public void setStatus(String status) {
@@ -50,6 +56,10 @@ public class PecOverviewDTO {
 
     public String getName() {
         return name;
+    }
+
+    public Integer getNumber() {
+        return number;
     }
 
     public String getStatus() {

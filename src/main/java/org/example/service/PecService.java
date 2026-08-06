@@ -72,6 +72,9 @@ public class PecService {
         if (patchDTO.getName() != null) {
             entity.setName(patchDTO.getName());
         }
+        if (patchDTO.getNumber() != null) {
+            entity.setNumber(patchDTO.getNumber());
+        }
         if (patchDTO.getDistanceKm() != null) {
             entity.setDistanceKm(patchDTO.getDistanceKm());
         }
@@ -87,7 +90,8 @@ public class PecService {
     }
 
     private boolean hasNonStatusChanges(PecPatchDTO patchDTO) {
-        return patchDTO.getName() != null
+        return patchDTO.getNumber() != null
+                || patchDTO.getName() != null
                 || patchDTO.getDistanceKm() != null
                 || patchDTO.getTotalNotes() != null;
     }
@@ -110,6 +114,7 @@ public class PecService {
 
         return new PecOverviewDTO(
                 pec.getId(),
+                pec.getNumber(),
                 pec.getName(),
                 pec.getStatus(),
                 pec.getDistanceKm(),

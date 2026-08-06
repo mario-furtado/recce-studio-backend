@@ -1,5 +1,6 @@
 package org.example.controller;
 
+import org.example.dto.ClickMarkerDto;
 import org.example.dto.GpsPointDTO;
 import org.example.dto.PecAssetDTO;
 import org.example.service.PecAssetService;
@@ -54,5 +55,10 @@ public class PecAssetController {
     @GetMapping("/{pecId}/gps/track")
     public ResponseEntity<List<GpsPointDTO>> getGpsTrack(@PathVariable String pecId) {
         return ResponseEntity.ok(pecAssetService.getGpsTrack(pecId));
+    }
+
+    @GetMapping("/{pecId}/gps/markers")
+    public ResponseEntity<List<ClickMarkerDto>> getRecceMarkers(@PathVariable String pecId) {
+        return ResponseEntity.ok(pecAssetService.getRecceMarkers(pecId));
     }
 }

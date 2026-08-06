@@ -10,4 +10,9 @@ public class ClickMarkerDto {
     private Double longitude;
     private Double altitude;
     private Double speed;
+    private String text;
+    private String rawText;
+    private String speedRating;
+    private String source;
+    private Double audioConfidence;
 }

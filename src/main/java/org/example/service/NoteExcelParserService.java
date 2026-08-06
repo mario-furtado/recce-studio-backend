@@ -12,9 +12,11 @@ import org.example.repository.TeamCarRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.apache.poi.ss.util.CellRangeAddress;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,39 +56,57 @@ public class NoteExcelParserService {
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Caderno de Notas");
+            sheet.setDisplayGridlines(false);
 
-            CellStyle headerStyle = workbook.createCellStyle();
-            Font font = workbook.createFont();
-            font.setBold(true);
-            font.setColor(IndexedColors.WHITE.getIndex());
-            headerStyle.setFont(font);
-            headerStyle.setFillForegroundColor(IndexedColors.DARK_RED.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            CellStyle tableHeaderStyle = tableHeaderStyle(workbook);
+            CellStyle timestampStyle = editableDataStyle(workbook, "0.0");
+            CellStyle noteStyle = editableDataStyle(workbook, null);
+            CellStyle observationStyle = editableDataStyle(workbook, null);
 
             int headerRowIndex = 0;
             if (pec != null) {
-                headerRowIndex = writePecInfo(sheet, pec) + 2;
+                headerRowIndex = writePecInfo(workbook, sheet, pec) + 2;
+            } else {
+                headerRowIndex = writeCleanTemplateInfo(workbook, sheet) + 2;
             }
 
             Row headerRow = sheet.createRow(headerRowIndex);
+            headerRow.setHeightInPoints(24);
             String[] headers = {"Tempo (Segundos)", "Nota do Troco", "Observacoes / Mudanca"};
 
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
-                cell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(i, 6000);
+                cell.setCellStyle(tableHeaderStyle);
             }
 
-            for (int i = 0; i < notes.size(); i++) {
-                NoteEntity note = notes.get(i);
+            int editableRows = Math.max(notes.size(), 20);
+            for (int i = 0; i < editableRows; i++) {
+                NoteEntity note = i < notes.size() ? notes.get(i) : null;
                 Row row = sheet.createRow(headerRowIndex + i + 1);
-                if (note.getOriginalTimestamp() != null) {
-                    row.createCell(0).setCellValue(note.getOriginalTimestamp());
+
+                Cell timestampCell = row.createCell(0);
+                timestampCell.setCellStyle(timestampStyle);
+                if (note != null && note.getOriginalTimestamp() != null) {
+                    timestampCell.setCellValue(note.getOriginalTimestamp());
                 }
-                row.createCell(1).setCellValue(note.getText() != null ? note.getText() : "");
-                row.createCell(2).setCellValue(note.getSpeedRating() != null ? note.getSpeedRating() : "");
+
+                Cell noteCell = row.createCell(1);
+                noteCell.setCellStyle(noteStyle);
+                noteCell.setCellValue(note != null && note.getText() != null ? note.getText() : "");
+
+                Cell observationCell = row.createCell(2);
+                observationCell.setCellStyle(observationStyle);
+                observationCell.setCellValue(note != null && note.getSpeedRating() != null ? note.getSpeedRating() : "");
             }
+
+            int lastTableRow = headerRowIndex + editableRows;
+            sheet.setAutoFilter(new CellRangeAddress(headerRowIndex, lastTableRow, 0, 2));
+            sheet.createFreezePane(0, headerRowIndex + 1);
+            sheet.setColumnWidth(0, 5200);
+            sheet.setColumnWidth(1, 11200);
+            sheet.setColumnWidth(2, 11200);
+            sheet.protectSheet("recce-studio");
 
             workbook.write(out);
             return out.toByteArray();
@@ -95,7 +115,7 @@ public class NoteExcelParserService {
         }
     }
 
-    private int writePecInfo(Sheet sheet, PecEntity pec) {
+    private int writePecInfo(Workbook workbook, Sheet sheet, PecEntity pec) {
         RallyEntity rally = pec.getRally();
         String carName = "";
         String carClass = rally != null ? rally.getCarClass() : "";
@@ -105,22 +125,195 @@ public class NoteExcelParserService {
                     .orElse("");
         }
 
-        String[][] rows = {
-                {"Informacoes da PEC", ""},
-                {"Rali", rally != null ? rally.getName() + " " + rally.getYear() : ""},
-                {"PEC", pec.getName()},
-                {"Distancia (km)", String.valueOf(pec.getDistanceKm())},
-                {"Numero de notas", String.valueOf(noteRepository.countByPecId(pec.getId()))},
-                {"Carro", carName},
-                {"Classe", carClass != null ? carClass : ""}
-        };
+        CellStyle titleStyle = titleStyle(workbook);
+        CellStyle subtitleStyle = subtitleStyle(workbook);
+        CellStyle labelStyle = metadataLabelStyle(workbook);
+        CellStyle valueStyle = metadataValueStyle(workbook);
+        CellStyle mutedValueStyle = metadataMutedValueStyle(workbook);
 
-        for (int i = 0; i < rows.length; i++) {
-            Row row = sheet.createRow(i);
-            row.createCell(0).setCellValue(rows[i][0]);
-            row.createCell(1).setCellValue(rows[i][1]);
+        mergeAndSet(sheet, 0, 0, 0, 2, "RECCE STUDIO - CADERNO DE NOTAS", titleStyle);
+        mergeAndSet(sheet, 1, 1, 0, 2, "Campos oficiais da PEC bloqueados para edicao. Edite apenas a tabela de notas.", subtitleStyle);
+
+        writeMetadataBlock(sheet, 3, 0, "RALI", rally != null ? rally.getName() + " " + rally.getYear() : "", labelStyle, valueStyle);
+        writeMetadataBlock(sheet, 3, 1, "PEC", "PEC " + pec.getNumber() + " - " + pec.getName(), labelStyle, valueStyle);
+        writeMetadataBlock(sheet, 3, 2, "DATA", pec.getUpdatedAt() != null ? pec.getUpdatedAt().toString() : LocalDate.now().toString(), labelStyle, valueStyle);
+
+        writeMetadataBlock(sheet, 6, 0, "DISTANCIA", String.format("%.1f km", pec.getDistanceKm()), labelStyle, valueStyle);
+        writeMetadataBlock(sheet, 6, 1, "N. NOTAS", String.valueOf(noteRepository.countByPecId(pec.getId())), labelStyle, valueStyle);
+        writeMetadataBlock(sheet, 6, 2, "PISO", rally != null && rally.getSurface() != null ? rally.getSurface() : "", labelStyle, valueStyle);
+
+        writeMetadataBlock(sheet, 9, 0, "CARRO", hasText(carName) ? carName : "Nao associado", labelStyle, mutedValueStyle);
+        writeMetadataBlock(sheet, 9, 1, "CLASSE", hasText(carClass) ? carClass : "Nao associada", labelStyle, mutedValueStyle);
+        writeMetadataBlock(sheet, 9, 2, "LOCALIZACAO", rally != null ? rally.getLocation() : "", labelStyle, mutedValueStyle);
+
+        return 11;
+    }
+
+    private int writeCleanTemplateInfo(Workbook workbook, Sheet sheet) {
+        CellStyle titleStyle = titleStyle(workbook);
+        CellStyle subtitleStyle = subtitleStyle(workbook);
+
+        mergeAndSet(sheet, 0, 0, 0, 2, "RECCE STUDIO - TEMPLATE DE NOTAS", titleStyle);
+        mergeAndSet(sheet, 1, 1, 0, 2, "Preencha apenas a tabela de notas. Os campos oficiais aparecem quando o template pertence a uma PEC.", subtitleStyle);
+        return 3;
+    }
+
+    private void writeMetadataBlock(Sheet sheet, int rowIndex, int columnIndex, String label, String value, CellStyle labelStyle, CellStyle valueStyle) {
+        Row labelRow = getOrCreateRow(sheet, rowIndex);
+        Row valueRow = getOrCreateRow(sheet, rowIndex + 1);
+        labelRow.setHeightInPoints(18);
+        valueRow.setHeightInPoints(30);
+
+        Cell labelCell = labelRow.createCell(columnIndex);
+        labelCell.setCellValue(label);
+        labelCell.setCellStyle(labelStyle);
+
+        Cell valueCell = valueRow.createCell(columnIndex);
+        valueCell.setCellValue(value != null ? value : "");
+        valueCell.setCellStyle(valueStyle);
+    }
+
+    private Row getOrCreateRow(Sheet sheet, int rowIndex) {
+        Row row = sheet.getRow(rowIndex);
+        return row != null ? row : sheet.createRow(rowIndex);
+    }
+
+    private void mergeAndSet(Sheet sheet, int firstRow, int lastRow, int firstCol, int lastCol, String value, CellStyle style) {
+        sheet.addMergedRegion(new CellRangeAddress(firstRow, lastRow, firstCol, lastCol));
+        Row row = getOrCreateRow(sheet, firstRow);
+        Cell cell = row.createCell(firstCol);
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+        for (int col = firstCol + 1; col <= lastCol; col++) {
+            Cell mergedCell = row.createCell(col);
+            mergedCell.setCellStyle(style);
         }
-        return rows.length - 1;
+    }
+
+    private CellStyle titleStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 15);
+        font.setColor(IndexedColors.WHITE.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setLocked(true);
+        addMediumBottomBorder(style, IndexedColors.RED.getIndex());
+        return style;
+    }
+
+    private CellStyle subtitleStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setItalic(true);
+        font.setFontHeightInPoints((short) 10);
+        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setLocked(true);
+        addThinBorder(style, IndexedColors.GREY_40_PERCENT.getIndex());
+        return style;
+    }
+
+    private CellStyle metadataLabelStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 9);
+        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setLocked(true);
+        addThinBorder(style, IndexedColors.GREY_40_PERCENT.getIndex());
+        return style;
+    }
+
+    private CellStyle metadataValueStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 11);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setWrapText(true);
+        style.setLocked(true);
+        addThinBorder(style, IndexedColors.GREY_40_PERCENT.getIndex());
+        return style;
+    }
+
+    private CellStyle metadataMutedValueStyle(Workbook workbook) {
+        CellStyle style = metadataValueStyle(workbook);
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 10);
+        font.setColor(IndexedColors.GREY_80_PERCENT.getIndex());
+        style.setFont(font);
+        return style;
+    }
+
+    private CellStyle tableHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 10);
+        font.setColor(IndexedColors.WHITE.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.DARK_RED.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        style.setLocked(true);
+        addThinBorder(style, IndexedColors.GREY_40_PERCENT.getIndex());
+        return style;
+    }
+
+    private CellStyle editableDataStyle(Workbook workbook, String dataFormat) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setFontHeightInPoints((short) 10);
+        font.setColor(IndexedColors.BLACK.getIndex());
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.LEMON_CHIFFON.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setAlignment(HorizontalAlignment.LEFT);
+        style.setVerticalAlignment(VerticalAlignment.TOP);
+        style.setWrapText(true);
+        style.setLocked(false);
+        if (dataFormat != null) {
+            style.setDataFormat(workbook.createDataFormat().getFormat(dataFormat));
+        }
+        addThinBorder(style, IndexedColors.GREY_25_PERCENT.getIndex());
+        return style;
+    }
+
+    private void addThinBorder(CellStyle style, short color) {
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setTopBorderColor(color);
+        style.setRightBorderColor(color);
+        style.setBottomBorderColor(color);
+        style.setLeftBorderColor(color);
+    }
+
+    private void addMediumBottomBorder(CellStyle style, short color) {
+        style.setBorderBottom(BorderStyle.MEDIUM);
+        style.setBottomBorderColor(color);
     }
 
     @Transactional
@@ -134,8 +327,10 @@ public class NoteExcelParserService {
              Workbook workbook = new XSSFWorkbook(is)) {
 
             Sheet sheet = workbook.getSheetAt(0);
+            int tableHeaderRow = findNotesHeaderRow(sheet, formatter);
+            int firstNotesRow = tableHeaderRow >= 0 ? tableHeaderRow + 1 : 1;
 
-            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+            for (int i = firstNotesRow; i <= sheet.getLastRowNum(); i++) {
                 Row row = sheet.getRow(i);
                 if (row == null) {
                     continue;
@@ -226,12 +421,20 @@ public class NoteExcelParserService {
         }
 
         List<NoteEntity> notesToSave = new ArrayList<>();
-        for (ClickMarkerDto marker : markers) {
+        for (int index = 0; index < markers.size(); index++) {
+            ClickMarkerDto marker = markers.get(index);
+            String noteText = hasText(marker.getText())
+                    ? marker.getText().trim()
+                    : "Nota Marcada " + (index + 1);
+            String observation = hasText(marker.getSpeedRating())
+                    ? marker.getSpeedRating().trim()
+                    : (hasText(marker.getRawText()) ? marker.getRawText().trim() : "");
+
             notesToSave.add(NoteEntity.builder()
                     .pecId(pecId)
                     .originalTimestamp(marker.getTimestamp())
-                    .text("")
-                    .speedRating("")
+                    .text(noteText)
+                    .speedRating(observation)
                     .build());
         }
 
@@ -241,6 +444,27 @@ public class NoteExcelParserService {
 
     private String cellText(Cell cell, DataFormatter formatter) {
         return cell != null ? formatter.formatCellValue(cell).trim() : "";
+    }
+
+    private int findNotesHeaderRow(Sheet sheet, DataFormatter formatter) {
+        for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+            Row row = sheet.getRow(i);
+            if (row == null) {
+                continue;
+            }
+
+            String firstCell = cellText(row.getCell(0), formatter).toLowerCase();
+            String secondCell = cellText(row.getCell(1), formatter).toLowerCase();
+
+            if (firstCell.contains("tempo") && secondCell.contains("nota")) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private Double parseTimestamp(Cell cell, DataFormatter formatter) {

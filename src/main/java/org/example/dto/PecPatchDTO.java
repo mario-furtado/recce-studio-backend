@@ -1,6 +1,7 @@
 package org.example.dto;
 
 public class PecPatchDTO {
+    private Integer number;
     private String name;
     private Double distanceKm;
     private Integer totalNotes;
@@ -9,6 +10,9 @@ public class PecPatchDTO {
     public PecPatchDTO() {}
 
     // Getters e Setters
+    public Integer getNumber() { return number; }
+    public void setNumber(Integer number) { this.number = number; }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 

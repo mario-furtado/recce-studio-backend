@@ -1,10 +1,14 @@
 package org.example.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.dto.ClickMarkerDto;
 import org.example.dto.GpsPointDTO;
 import org.example.dto.PecAssetDTO;
+import org.example.entity.OfflineRecceSyncEntity;
 import org.example.entity.PecEntity;
+import org.example.repository.OfflineRecceSyncRepository;
 import org.example.repository.PecRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -30,14 +34,17 @@ import java.util.UUID;
 @Service
 public class PecAssetService {
     private final PecRepository pecRepository;
+    private final OfflineRecceSyncRepository offlineRecceSyncRepository;
     private final ObjectMapper objectMapper;
     private final Path uploadRoot;
 
     public PecAssetService(
             PecRepository pecRepository,
+            OfflineRecceSyncRepository offlineRecceSyncRepository,
             ObjectMapper objectMapper,
             @Value("${recce.upload-dir:uploads}") String uploadDir) {
         this.pecRepository = pecRepository;
+        this.offlineRecceSyncRepository = offlineRecceSyncRepository;
         this.objectMapper = objectMapper;
         this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
     }
@@ -100,7 +107,7 @@ public class PecAssetService {
     public List<GpsPointDTO> getGpsTrack(String pecId) {
         PecEntity pec = getPec(pecId);
         if (pec.getGpsStoragePath() == null) {
-            return new ArrayList<>();
+            return getOfflineGpsTrack(pecId);
         }
 
         try {
@@ -113,6 +120,14 @@ public class PecAssetService {
         } catch (Exception e) {
             throw new RuntimeException("Erro ao ler GPS da PEC: " + e.getMessage());
         }
+    }
+
+    public List<ClickMarkerDto> getRecceMarkers(String pecId) {
+        getPec(pecId);
+        return offlineRecceSyncRepository.findTopByPecIdOrderBySyncedAtDesc(pecId)
+                .map(OfflineRecceSyncEntity::getMarkersJson)
+                .map(this::parseMarkerJson)
+                .orElseGet(ArrayList::new);
     }
 
     private PecEntity getPec(String pecId) {
@@ -203,6 +218,35 @@ public class PecAssetService {
             }
         }
         return points;
+    }
+
+    private List<GpsPointDTO> getOfflineGpsTrack(String pecId) {
+        return offlineRecceSyncRepository.findTopByPecIdOrderBySyncedAtDesc(pecId)
+                .map(OfflineRecceSyncEntity::getGpsTrackJson)
+                .map(this::parseGpsTrackJson)
+                .orElseGet(ArrayList::new);
+    }
+
+    private List<GpsPointDTO> parseGpsTrackJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<GpsPointDTO>>() {});
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao ler track GPS sincronizado: " + e.getMessage());
+        }
+    }
+
+    private List<ClickMarkerDto> parseMarkerJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ClickMarkerDto>>() {});
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao ler notas GPS sincronizadas: " + e.getMessage());
+        }
     }
 
     private JsonNode firstArray(JsonNode node) {
