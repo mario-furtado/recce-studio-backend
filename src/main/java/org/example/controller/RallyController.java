@@ -4,11 +4,21 @@ import org.example.entity.RallyEntity;
 import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.service.TeamProfileService;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/rallies")
@@ -68,6 +78,9 @@ public class RallyController {
             if (updatedData.getSurface() != null) existingRally.setSurface(updatedData.getSurface());
             if (updatedData.getLocation() != null) existingRally.setLocation(updatedData.getLocation());
             if (updatedData.getIcon() != null) existingRally.setIcon(updatedData.getIcon());
+            if (updatedData.getLogoFileName() != null) existingRally.setLogoFileName(updatedData.getLogoFileName());
+            if (updatedData.getLogoContentType() != null) existingRally.setLogoContentType(updatedData.getLogoContentType());
+            if (updatedData.getLogoStoragePath() != null) existingRally.setLogoStoragePath(updatedData.getLogoStoragePath());
             if (updatedData.getCarId() != null) existingRally.setCarId(updatedData.getCarId());
             if (updatedData.getCarClass() != null) existingRally.setCarClass(updatedData.getCarClass());
             if (updatedData.getStatus() != null) {
@@ -98,8 +111,59 @@ public class RallyController {
                 || updatedData.getSurface() != null
                 || updatedData.getLocation() != null
                 || updatedData.getIcon() != null
+                || updatedData.getLogoFileName() != null
+                || updatedData.getLogoContentType() != null
+                || updatedData.getLogoStoragePath() != null
                 || updatedData.getCarId() != null
                 || updatedData.getCarClass() != null;
+    }
+
+    @PostMapping("/{id}/logo")
+    public ResponseEntity<RallyEntity> uploadLogo(@PathVariable String id, @RequestParam("file") MultipartFile file) {
+        return rallyRepository.findById(id).map(rally -> {
+            if ("COMPLETED".equalsIgnoreCase(rally.getStatus())) {
+                throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar.");
+            }
+            if (file == null || file.isEmpty()) {
+                throw new IllegalArgumentException("Imagem obrigatoria.");
+            }
+            try {
+                Path dir = Paths.get("uploads", "rallies", id).toAbsolutePath().normalize();
+                Files.createDirectories(dir);
+                String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "logo";
+                String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : "";
+                Path target = dir.resolve(UUID.randomUUID().toString() + extension).normalize();
+                Files.copy(file.getInputStream(), target);
+
+                if (rally.getLogoStoragePath() != null) {
+                    Files.deleteIfExists(Paths.get(rally.getLogoStoragePath()));
+                }
+
+                rally.setLogoFileName(originalName);
+                rally.setLogoContentType(file.getContentType());
+                rally.setLogoStoragePath(target.toString());
+                RallyEntity saved = rallyRepository.save(rally);
+                attachPecsCount(saved);
+                return ResponseEntity.ok(saved);
+            } catch (IOException exception) {
+                throw new IllegalStateException("Nao foi possivel guardar a imagem do rali.");
+            }
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{id}/logo")
+    public ResponseEntity<Resource> getLogo(@PathVariable String id) {
+        return rallyRepository.findById(id).map(rally -> {
+            if (rally.getLogoStoragePath() == null) {
+                return ResponseEntity.notFound().<Resource>build();
+            }
+            Resource resource = new FileSystemResource(rally.getLogoStoragePath());
+            String contentType = rally.getLogoContentType() != null ? rally.getLogoContentType() : "application/octet-stream";
+            return ResponseEntity.<Resource>ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                    .body(resource);
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     // 5. DELETE

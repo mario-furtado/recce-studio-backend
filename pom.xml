@@ -38,6 +38,12 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Password hashing without enabling the full Spring Security filter chain -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- BD H2 em memória -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -65,25 +71,6 @@
             <version>4.1.2</version> <!-- Versão 100% estável e compatível com Java 8 -->
         </dependency>
 
-        <!-- Spring Data JPA (Inclui o jakarta.persistence e Hibernate) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-
-        <!-- Lombok (Para o @Data, @Builder, etc) -->
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Base de Dados H2 para testes locais (ou PostgreSQL) -->
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>runtime</scope>
-        </dependency>
     </dependencies>
 
     <build>

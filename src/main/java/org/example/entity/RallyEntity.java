@@ -35,6 +35,12 @@ public class RallyEntity {
 
     private String icon;
 
+    private String logoFileName;
+
+    private String logoContentType;
+
+    private String logoStoragePath;
+
     private String carId;
 
     private String carClass;
