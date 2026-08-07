@@ -66,6 +66,13 @@ public class AuthService {
         return StringUtils.hasText(token) && authUserRepository.findByTokenAndActiveTrue(token).isPresent();
     }
 
+    public String getEmailFromAuthorization(String authorization) {
+        String token = extractBearerToken(authorization);
+        return authUserRepository.findByTokenAndActiveTrue(token)
+                .map(AuthUserEntity::getEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Sessao invalida ou expirada."));
+    }
+
     private void validateCredentials(AuthRequestDTO request) {
         if (request == null || !StringUtils.hasText(request.getEmail()) || !StringUtils.hasText(request.getPassword())) {
             throw new IllegalArgumentException("Email e password sao obrigatorios.");
@@ -77,6 +84,13 @@ public class AuthService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase();
+    }
+
+    private String extractBearerToken(String authorization) {
+        if (!StringUtils.hasText(authorization) || !authorization.startsWith("Bearer ")) {
+            return null;
+        }
+        return authorization.substring("Bearer ".length()).trim();
     }
 
     private String newToken() {

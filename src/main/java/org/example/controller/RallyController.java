@@ -4,6 +4,7 @@ import org.example.entity.RallyEntity;
 import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.service.TeamProfileService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/rallies")
-@CrossOrigin(origins = "http://localhost:4200") // Permite chamadas do Angular
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class RallyController {
 
     @Autowired
@@ -33,6 +34,9 @@ public class RallyController {
 
     @Autowired
     private TeamProfileService teamProfileService;
+
+    @Value("${recce.upload-dir:uploads}")
+    private String uploadDir;
 
     // 1. GET ALL
     @GetMapping
@@ -128,7 +132,7 @@ public class RallyController {
                 throw new IllegalArgumentException("Imagem obrigatoria.");
             }
             try {
-                Path dir = Paths.get("uploads", "rallies", id).toAbsolutePath().normalize();
+                Path dir = Paths.get(uploadDir, "rallies", id).toAbsolutePath().normalize();
                 Files.createDirectories(dir);
                 String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "logo";
                 String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : "";
