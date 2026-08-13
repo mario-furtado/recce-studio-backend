@@ -1,0 +1,236 @@
+<div class="app-shell min-h-screen flex items-center justify-center p-4 md:p-8">
+  <div
+    class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch"
+  >
+    <section
+      class="glass-panel rounded-2xl p-8 md:p-10 flex flex-col justify-between min-h-[34rem]"
+    >
+      <div>
+        <div class="login-brand-lockup">
+          <img
+            src="assets/brand/recce-studio-icon-dark.png"
+            alt="Recce Studio"
+            class="login-brand-icon"
+          />
+          <div>
+            <!-- <img
+              src="assets/brand/recce-studio-logo-rs.png"
+              alt=""
+              class="login-brand-mark"
+              aria-hidden="true"
+            /> -->
+            <div class="login-brand-name">RECCE <span>STUDIO</span></div>
+            <p class="login-brand-tagline">Read the Road.</p>
+          </div>
+        </div>
+
+        <h1
+          class="text-4xl md:text-5xl font-black text-white mt-8 leading-tight"
+        >
+          O teu centro de reconhecimento, notas e sincronizacão.
+        </h1>
+        <p class="text-base text-slate-400 mt-4 max-w-xl">
+          Entra para gerir ralis, PECs, garagem, video, GPS e cadernos de notas
+          numa unica area protegida.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 mt-8">
+        <div class="metric-tile rounded-xl p-4">
+          <div class="text-2xl font-black text-white">GPS</div>
+          <div class="text-xs text-slate-400 mt-1">offline first</div>
+        </div>
+        <div class="metric-tile rounded-xl p-4">
+          <div class="text-2xl font-black text-white">PEC</div>
+          <div class="text-xs text-slate-400 mt-1">estado protegido</div>
+        </div>
+        <div class="metric-tile rounded-xl p-4">
+          <div class="text-2xl font-black text-white">XLS</div>
+          <div class="text-xs text-slate-400 mt-1">templates</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-panel rounded-2xl p-6 md:p-8">
+      <div *ngIf="isBrowserOffline" class="surface-card rounded-2xl p-4 mb-5">
+        <div class="text-sm font-black text-white">Sem ligação disponível</div>
+        <p class="text-xs text-slate-400 mt-2">
+          Neste momento so podes entrar em modo offline para fazer novo
+          reconhecimento e guardar o JSON localmente.
+        </p>
+      </div>
+
+      <div
+        *ngIf="!isBrowserOffline"
+        class="surface-card rounded-2xl p-1 grid grid-cols-2 gap-1"
+      >
+        <button
+          type="button"
+          (click)="setMode('login')"
+          class="rounded-xl py-3 text-sm font-bold transition"
+          [class.selected-ring]="mode === 'login'"
+        >
+          Entrar
+        </button>
+        <button
+          type="button"
+          (click)="setMode('register')"
+          class="rounded-xl py-3 text-sm font-bold transition"
+          [class.selected-ring]="mode === 'register'"
+        >
+          Criar conta
+        </button>
+      </div>
+
+      <form
+        *ngIf="!isBrowserOffline"
+        class="mt-6 space-y-4"
+        (ngSubmit)="submit()"
+      >
+        <div>
+          <label class="text-xs font-bold text-slate-400 uppercase"
+            >Email</label
+          >
+          <input
+            type="email"
+            name="email"
+            [(ngModel)]="form.email"
+            class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+            placeholder="equipa@exemplo.com"
+          />
+        </div>
+
+        <div>
+          <label class="text-xs font-bold text-slate-400 uppercase"
+            >Password</label
+          >
+          <input
+            type="password"
+            name="password"
+            [(ngModel)]="form.password"
+            class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+            placeholder="Minimo 6 caracteres"
+          />
+        </div>
+
+        <div
+          *ngIf="mode === 'register'"
+          class="surface-card rounded-2xl p-4 space-y-4"
+        >
+          <div>
+            <label class="text-xs font-bold text-slate-400 uppercase"
+              >Nome da equipa</label
+            >
+            <input
+              type="text"
+              name="teamName"
+              [(ngModel)]="form.teamName"
+              class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+              placeholder="Ex: RS Motorsport"
+            />
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-bold text-slate-400 uppercase"
+                >Piloto</label
+              >
+              <input
+                type="text"
+                name="driverName"
+                [(ngModel)]="form.driverName"
+                class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+              />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-400 uppercase"
+                >Navegador</label
+              >
+              <input
+                type="text"
+                name="coDriverName"
+                [(ngModel)]="form.coDriverName"
+                class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-bold text-slate-400 uppercase"
+                >Sistema de notas</label
+              >
+              <select
+                name="noteSystem"
+                [(ngModel)]="form.noteSystem"
+                class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+              >
+                <option
+                  *ngFor="let option of noteSystemOptions"
+                  [value]="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-400 uppercase"
+                >Medida</label
+              >
+              <select
+                name="distanceUnit"
+                [(ngModel)]="form.distanceUnit"
+                class="themed-input w-full mt-1 rounded-xl px-4 py-3"
+              >
+                <option
+                  *ngFor="let option of distanceUnitOptions"
+                  [value]="option"
+                >
+                  {{ option }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div
+          *ngIf="errorMessage"
+          class="danger-button rounded-xl px-4 py-3 text-sm font-semibold"
+        >
+          {{ errorMessage }}
+        </div>
+
+        <button
+          type="submit"
+          [disabled]="isLoading"
+          class="accent-button w-full rounded-xl px-5 py-3 font-black disabled:opacity-60"
+        >
+          {{
+            isLoading
+              ? "A validar..."
+              : mode === "login"
+                ? "Entrar"
+                : "Criar conta e entrar"
+          }}
+        </button>
+
+        <button
+          type="button"
+          (click)="enterOffline()"
+          class="soft-button w-full rounded-xl px-5 py-3 font-bold"
+        >
+          Entrar em modo offline
+        </button>
+      </form>
+
+      <button
+        *ngIf="isBrowserOffline"
+        type="button"
+        (click)="enterOffline()"
+        class="accent-button w-full rounded-xl px-5 py-3 font-black"
+      >
+        Entrar em modo offline
+      </button>
+    </section>
+  </div>
+</div>

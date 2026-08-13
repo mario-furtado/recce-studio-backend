@@ -1,0 +1,49 @@
+.login-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.login-brand-icon {
+  width: clamp(5.25rem, 9vw, 7.5rem);
+  height: clamp(5.25rem, 9vw, 7.5rem);
+  border-radius: 22%;
+  object-fit: cover;
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.36),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.login-brand-mark {
+  width: clamp(7.5rem, 14vw, 10.5rem);
+  max-height: 4.4rem;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.35));
+}
+
+.login-brand-name {
+  margin-top: 0.35rem;
+  color: #f5f7fa;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+}
+
+.login-brand-name span {
+  color: #e31837;
+}
+
+.login-brand-tagline {
+  margin-top: 0.15rem;
+  color: #a6b0bf;
+  font-size: 0.8rem;
+  font-style: italic;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .login-brand-lockup {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

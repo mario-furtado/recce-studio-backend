@@ -1,0 +1,285 @@
+<div class="max-w-6xl mx-auto space-y-6">
+  <section class="glass-panel rs-page-header">
+    <h1 class="text-2xl font-black text-white">Configurações</h1>
+    <p class="text-sm text-slate-400 mt-1">
+      Ajustes visuais e preferencias da aplicação.
+    </p>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-6 space-y-4">
+    <div>
+      <h2 class="text-lg font-bold text-white">Tema geral</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Define a luminosidade e o ambiente da aplicação.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button
+        *ngFor="let theme of shellThemes"
+        type="button"
+        (click)="setShellTheme(theme.value)"
+        class="interactive-card shell-preview text-left rounded-xl border border-slate-800 p-4"
+        [attr.data-shell-preview]="theme.value"
+        [class.selected-ring]="selectedShellTheme === theme.value"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div class="font-bold text-white">{{ theme.label }}</div>
+          <span
+            *ngIf="selectedShellTheme === theme.value"
+            class="themed-chip text-[10px] px-2 py-0.5"
+          >
+            Ativo
+          </span>
+        </div>
+        <p class="text-xs text-slate-300 mt-2">{{ theme.description }}</p>
+        <div class="mt-5 grid grid-cols-3 gap-2">
+          <div class="h-8 rounded-lg bg-white/10 border border-white/10"></div>
+          <div class="h-8 rounded-lg bg-white/20 border border-white/10"></div>
+          <div class="h-8 rounded-lg bg-black/20 border border-white/10"></div>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <section class="hidden">
+    <div>
+      <h2 class="text-lg font-bold text-white">Cor de detalhe</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Controla destaques, seleção e botões principais. Estados continuam
+        semanticos.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <button
+        *ngFor="let theme of accentThemes"
+        type="button"
+        (click)="setAccentTheme(theme.value)"
+        class="interactive-card theme-preview text-left rounded-xl border border-slate-800 p-4"
+        [attr.data-preview-theme]="theme.value"
+        [class.selected-ring]="selectedAccentTheme === theme.value"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-bold text-white">{{ theme.label }}</div>
+            <p class="text-xs text-slate-300 mt-2">{{ theme.description }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span
+              *ngIf="selectedAccentTheme === theme.value"
+              class="themed-chip text-[10px] px-2 py-0.5"
+            >
+              Ativo
+            </span>
+            <div
+              class="w-5 h-5 rounded-full border border-white/20"
+              style="background: var(--preview-accent)"
+            ></div>
+          </div>
+        </div>
+        <div class="mt-5 grid grid-cols-3 gap-2">
+          <div class="h-8 rounded-lg bg-white/10 border border-white/10"></div>
+          <div class="h-8 rounded-lg bg-white/15 border border-white/10"></div>
+          <div
+            class="h-8 rounded-lg border border-white/10"
+            style="background: var(--preview-accent)"
+          ></div>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-6 space-y-4">
+    <div>
+      <h2 class="text-lg font-bold text-white">Notas de voz</h2>
+      <p class="text-sm text-slate-400 mt-1">
+        Define como o modo reconhecimento recolhe a transcrição das notas.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button
+        *ngFor="let mode of voiceCaptureModes"
+        type="button"
+        (click)="setVoiceCaptureMode(mode.value)"
+        class="interactive-card text-left rounded-xl border border-slate-800 p-4"
+        [class.selected-ring]="selectedVoiceCaptureMode === mode.value"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div class="font-bold text-white">{{ mode.label }}</div>
+          <span
+            *ngIf="selectedVoiceCaptureMode === mode.value"
+            class="themed-chip text-[10px] px-2 py-0.5"
+          >
+            Ativo
+          </span>
+        </div>
+        <p class="text-xs text-slate-300 mt-2">{{ mode.description }}</p>
+      </button>
+    </div>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-6 space-y-5">
+    <div
+      class="flex flex-col md:flex-row md:items-start md:justify-between gap-3"
+    >
+      <div>
+        <h2 class="text-lg font-bold text-white">Dicionario de notas</h2>
+        <p class="text-sm text-slate-400 mt-1">
+          Personaliza palavras ou frases que entram nas notas compactas.
+        </p>
+      </div>
+      <button
+        type="button"
+        (click)="loadDictionaryRules()"
+        [disabled]="
+          dictionaryLoading || shared.connectionMode$.value !== 'online'
+        "
+        class="soft-button px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50"
+      >
+        {{ dictionaryLoading ? "A carregar..." : "Atualizar" }}
+      </button>
+    </div>
+
+    <form
+      class="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr_auto] gap-3 items-end"
+      (ngSubmit)="saveDictionaryRule()"
+    >
+      <label class="block">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-400"
+          >Quando digo</span
+        >
+        <input
+          type="text"
+          name="dictionaryPhrase"
+          [(ngModel)]="dictionaryForm.phrase"
+          class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-[var(--accent)]"
+          placeholder="sinal"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-400"
+          >Escrever</span
+        >
+        <input
+          type="text"
+          name="dictionarySymbol"
+          [(ngModel)]="dictionaryForm.symbol"
+          class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-[var(--accent)]"
+          placeholder="Sin"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-xs font-bold uppercase tracking-wide text-slate-400"
+          >Grupo</span
+        >
+        <input
+          type="text"
+          name="dictionaryCategory"
+          [(ngModel)]="dictionaryForm.category"
+          class="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none focus:border-[var(--accent)]"
+          placeholder="referencias"
+        />
+      </label>
+
+      <div class="flex items-center gap-2">
+        <label
+          class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-3 text-sm text-slate-200"
+        >
+          <input
+            type="checkbox"
+            name="dictionaryEnabled"
+            [(ngModel)]="dictionaryForm.enabled"
+          />
+          Ativa
+        </label>
+        <button
+          type="submit"
+          [disabled]="dictionarySaving"
+          class="accent-button px-4 py-3 rounded-xl text-sm font-black disabled:opacity-50"
+        >
+          {{ editingRuleId ? "Guardar" : "Adicionar" }}
+        </button>
+        <button
+          *ngIf="editingRuleId"
+          type="button"
+          (click)="cancelDictionaryEdit()"
+          class="soft-button px-4 py-3 rounded-xl text-sm font-bold"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+
+    <div class="space-y-2">
+      <div
+        *ngIf="dictionaryRules.length === 0"
+        class="rounded-xl border border-dashed border-slate-800 p-5 text-sm text-slate-400"
+      >
+        Ainda não existem regras personalizadas.
+      </div>
+
+      <div
+        *ngFor="let rule of dictionaryRules; trackBy: trackRule"
+        class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+        [class.opacity-55]="!rule.enabled"
+      >
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-sm font-bold text-white">{{ rule.phrase }}</span>
+            <span class="text-xs text-slate-500">-></span>
+            <span class="themed-chip text-xs px-2 py-0.5">{{
+              rule.symbol
+            }}</span>
+            <span
+              *ngIf="rule.category"
+              class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
+            >
+              {{ rule.category }}
+            </span>
+            <span
+              *ngIf="rule.localOnly"
+              class="text-[11px] text-amber-200 rounded-full border border-amber-500/30 px-2 py-0.5"
+            >
+              Local
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            (click)="toggleDictionaryRule(rule)"
+            class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
+          >
+            {{ rule.enabled ? "Desativar" : "Ativar" }}
+          </button>
+          <button
+            type="button"
+            (click)="editDictionaryRule(rule)"
+            class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            (click)="deleteDictionaryRule(rule)"
+            class="danger-button px-3 py-2 rounded-lg text-xs font-bold"
+          >
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-6 opacity-75">
+    <h2 class="text-lg font-bold text-white">Idioma</h2>
+    <p class="text-sm text-slate-400 mt-1">
+      Preferencias de lingua ficam aqui numa fase seguinte.
+    </p>
+  </section>
+</div>

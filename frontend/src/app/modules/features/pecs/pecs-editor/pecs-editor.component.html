@@ -1,0 +1,389 @@
+<div class="h-[calc(100vh-4rem)] flex flex-col gap-4">
+  <div
+    class="studio-toolbar glass-panel flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl shadow-lg"
+  >
+    <div>
+      <!-- <h1 class="text-lg font-extrabold text-white">{{ pecTitle }}</h1> -->
+      <p class="text-xs text-slate-400">
+        Offset: {{ timeOffset >= 0 ? "+" : "" }}{{ timeOffset.toFixed(1) }}s
+      </p>
+      <p *ngIf="isLocked" class="text-xs text-amber-400 font-semibold mt-1">
+        PEC concluida: volte a rascunho para editar.
+      </p>
+    </div>
+
+    <div
+      class="studio-asset-actions surface-card flex items-center gap-2 p-1.5 rounded-xl"
+    >
+      <label
+        *ngIf="!hasVideo"
+        [class.pointer-events-none]="isLocked"
+        [class.opacity-40]="isLocked"
+        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
+      >
+        <input
+          type="file"
+          (change)="onFileSelect($event, 'video')"
+          accept="video/*"
+          class="hidden"
+        />
+        <span class="desktop-label">+ Add Video</span>
+        <span class="mobile-label">Video</span>
+      </label>
+
+      <button
+        *ngIf="hasVideo"
+        type="button"
+        (click)="deleteVideo()"
+        [disabled]="isLocked"
+        class="danger-button text-xs text-white px-3 py-1.5 rounded-lg font-semibold"
+        [title]="videoFileName"
+      >
+        <span class="desktop-label">Eliminar Video</span>
+        <span class="mobile-label">Del Video</span>
+      </button>
+
+      <label
+        [class.pointer-events-none]="isLocked"
+        [class.opacity-40]="isLocked"
+        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
+      >
+        <input
+          type="file"
+          (change)="onFileSelect($event, 'gpx')"
+          accept=".gpx,.json,application/json"
+          class="hidden"
+        />
+        <span class="desktop-label">{{
+          hasGpx ? "Trocar GPS" : "+ Add GPS"
+        }}</span>
+        <span class="mobile-label">GPS</span>
+      </label>
+
+      <label
+        [class.pointer-events-none]="isLocked"
+        [class.opacity-40]="isLocked"
+        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
+      >
+        <input
+          type="file"
+          (change)="onFileSelected($event)"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          class="hidden"
+        />
+        <span class="desktop-label">{{
+          hasNotes ? "Carregar Notas" : "+ Adicionar Notas"
+        }}</span>
+        <span class="mobile-label">Notas</span>
+      </label>
+
+      <button
+        type="button"
+        (click)="onDownloadTemplate()"
+        class="soft-button text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
+      >
+        <span class="desktop-label">Descarregar Template</span>
+        <span class="mobile-label">Template</span>
+      </button>
+    </div>
+
+    <div class="studio-sync-actions flex items-center gap-3">
+      <button
+        (click)="setAnchorAtCurrentTime()"
+        [disabled]="isLocked"
+        class="accent-button text-white text-xs font-bold px-3 py-2 rounded-xl"
+      >
+        <span class="desktop-label">Fixar Nota 1 Aqui</span>
+        <span class="mobile-label">Fixar Nota 1</span>
+      </button>
+
+      <div class="playback-speed surface-card flex p-1 rounded-xl text-xs">
+        <button
+          *ngFor="let speed of [1.0, 1.25, 1.5, 2.0]"
+          (click)="setPlaybackSpeed(speed)"
+          [class.selected-ring]="playbackSpeed === speed"
+          [class.text-white]="playbackSpeed === speed"
+          [class.text-slate-400]="playbackSpeed !== speed"
+          class="px-2 py-1 rounded-lg font-semibold transition"
+        >
+          {{ speed }}x
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
+    <div class="lg:col-span-8 flex flex-col gap-4 overflow-hidden">
+      <div
+        class="rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex-1 flex items-center justify-center relative bg-black/80"
+      >
+        <video
+          *ngIf="videoSrc; else noVideo"
+          #videoPlayer
+          [src]="videoSrc"
+          (timeupdate)="onTimeUpdate()"
+          controls
+          class="w-full h-full object-contain"
+        ></video>
+        <ng-template #noVideo>
+          <div class="text-sm text-slate-500">Sem video carregado</div>
+        </ng-template>
+      </div>
+
+      <div
+        class="surface-card h-56 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden"
+      >
+        <div class="flex justify-between items-center z-10">
+          <span class="text-xs font-bold text-slate-400"
+            >Tracado GPS da PEC</span
+          >
+          <span class="themed-chip text-xs px-2 py-0.5 rounded">
+            {{ gpsTrack.length }} GPS · {{ gpsNotePoints.length }} notas
+          </span>
+        </div>
+
+        <svg
+          *ngIf="hasGpsSketch"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          class="absolute inset-x-4 top-12 bottom-8 w-[calc(100%-2rem)] h-[calc(100%-5rem)]"
+          aria-label="Desenho do tracado GPS"
+        >
+          <rect
+            x="0"
+            y="0"
+            width="100"
+            height="100"
+            rx="3"
+            fill="rgba(15, 23, 42, 0.6)"
+          ></rect>
+          <polyline
+            *ngIf="gpsTrack.length > 1"
+            [attr.points]="gpsPolylinePoints"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+          ></polyline>
+          <circle
+            *ngFor="let point of gpsNotePoints"
+            [attr.cx]="point.x"
+            [attr.cy]="point.y"
+            r="3.4"
+            fill="#f59e0b"
+            stroke="#111827"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          >
+            <title>
+              {{ point.label }} · {{ point.timestamp.toFixed(1) }}s ·
+              {{ point.text }}
+            </title>
+          </circle>
+          <text
+            *ngFor="let point of gpsNotePoints"
+            [attr.x]="point.x"
+            [attr.y]="point.y + 1.2"
+            text-anchor="middle"
+            font-size="3"
+            font-weight="800"
+            fill="#111827"
+            pointer-events="none"
+          >
+            {{ point.label }}
+          </text>
+        </svg>
+
+        <div class="text-xs text-slate-500 z-10">
+          Coordenadas:
+          <ng-container *ngIf="gpsReferencePoint as gps; else noGpsTrack">
+            {{ gps.lat | number: "1.4-4" }},
+            {{ gps.lng | number: "1.4-4" }}
+            <span *ngIf="isGpsFlatSketch" class="ml-2 text-amber-400">
+              GPS parado, notas distribuidas por ordem
+            </span>
+          </ng-container>
+          <ng-template #noGpsTrack>sem GPS carregado</ng-template>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="glass-panel lg:col-span-4 rounded-2xl p-4 flex flex-col overflow-hidden"
+    >
+      <div
+        class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3 gap-2"
+      >
+        <div>
+          <h3 class="font-bold text-white text-sm">Caderno de Notas</h3>
+          <span class="text-[11px] text-slate-500">
+            {{ notes.length }} notas registadas
+          </span>
+        </div>
+
+        <button
+          (click)="openAddNoteForm()"
+          [disabled]="isLocked"
+          class="accent-button text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap"
+        >
+          Inserir Nota ({{ currentTime.toFixed(1) }}s)
+        </button>
+      </div>
+
+      <div
+        *ngIf="isAddingNote"
+        class="note-edit-panel mb-3 p-3 rounded-xl space-y-2 animate-fade-in"
+      >
+        <div class="flex justify-between items-center">
+          <span class="text-xs font-bold theme-text">
+            Nova Nota aos {{ currentTime.toFixed(1) }}s
+          </span>
+          <button
+            (click)="isAddingNote = false"
+            class="text-slate-500 hover:text-white text-xs"
+          >
+            x
+          </button>
+        </div>
+
+        <input
+          type="text"
+          [(ngModel)]="newNoteText"
+          (keyup.enter)="saveNewNote()"
+          placeholder="Ex: D3 com gravilha não corta..."
+          autofocus
+          class="themed-input w-full text-xs rounded-lg px-3 py-2"
+        />
+        <input
+          type="text"
+          [(ngModel)]="newNoteObservation"
+          (keyup.enter)="saveNewNote()"
+          placeholder="Observações / mudança..."
+          class="themed-input w-full text-slate-300 text-xs rounded-lg px-3 py-2"
+        />
+
+        <div class="flex justify-end gap-2 pt-1">
+          <button
+            (click)="isAddingNote = false"
+            class="soft-button px-3 py-1 rounded-lg text-slate-400 text-xs font-semibold"
+          >
+            Cancelar
+          </button>
+          <button
+            (click)="saveNewNote()"
+            class="accent-button px-3 py-1 rounded-lg text-white text-xs font-bold"
+          >
+            Guardar
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-2 pr-1">
+        <div
+          *ngFor="let note of notes; let i = index"
+          (click)="jumpToNote(note)"
+          [class.selected-ring]="activeNoteId === note.id"
+          [class.text-white]="activeNoteId === note.id"
+          [class.text-slate-300]="activeNoteId !== note.id"
+          class="note-row p-3 rounded-xl border border-slate-800/80 transition-all duration-200 cursor-pointer flex items-center justify-between group"
+        >
+          <div class="flex items-center gap-3 overflow-hidden flex-1">
+            <span
+              [class.bg-white]="activeNoteId === note.id"
+              [class.note-index-active]="activeNoteId === note.id"
+              [class.text-slate-400]="activeNoteId !== note.id"
+              class="note-index text-xs font-black w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+            >
+              {{ i + 1 }}
+            </span>
+
+            <span class="text-xs font-bold opacity-75 shrink-0">
+              {{ (note.originalTimestamp + timeOffset).toFixed(1) }}s
+            </span>
+
+            <div
+              *ngIf="editingNoteId !== note.id; else editNoteForm"
+              class="min-w-0 flex-1"
+              (dblclick)="startEditNote(note, $event)"
+            >
+              <div class="font-semibold text-xs truncate">{{ note.text }}</div>
+              <div
+                *ngIf="note.speedRating"
+                class="note-observation text-[11px] truncate mt-0.5"
+              >
+                {{ note.speedRating }}
+              </div>
+            </div>
+
+            <ng-template #editNoteForm>
+              <div
+                class="note-edit-panel min-w-0 flex-1 space-y-2"
+                (click)="$event.stopPropagation()"
+              >
+                <div class="text-[10px] font-black text-slate-500 uppercase">
+                  Editar Nota
+                </div>
+                <input
+                  type="text"
+                  [(ngModel)]="editingNoteText"
+                  class="themed-input w-full text-white text-xs rounded px-2 py-1"
+                />
+                <input
+                  type="text"
+                  [(ngModel)]="editingNoteObservation"
+                  class="themed-input w-full text-slate-300 text-[11px] rounded px-2 py-1"
+                  placeholder="Observações / mudança..."
+                />
+                <div class="flex justify-end gap-1">
+                  <button
+                    type="button"
+                    (click)="cancelEditNote($event)"
+                    class="soft-button px-2 py-0.5 rounded text-slate-400 text-[11px] font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    (click)="saveEditedNote(note, $event)"
+                    class="accent-button px-2 py-0.5 rounded text-white text-[11px] font-bold"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </ng-template>
+          </div>
+
+          <button
+            *ngIf="!isLocked && editingNoteId !== note.id"
+            (click)="startEditNote(note, $event)"
+            title="Editar Nota"
+            class="icon-button soft-button opacity-0 group-hover:opacity-100 transition shrink-0"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20h4l11-11-4-4L4 16z" />
+              <path d="M13 7l4 4" />
+            </svg>
+            <span class="sr-only">Editar</span>
+          </button>
+          <button
+            *ngIf="!isLocked"
+            (click)="deleteNote(note.id, $event)"
+            title="Eliminar Nota"
+            class="icon-button danger-button opacity-0 group-hover:opacity-100 transition shrink-0"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16" />
+              <path d="M10 11v6M14 11v6" />
+              <path d="M6 7l1 14h10l1-14" />
+              <path d="M9 7V4h6v3" />
+            </svg>
+            <span class="sr-only">Eliminar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

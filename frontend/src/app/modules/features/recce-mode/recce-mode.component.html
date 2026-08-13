@@ -1,0 +1,120 @@
+<div
+  class="recce-screen w-full text-white flex flex-col select-none touch-manipulation overflow-hidden"
+>
+  <div
+    class="recce-status surface-card rounded-xl border border-slate-800 shrink-0"
+  >
+    <div>
+      <span
+        class="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider"
+        >Tempo PEC</span
+      >
+      <span class="text-2xl sm:text-3xl font-mono font-bold text-emerald-400">{{
+        elapsedTimeString
+      }}</span>
+    </div>
+
+    <div class="text-center hidden sm:block">
+      <span
+        class="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider"
+        >Audio</span
+      >
+      <span
+        class="text-xs sm:text-sm font-bold"
+        [class.text-emerald-400]="isRecording"
+        [class.text-slate-400]="!isRecording"
+      >
+        {{ audioStatus }}
+      </span>
+    </div>
+
+    <div class="text-right">
+      <span
+        class="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider"
+        >GPS</span
+      >
+      <ng-container
+        *ngIf="trackingService.currentCoords$ | async as gps; else noGps"
+      >
+        <span class="text-xs sm:text-sm font-bold text-sky-400"
+          >{{ gps.speed | number: "1.0-0" }} km/h</span
+        >
+      </ng-container>
+      <ng-template #noGps>
+        <span class="text-xs text-amber-500 animate-pulse">A procurar...</span>
+      </ng-template>
+    </div>
+  </div>
+
+  <div
+    class="recce-main-action flex-1 flex justify-center items-center min-h-0"
+  >
+    <button
+      (pointerdown)="onMarkerPointerDown($event)"
+      (pointerup)="onMarkerPointerUp($event)"
+      (pointercancel)="onMarkerPointerCancel($event)"
+      (pointerleave)="onMarkerPointerLeave($event)"
+      (contextmenu)="$event.preventDefault()"
+      [disabled]="!isRecording"
+      [class.is-listening]="isPushToTalkActive"
+      class="recce-mark-button w-full h-full text-white font-extrabold flex flex-col justify-center items-center cursor-pointer"
+    >
+      <span class="recce-mark-icon animate-bounce" *ngIf="isRecording">!</span>
+      <span class="recce-mark-icon" *ngIf="!isRecording">STOP</span>
+      <span>{{ markerButtonLabel() }}</span>
+      <span
+        *ngIf="isRecording"
+        class="text-xs sm:text-sm font-normal opacity-80"
+        >{{ markerButtonHint() }}</span
+      >
+    </button>
+  </div>
+
+  <div class="recce-footer shrink-0">
+    <div
+      class="recce-voice-strip surface-card rounded-xl border border-slate-800"
+    >
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[10px] uppercase font-bold text-slate-400"
+          >Transcrição</span
+        >
+        <span class="text-[10px] font-mono text-slate-500">{{
+          speechStatus
+        }}</span>
+      </div>
+      <div class="recce-voice-text">
+        {{ liveTranscript || lastVoiceNote || "Sem nota de voz registada" }}
+      </div>
+    </div>
+
+    <div
+      class="surface-card rounded-xl flex justify-between text-xs sm:text-sm border border-slate-800"
+    >
+      <span
+        >Notas:
+        <strong class="text-white font-bold ml-1">{{
+          totalClicks
+        }}</strong></span
+      >
+      <span *ngIf="lastMarker"
+        >Ultima:
+        <strong class="text-amber-400 font-mono ml-1"
+          >{{ lastMarker.timestamp }}s</strong
+        ></span
+      >
+    </div>
+
+    <button
+      (click)="toggleRecording()"
+      [disabled]="isWaitingGps"
+      [class.is-warning]="isRecording"
+      [class.is-success]="!isRecording"
+      class="recce-record-button w-full text-center font-extrabold rounded-xl transition disabled:opacity-50 active:scale-[0.98]"
+    >
+      <span *ngIf="isWaitingGps">A AGUARDAR GPS...</span>
+      <span *ngIf="!isWaitingGps">{{
+        isRecording ? "FINALIZAR E GUARDAR" : "INICIAR RECONHECIMENTO"
+      }}</span>
+    </button>
+  </div>
+</div>

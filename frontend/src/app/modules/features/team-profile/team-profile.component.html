@@ -1,0 +1,271 @@
+<div class="min-h-screen text-white p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+  <header class="glass-panel rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
+    <div class="flex items-center gap-6 w-full md:w-auto">
+      <div class="surface-card w-24 h-24 rounded-2xl border-2 flex items-center justify-center overflow-hidden shadow-lg shrink-0 selected-ring">
+        <img
+          *ngIf="logoPreviewUrl; else logoFallback"
+          [src]="logoPreviewUrl"
+          alt="Logo da equipa"
+          class="w-full h-full object-cover"
+        />
+        <ng-template #logoFallback>
+          <span class="text-4xl font-black">RS</span>
+        </ng-template>
+      </div>
+
+      <div class="min-w-0 flex-1">
+        <ng-container *ngIf="!isEditing; else profileEdit">
+          <h1 class="text-3xl font-extrabold text-white tracking-tight truncate">
+            {{ team.name }}
+          </h1>
+          <p class="text-slate-400 mt-1 text-lg flex items-center gap-2 flex-wrap">
+            {{ team.car || "Sem carro selecionado" }}
+            <span class="surface-card px-2 py-0.5 rounded-md text-xs font-bold">
+              {{ team.carClass || "Sem classe" }}
+            </span>
+          </p>
+        </ng-container>
+
+        <ng-template #profileEdit>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input
+              type="text"
+              [(ngModel)]="draft.name"
+              placeholder="Nome da equipa"
+              class="themed-input md:col-span-2 rounded-lg px-3 py-2"
+            />
+            <input
+              type="text"
+              [(ngModel)]="draft.driverName"
+              placeholder="Piloto"
+              class="themed-input rounded-lg px-3 py-2"
+            />
+            <input
+              type="text"
+              [(ngModel)]="draft.coDriverName"
+              placeholder="Navegador"
+              class="themed-input rounded-lg px-3 py-2"
+            />
+          </div>
+        </ng-template>
+      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+      <label
+        *ngIf="isEditing"
+        class="soft-button cursor-pointer text-white font-bold px-4 py-3 rounded-xl transition text-center"
+      >
+        <input type="file" accept="image/*" (change)="onLogoSelected($event)" class="hidden" />
+        Alterar Imagem
+      </label>
+
+      <button
+        *ngIf="!isEditing"
+        type="button"
+        (click)="startEdit()"
+        class="soft-button text-white font-bold px-6 py-3 rounded-xl transition"
+      >
+        Editar Perfil
+      </button>
+      <button
+        *ngIf="isEditing"
+        type="button"
+        (click)="cancelEdit()"
+        class="soft-button text-slate-200 font-bold px-4 py-3 rounded-xl transition"
+      >
+        Cancelar
+      </button>
+      <button
+        *ngIf="isEditing"
+        type="button"
+        (click)="saveProfile()"
+        [disabled]="isSaving"
+        class="accent-button disabled:opacity-50 text-white font-bold px-5 py-3 rounded-xl"
+      >
+        {{ isSaving ? "A guardar..." : "Guardar" }}
+      </button>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+      <section class="glass-panel rounded-2xl p-6 shadow-xl">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h2 class="text-xl font-bold text-white">Garagem</h2>
+          <button
+            *ngIf="isEditing"
+            type="button"
+            (click)="newCar()"
+            class="soft-button text-white text-xs font-bold px-3 py-2 rounded-lg"
+          >
+            Novo Carro
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div
+            *ngFor="let car of cars"
+            (click)="selectCar(car)"
+            class="interactive-card surface-card p-4 rounded-xl flex flex-col gap-3"
+            [class.selected-ring]="car.active"
+            [class.cursor-pointer]="true"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="surface-card w-20 h-14 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                <img
+                  *ngIf="getCarPhotoUrl(car); else carPhotoFallback"
+                  [src]="getCarPhotoUrl(car)"
+                  alt="Fotografia do carro"
+                  class="w-full h-full object-cover"
+                />
+                <ng-template #carPhotoFallback>
+                  <span class="text-xs text-slate-600 font-bold">CAR</span>
+                </ng-template>
+              </div>
+              <div class="min-w-0">
+                <div class="font-bold text-slate-100 truncate">{{ car.name }}</div>
+                <div class="text-xs text-slate-500 mt-0.5">{{ car.carClass }}</div>
+                <div *ngIf="car.notes" class="text-xs text-slate-500 mt-2 line-clamp-2">
+                  {{ car.notes }}
+                </div>
+              </div>
+              <span *ngIf="car.active" class="themed-chip text-[11px] px-2 py-1 rounded">
+                ativo
+              </span>
+            </div>
+
+            <div *ngIf="isEditing" class="flex gap-2" (click)="$event.stopPropagation()">
+              <button
+                type="button"
+                (click)="startEditCar(car)"
+                class="icon-button soft-button rounded"
+                title="Editar carro"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16z" /><path d="M13 7l4 4" /></svg>
+                <span class="sr-only">Editar</span>
+              </button>
+              <button
+                type="button"
+                (click)="deleteCar(car)"
+                class="icon-button danger-button rounded"
+                title="Eliminar carro"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 14h10l1-14" /><path d="M9 7V4h6v3" /></svg>
+                <span class="sr-only">Eliminar</span>
+              </button>
+              <label
+                class="soft-button cursor-pointer text-slate-200 text-xs font-semibold px-3 py-1.5 rounded"
+              >
+                <input type="file" accept="image/*" (change)="onCarPhotoSelected(car, $event)" class="hidden" />
+                Foto
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="isEditing" class="surface-card mt-4 p-4 rounded-xl space-y-3">
+          <h3 class="text-sm font-bold text-slate-200">
+            {{ editingCarId ? "Editar Carro" : "Adicionar Carro" }}
+          </h3>
+          <input
+            type="text"
+            [(ngModel)]="carDraft.name"
+            placeholder="Ex: Skoda Fabia RS"
+            class="themed-input w-full rounded-lg px-3 py-2"
+          />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select
+              [(ngModel)]="selectedClassOption"
+              class="themed-input rounded-lg px-3 py-2"
+            >
+              <option *ngFor="let option of classOptions" [value]="option">{{ option }}</option>
+            </select>
+            <input
+              *ngIf="selectedClassOption === 'Outro'"
+              type="text"
+              [(ngModel)]="customClass"
+              placeholder="Classe personalizada"
+              class="themed-input rounded-lg px-3 py-2"
+            />
+          </div>
+          <input
+            type="text"
+            [(ngModel)]="carDraft.notes"
+            placeholder="Notas do carro"
+            class="themed-input w-full rounded-lg px-3 py-2"
+          />
+          <button
+            type="button"
+            (click)="saveCar()"
+            class="accent-button text-white text-sm font-bold px-4 py-2 rounded-lg"
+          >
+            Guardar Carro
+          </button>
+        </div>
+      </section>
+
+      <section class="glass-panel rounded-2xl p-6 shadow-xl">
+        <h2 class="text-xl font-bold text-white mb-4">Estatisticas de Reconhecimento</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div class="metric-tile p-4 rounded-xl text-center">
+            <span class="text-3xl font-extrabold text-white block">{{ stats.totalPecs }}</span>
+            <span class="text-xs text-slate-500 font-semibold uppercase">PECs Mapeadas</span>
+          </div>
+          <div class="metric-tile p-4 rounded-xl text-center">
+            <span class="text-3xl font-extrabold text-emerald-400 block">{{ stats.totalKm | number: "1.1-1" }}</span>
+            <span class="text-xs text-slate-500 font-semibold uppercase">Km em Recce</span>
+          </div>
+          <div class="metric-tile p-4 rounded-xl text-center col-span-2 md:col-span-1">
+            <span class="text-3xl font-extrabold text-amber-400 block">{{ stats.activeEvents }}</span>
+            <span class="text-xs text-slate-500 font-semibold uppercase">Ralis Ativos</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="space-y-6">
+      <section class="glass-panel rounded-2xl p-6 shadow-xl h-full">
+        <h2 class="text-xl font-bold text-white mb-4">Sistema e Notas</h2>
+        <div class="space-y-4">
+          <div class="surface-card p-4 rounded-xl">
+            <label class="text-xs text-slate-500 font-semibold uppercase block mb-1">Sistema de Notas Base</label>
+            <div *ngIf="!isEditing; else noteSystemEdit" class="text-sm font-bold text-slate-200">
+              {{ team.noteSystem }}
+            </div>
+            <ng-template #noteSystemEdit>
+              <select
+                [(ngModel)]="selectedNoteSystemOption"
+                class="themed-input w-full rounded-lg px-3 py-2"
+              >
+                <option *ngFor="let option of noteSystemOptions" [value]="option">{{ option }}</option>
+              </select>
+              <input
+                *ngIf="selectedNoteSystemOption === 'Outro'"
+                type="text"
+                [(ngModel)]="customNoteSystem"
+                placeholder="Sistema personalizado"
+                class="themed-input w-full mt-2 rounded-lg px-3 py-2"
+              />
+            </ng-template>
+          </div>
+
+          <div class="surface-card p-4 rounded-xl">
+            <label class="text-xs text-slate-500 font-semibold uppercase block mb-1">Unidade de Medida</label>
+            <div *ngIf="!isEditing; else distanceUnitEdit" class="text-sm font-bold text-slate-200">
+              {{ team.distanceUnit }}
+            </div>
+            <ng-template #distanceUnitEdit>
+              <select
+                [(ngModel)]="draft.distanceUnit"
+                class="themed-input w-full rounded-lg px-3 py-2"
+              >
+                <option *ngFor="let option of distanceUnitOptions" [value]="option">{{ option }}</option>
+              </select>
+            </ng-template>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

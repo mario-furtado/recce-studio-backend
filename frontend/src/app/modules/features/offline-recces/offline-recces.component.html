@@ -1,0 +1,318 @@
+<div class="max-w-7xl mx-auto space-y-6">
+  <section class="glass-panel rs-page-header flex-col md:flex-row">
+    <div
+      class="flex flex-col md:flex-row md:items-end md:justify-between gap-5"
+    >
+      <div>
+        <p class="rs-eyebrow">Offline Store</p>
+        <h1 class="rs-page-title">
+          Reconhecimentos Offline
+        </h1>
+        <p class="rs-page-subtitle">
+          Sessões guardadas neste dispositivo. Em modo offline não são feitos
+          pedidos ao backend.
+        </p>
+        <p
+          *ngIf="!isOnlineMode"
+          class="text-xs text-amber-400 mt-2 font-semibold"
+        >
+          Modo offline ativo: podes continuar, criar outro reconhecimento ou
+          eliminar sessões locais.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="accent-button px-4 py-2"
+          (click)="startNewRecce()"
+        >
+          Novo reconhecimento
+        </button>
+        <button
+          type="button"
+          class="soft-button px-4 py-2"
+          (click)="loadSessions()"
+        >
+          Atualizar
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="metric-tile rounded-xl p-4">
+      <span class="block text-xs uppercase">Pendentes locais</span>
+      <div class="text-2xl font-black mt-2">{{ visibleSessions.length }}</div>
+    </div>
+    <div class="metric-tile rounded-xl p-4">
+      <span class="block text-xs uppercase">Por sincronizar</span>
+      <div class="text-2xl font-black mt-2">{{ pendingCount }}</div>
+    </div>
+    <div class="metric-tile rounded-xl p-4">
+      <span class="block text-xs uppercase">Rascunhos</span>
+      <div class="text-2xl font-black mt-2">{{ draftCount }}</div>
+    </div>
+    <div class="metric-tile rounded-xl p-4">
+      <span class="block text-xs uppercase">Notas locais</span>
+      <div class="text-2xl font-black mt-2">{{ totalNotes }}</div>
+    </div>
+  </section>
+
+  <section class="glass-panel p-4 md:p-6">
+    <div
+      *ngIf="isLoading"
+      class="surface-card rounded-xl p-6 text-sm text-slate-400"
+    >
+      A carregar reconhecimentos offline...
+    </div>
+
+    <div
+      *ngIf="!isLoading && visibleSessions.length === 0"
+      class="surface-card rounded-xl p-8 text-center"
+    >
+      <div class="text-sm font-bold text-white">
+        Sem reconhecimentos offline pendentes
+      </div>
+      <p class="text-xs text-slate-400 mt-2">
+        Quando finalizares um reconhecimento local, ele aparece aqui. Depois de
+        sincronizado, e removido deste dispositivo.
+      </p>
+      <button
+        type="button"
+        class="accent-button px-4 py-2 mt-4"
+        (click)="startNewRecce()"
+      >
+        Fazer reconhecimento
+      </button>
+    </div>
+
+    <div *ngIf="!isLoading && visibleSessions.length > 0" class="space-y-3">
+      <article
+        *ngFor="let session of visibleSessions; trackBy: trackById"
+        class="surface-card interactive-card rounded-xl p-4 border border-slate-800"
+      >
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:items-center">
+          <div class="lg:col-span-4 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span
+                class="status-badge"
+                [ngClass]="statusClass(session.status)"
+              >
+                {{ statusLabel(session.status) }}
+              </span>
+              <span
+                *ngIf="session.pecName"
+                class="themed-chip text-xs px-2 py-0.5"
+              >
+                PEC associada
+              </span>
+            </div>
+            <h2 class="text-lg font-black text-white mt-3 truncate">
+              {{ session.temporaryName }}
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              {{ session.pecName || "Sem PEC associada" }}
+            </p>
+          </div>
+
+          <div
+            class="lg:col-span-5 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"
+          >
+            <div>
+              <div class="text-[10px] uppercase font-black text-slate-500">
+                Data
+              </div>
+              <div class="font-bold text-white mt-1">
+                {{ formatDate(session.createdAt) }}
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase font-black text-slate-500">
+                Notas
+              </div>
+              <div class="font-bold text-white mt-1">
+                {{ session.notesCount }}
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase font-black text-slate-500">
+                Duração
+              </div>
+              <div class="font-bold text-white mt-1">
+                {{ formatDuration(session.durationSeconds) }}
+              </div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase font-black text-slate-500">
+                Audio
+              </div>
+              <div class="font-bold text-white mt-1">
+                {{ formatAudioSize(session.audioSize) }}
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-3 flex flex-wrap lg:justify-end gap-2">
+            <select
+              class="form-input min-w-48 px-3 py-2 text-sm"
+              [(ngModel)]="selectedPecIds[session.id]"
+              [disabled]="
+                !isOnlineMode ||
+                session.status === 'synced' ||
+                session.status === 'syncing' ||
+                isLoadingPecs
+              "
+              title="Associar a PEC existente"
+            >
+              <option value="">
+                {{ isOnlineMode ? "Escolher PEC" : "Disponivel online" }}
+              </option>
+              <option *ngFor="let pec of pecOptions" [value]="pec.id">
+                {{ pec.name }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="soft-button px-3 py-2"
+              [disabled]="session.status !== 'draft'"
+              (click)="continueSession(session)"
+            >
+              Continuar
+            </button>
+            <button
+              type="button"
+              class="accent-button px-3 py-2"
+              [disabled]="
+                !isOnlineMode ||
+                session.status !== 'ready_to_sync' ||
+                syncingSessionId === session.id
+              "
+              (click)="syncSession(session)"
+            >
+              {{
+                syncingSessionId === session.id
+                  ? "A sincronizar"
+                  : "Sincronizar"
+              }}
+            </button>
+            <button
+              type="button"
+              class="soft-button px-3 py-2"
+              [disabled]="
+                !isOnlineMode ||
+                session.status !== 'ready_to_sync' ||
+                syncingSessionId === session.id
+              "
+              (click)="openCreatePec(session)"
+            >
+              Criar PEC
+            </button>
+            <button
+              type="button"
+              class="danger-button icon-button"
+              title="Eliminar"
+              (click)="deleteSession(session)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M6 7l1 14h10l1-14" />
+                <path d="M9 7V4h6v3" />
+              </svg>
+              <span class="sr-only">Eliminar</span>
+            </button>
+          </div>
+        </div>
+
+        <div
+          *ngIf="
+            expandedCreateSessionId === session.id &&
+            newPecDrafts[session.id] as draft
+          "
+          class="surface-card rounded-xl border border-slate-800 mt-4 p-4"
+        >
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-3 md:items-end">
+            <div>
+              <label
+                class="block text-[10px] uppercase font-black text-slate-500 mb-1"
+                >Rali</label
+              >
+              <select
+                class="themed-input w-full rounded-xl px-3 py-2 text-sm"
+                [(ngModel)]="draft.rallyId"
+                (ngModelChange)="onCreatePecRallyChange(session)"
+                [disabled]="isLoadingPecs || syncingSessionId === session.id"
+              >
+                <option value="">Escolher rali</option>
+                <option *ngFor="let rally of rallies" [value]="rally.id">
+                  {{ rally.name }} {{ rally.year }}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                class="block text-[10px] uppercase font-black text-slate-500 mb-1"
+                >Numero</label
+              >
+              <input
+                type="number"
+                class="themed-input w-full rounded-xl px-3 py-2 text-sm"
+                [(ngModel)]="draft.number"
+                [disabled]="syncingSessionId === session.id"
+              />
+            </div>
+
+            <div class="md:col-span-2">
+              <label
+                class="block text-[10px] uppercase font-black text-slate-500 mb-1"
+                >Nome da PEC</label
+              >
+              <input
+                type="text"
+                class="themed-input w-full rounded-xl px-3 py-2 text-sm"
+                [(ngModel)]="draft.name"
+                [disabled]="syncingSessionId === session.id"
+                placeholder="Ex: Lameirinha 1"
+              />
+            </div>
+
+            <div>
+              <label
+                class="block text-[10px] uppercase font-black text-slate-500 mb-1"
+                >Distancia km</label
+              >
+              <input
+                type="number"
+                step="0.1"
+                class="themed-input w-full rounded-xl px-3 py-2 text-sm"
+                [(ngModel)]="draft.distanceKm"
+                [disabled]="syncingSessionId === session.id"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 mt-4">
+            <button
+              type="button"
+              class="soft-button px-3 py-2 text-sm"
+              [disabled]="syncingSessionId === session.id"
+              (click)="expandedCreateSessionId = null"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="accent-button px-3 py-2 text-sm"
+              [disabled]="syncingSessionId === session.id"
+              (click)="createPecAndSync(session)"
+            >
+              Criar e sincronizar
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+</div>

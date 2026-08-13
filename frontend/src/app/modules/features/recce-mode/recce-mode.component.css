@@ -1,0 +1,110 @@
+.recce-screen {
+  min-height: calc(100dvh - 7.25rem);
+  gap: 0.45rem;
+  justify-content: flex-start;
+}
+
+.recce-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.75rem;
+}
+
+.recce-main-action {
+  flex: 0 0 auto !important;
+  margin: 0;
+  align-items: stretch;
+}
+
+.recce-mark-button {
+  height: min(32dvh, 14rem) !important;
+  max-height: 14rem;
+  min-height: 8.5rem;
+  gap: 0.45rem;
+  font-size: clamp(1.25rem, 5vw, 1.85rem);
+  touch-action: none;
+  user-select: none;
+}
+
+.recce-mark-button.is-listening {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.34), 0 18px 55px rgba(245, 158, 11, 0.18);
+  transform: scale(0.985);
+}
+
+.recce-mark-icon {
+  font-size: clamp(2rem, 9vw, 3.25rem);
+  line-height: 1;
+}
+
+.recce-footer {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.recce-voice-strip {
+  padding: 0.55rem 0.7rem;
+}
+
+.recce-voice-text {
+  margin-top: 0.2rem;
+  min-height: 1.15rem;
+  color: var(--text);
+  font-size: clamp(0.78rem, 3.2vw, 0.92rem);
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recce-footer .surface-card {
+  padding: 0.55rem 0.7rem;
+}
+
+.recce-record-button {
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  font-size: clamp(0.95rem, 4vw, 1.1rem);
+}
+
+@media (max-width: 480px) {
+  .recce-screen {
+    min-height: calc(100dvh - 6.7rem);
+    gap: 0.35rem;
+  }
+
+  .recce-status {
+    padding: 0.5rem 0.65rem;
+  }
+
+  .recce-mark-button {
+    height: min(30dvh, 11rem) !important;
+    max-height: 11rem;
+    min-height: 7.75rem;
+    border-radius: 1.15rem;
+  }
+
+  .recce-record-button {
+    min-height: 2.55rem;
+    padding: 0.55rem 0.85rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .recce-screen {
+    min-height: calc(100dvh - 5.65rem);
+    gap: 0.35rem;
+  }
+
+  .recce-mark-button {
+    height: min(42dvh, 10rem) !important;
+    max-height: 10rem;
+    min-height: 7rem;
+  }
+
+  .recce-footer {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    align-items: stretch;
+  }
+}

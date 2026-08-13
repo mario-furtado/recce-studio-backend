@@ -1,0 +1,324 @@
+<div class="max-w-7xl mx-auto space-y-6">
+  <div
+    class="glass-panel rs-page-header flex-col md:flex-row"
+  >
+    <div>
+      <p class="rs-eyebrow">Rali</p>
+      <h1 class="rs-page-title">Ralis & PECs</h1>
+      <p class="rs-page-subtitle">Explora, gere e analisa as tuas PECs.</p>
+    </div>
+
+    <div class="flex items-center gap-3 w-full md:w-auto">
+      <input
+        type="text"
+        [(ngModel)]="searchTerm"
+        placeholder="Pesquisar rali..."
+        class="themed-input w-full md:w-80 text-sm rounded-xl px-4 py-2.5"
+      />
+
+      <button
+        (click)="openCreateRallyForm()"
+        class="accent-button font-semibold px-4 py-2.5 rounded-xl whitespace-nowrap"
+      >
+        Criar novo rali
+      </button>
+    </div>
+  </div>
+
+  <div
+    class="rally-filter-bar glass-panel p-4 rounded-2xl grid grid-cols-1 md:grid-cols-6 gap-3"
+  >
+    <select
+      [(ngModel)]="statusFilter"
+      class="themed-input text-sm rounded-xl px-3 py-2.5"
+    >
+      <option value="">Todos os estados</option>
+      <option value="ACTIVE">Ralis ativos</option>
+      <option value="COMPLETED">Ralis terminados</option>
+    </select>
+
+    <select
+      [(ngModel)]="surfaceFilter"
+      class="themed-input text-sm rounded-xl px-3 py-2.5"
+    >
+      <option value="">Todas as superficies</option>
+      <option *ngFor="let surface of surfaceOptions" [value]="surface">
+        {{ surface }}
+      </option>
+    </select>
+
+    <select
+      [(ngModel)]="yearFilter"
+      class="themed-input text-sm rounded-xl px-3 py-2.5"
+    >
+      <option value="">Todas as datas</option>
+      <option *ngFor="let year of yearOptions" [value]="year">
+        {{ year }}
+      </option>
+    </select>
+
+    <select
+      [(ngModel)]="carFilter"
+      class="themed-input text-sm rounded-xl px-3 py-2.5"
+    >
+      <option value="">Todos os carros</option>
+      <option *ngFor="let car of cars" [value]="car.id">{{ car.name }}</option>
+    </select>
+
+    <select
+      [(ngModel)]="classFilter"
+      class="themed-input text-sm rounded-xl px-3 py-2.5"
+    >
+      <option value="">Todas as classes</option>
+      <option
+        *ngFor="let carClass of registeredClassOptions"
+        [value]="carClass"
+      >
+        {{ carClass }}
+      </option>
+    </select>
+
+    <button
+      type="button"
+      (click)="clearFilters()"
+      class="soft-button text-slate-300 text-sm font-bold rounded-xl px-3 py-2.5"
+    >
+      Limpar filtros
+    </button>
+  </div>
+
+  <div
+    *ngIf="isCreatingRally"
+    class="glass-panel rounded-2xl p-6 shadow-2xl space-y-6"
+  >
+    <div
+      class="flex items-center justify-between pb-4 border-b border-slate-800"
+    >
+      <h2 class="text-lg font-bold text-white">
+        {{ editingRallyId ? "Editar Rali" : "Criar Novo Rali" }}
+      </h2>
+      <button (click)="cancelForm()" class="text-slate-400 hover:text-white">
+        x
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <div class="md:col-span-12 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">LOGO DO RALI</label>
+        <div class="flex flex-wrap items-center gap-3">
+          <div
+            class="rally-logo-tile w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center text-sm font-black"
+          >
+            <img
+              *ngIf="logoPreviewUrl; else rallyLogoFallback"
+              [src]="logoPreviewUrl"
+              alt="Logo do rali"
+              class="w-full h-full object-cover"
+            />
+            <ng-template #rallyLogoFallback>
+              {{ getRallyInitials(rallyForm.name) }}
+            </ng-template>
+          </div>
+          <label class="soft-button rounded-xl px-4 py-2 text-xs font-bold">
+            <input
+              type="file"
+              accept="image/*"
+              (change)="onRallyLogoSelected($event)"
+              class="hidden"
+            />
+            Escolher imagem
+          </label>
+          <span class="text-[11px] text-slate-500">
+            Se não escolheres imagem, serão utilizadas as iniciais.
+          </span>
+        </div>
+      </div>
+
+      <div class="md:col-span-6 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">NOME DO RALI *</label>
+        <input
+          type="text"
+          [(ngModel)]="rallyForm.name"
+          class="themed-input text-sm rounded-xl px-4 py-2.5"
+        />
+      </div>
+
+      <div class="md:col-span-2 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">ANO</label>
+        <input
+          type="number"
+          [(ngModel)]="rallyForm.year"
+          class="themed-input text-sm rounded-xl px-4 py-2.5 text-center font-bold"
+        />
+      </div>
+
+      <div class="md:col-span-4 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">PISO</label>
+        <select
+          [(ngModel)]="rallyForm.surface"
+          class="themed-input text-sm rounded-xl px-4 py-2.5"
+        >
+          <option *ngFor="let surface of surfaceOptions" [value]="surface">
+            {{ surface }}
+          </option>
+        </select>
+      </div>
+
+      <div class="md:col-span-6 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">LOCALIZAÇÃO *</label>
+        <input
+          type="text"
+          [(ngModel)]="rallyForm.location"
+          class="themed-input text-sm rounded-xl px-4 py-2.5"
+        />
+      </div>
+
+      <div class="md:col-span-3 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">CARRO</label>
+        <select
+          [(ngModel)]="rallyForm.carId"
+          (ngModelChange)="onRallyCarChange()"
+          class="themed-input text-sm rounded-xl px-4 py-2.5"
+        >
+          <option value="">Sem carro associado</option>
+          <option *ngFor="let car of cars" [value]="car.id">
+            {{ car.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="md:col-span-3 flex flex-col gap-2">
+        <label class="text-xs font-bold text-slate-400">CLASSE</label>
+        <select
+          [(ngModel)]="rallyForm.carClass"
+          [disabled]="!!rallyForm.carId"
+          class="themed-input text-sm rounded-xl px-4 py-2.5 disabled:opacity-50"
+        >
+          <option value="">Sem classe associada</option>
+          <option
+            *ngFor="
+              let carClass of registeredClassOptions.length
+                ? registeredClassOptions
+                : fallbackClassOptions
+            "
+            [value]="carClass"
+          >
+            {{ carClass }}
+          </option>
+        </select>
+        <span *ngIf="rallyForm.carId" class="text-[11px] text-slate-500">
+          Classe bloqueada pelo carro selecionado.
+        </span>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+      <button
+        (click)="cancelForm()"
+        class="soft-button px-5 py-2.5 rounded-xl text-slate-400 text-xs font-bold"
+      >
+        Cancelar
+      </button>
+      <button
+        (click)="saveRally()"
+        class="accent-button px-6 py-2.5 rounded-xl text-xs font-bold"
+      >
+        {{ editingRallyId ? "Guardar Alterações" : "Criar Rali" }}
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div
+      *ngFor="let rally of filteredRallies"
+      class="interactive-card glass-panel rounded-2xl p-6 flex flex-col justify-between shadow-xl transition group cursor-pointer"
+    >
+      <div>
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center gap-3 min-w-0">
+            <div
+              class="rally-logo-tile w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black shrink-0 overflow-hidden"
+            >
+              <img
+                *ngIf="getRallyLogoUrl(rally); else cardInitials"
+                [src]="getRallyLogoUrl(rally)!"
+                alt="Logo do rali"
+                class="w-full h-full object-cover"
+              />
+              <ng-template #cardInitials>
+                {{ getRallyInitials(rally.name) }}
+              </ng-template>
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-lg font-bold text-white transition truncate">
+                {{ rally.name }} {{ rally.year }}
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5 truncate">
+                {{ rally.location }}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <button
+              (click)="openEditRallyForm(rally, $event)"
+              title="Editar Rali"
+              class="icon-button soft-button rounded-lg text-slate-400 hover:text-white transition"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 20h4l11-11-4-4L4 16z" />
+                <path d="M13 7l4 4" />
+              </svg>
+              <span class="sr-only">Editar</span>
+            </button>
+            <button
+              (click)="deleteRally(rally.id, rally.name, $event)"
+              title="Eliminar Rali"
+              class="icon-button danger-button rounded-lg transition"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M6 7l1 14h10l1-14" />
+                <path d="M9 7V4h6v3" />
+              </svg>
+              <span class="sr-only">Eliminar</span>
+            </button>
+          </div>
+        </div>
+
+        <div
+          class="flex items-center gap-3 mt-6 pt-4 border-t border-slate-900 flex-wrap"
+        >
+          <span
+            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
+          >
+            {{ rally.surface }}
+          </span>
+          <span class="themed-chip text-xs px-3 py-1 rounded-lg font-semibold">
+            {{ getPecsCount(rally) }} PECs Registadas
+          </span>
+          <span
+            *ngIf="rally.carId"
+            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
+          >
+            {{ getCarName(rally.carId) }}
+          </span>
+          <span
+            *ngIf="rally.carClass"
+            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
+          >
+            {{ rally.carClass }}
+          </span>
+        </div>
+      </div>
+
+      <button
+        (click)="viewRallyDetails(rally.id)"
+        class="soft-button mt-6 w-full py-3 rounded-xl text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
+      >
+        Ver Rali e PECs
+      </button>
+    </div>
+  </div>
+</div>

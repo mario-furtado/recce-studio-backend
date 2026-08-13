@@ -1,0 +1,22 @@
+<div class="max-w-6xl mx-auto space-y-6">
+  <section class="glass-panel rounded-2xl p-6 md:p-8">
+    <h1 class="text-2xl md:text-3xl font-black text-white">Tutorial</h1>
+    <p class="text-sm text-slate-400 mt-2">
+      Fluxo rapido para usar o Recce Studio no carro, no reconhecimento e no Studio.
+    </p>
+  </section>
+
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <article *ngFor="let step of steps" class="interactive-card glass-panel rounded-2xl p-5">
+      <h2 class="text-lg font-black text-white">{{ step.title }}</h2>
+      <p class="text-sm text-slate-400 mt-2">{{ step.text }}</p>
+    </article>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-5">
+    <h2 class="text-lg font-black text-white">Dica para telemovel</h2>
+    <p class="text-sm text-slate-400 mt-2">
+      No carro, usa o telemovel na horizontal quando estiveres no Studio com video e notas. Na vertical, a app empilha os paineis para acesso rapido.
+    </p>
+  </section>
+</div>
