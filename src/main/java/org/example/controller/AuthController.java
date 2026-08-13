@@ -3,8 +3,12 @@ package org.example.controller;
 import org.example.dto.AuthRequestDTO;
 import org.example.dto.AuthResponseDTO;
 import org.example.service.AuthService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -17,8 +21,10 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponseDTO> register(@RequestBody AuthRequestDTO request) {
-        return ResponseEntity.ok(authService.register(request));
+    public ResponseEntity<Map<String, String>> register() {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(Collections.singletonMap("message", "Criacao de contas desativada nesta beta."));
     }
 
     @PostMapping("/login")

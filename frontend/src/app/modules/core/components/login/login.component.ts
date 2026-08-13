@@ -6,8 +6,6 @@ import { AuthPayload, AuthService } from '../../services/auth.service';
 import { OfflineRecceStoreService } from '../../services/offline-recce-store.service';
 import { SharedProperties } from '../../shared/shared-properties';
 
-type AuthMode = 'login' | 'register';
-
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -16,7 +14,6 @@ type AuthMode = 'login' | 'register';
   styleUrl: './login.component.css',
 })
 export class LoginComponent {
-  mode: AuthMode = 'login';
   isLoading = false;
   errorMessage = '';
   isBrowserOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
@@ -66,11 +63,6 @@ export class LoginComponent {
   @HostListener('window:offline')
   onOffline(): void {
     this.isBrowserOffline = true;
-    this.mode = 'login';
-  }
-
-  setMode(mode: AuthMode): void {
-    this.mode = mode;
     this.errorMessage = '';
   }
 
@@ -85,15 +77,8 @@ export class LoginComponent {
       this.errorMessage = 'Preenche o email e a password.';
       return;
     }
-    if (this.mode === 'register' && !this.form.teamName) {
-      this.errorMessage = 'Indica o nome da equipa.';
-      return;
-    }
-
     this.isLoading = true;
-    const request = this.mode === 'login' ? this.auth.login(this.form) : this.auth.register(this.form);
-
-    request.subscribe({
+    this.auth.login(this.form).subscribe({
       next: () => {
         if (this.shared.connectionMode$.value !== 'online') {
           this.shared.setConnectionMode('online');
