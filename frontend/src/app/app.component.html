@@ -1,1 +1,31 @@
 <router-outlet></router-outlet>
+
+<aside *ngIf="isInstallBannerVisible" class="install-banner glass-panel">
+  <div class="install-banner-copy">
+    <strong>Instalar Recce Studio</strong>
+    <span *ngIf="isIosInstallHelp">
+      No iPhone: Partilhar > Adicionar ao ecra principal.
+    </span>
+    <span *ngIf="!isIosInstallHelp">
+      Guarda a app no dispositivo para usar em modo PWA.
+    </span>
+  </div>
+  <div class="install-banner-actions">
+    <button
+      *ngIf="!isIosInstallHelp"
+      type="button"
+      class="accent-button install-action"
+      (click)="installApp()"
+    >
+      Instalar
+    </button>
+    <button
+      type="button"
+      class="soft-button install-action"
+      (click)="dismissInstallBanner()"
+      aria-label="Fechar aviso de instalacao"
+    >
+      Fechar
+    </button>
+  </div>
+</aside>

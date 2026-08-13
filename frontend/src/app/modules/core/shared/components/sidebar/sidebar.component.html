@@ -147,6 +147,45 @@
         <span *ngIf="!isCollapsed" class="whitespace-nowrap">Tutorial</span>
       </a>
     </nav>
+
+    <div class="mobile-session-bar">
+      <button
+        type="button"
+        (click)="toggleConnectionMode()"
+        class="mobile-session-button"
+        [disabled]="isSwitchingConnectionMode"
+        [class.is-offline]="(shared.connectionMode$ | async) === 'offline'"
+      >
+        <span
+          class="rs-status-dot"
+          [class.is-offline]="(shared.connectionMode$ | async) === 'offline'"
+          aria-hidden="true"
+        ></span>
+        <span>
+          {{
+            isSwitchingConnectionMode
+              ? "A validar"
+              : (shared.connectionMode$ | async) === "offline"
+                ? "Offline"
+                : "Online"
+          }}
+        </span>
+      </button>
+
+      <button
+        type="button"
+        (click)="logout()"
+        class="mobile-session-button mobile-logout-button"
+      >
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M10 6H5v12h5" />
+            <path d="M14 8l4 4-4 4M18 12H9" />
+          </svg>
+        </span>
+        <span>Logout</span>
+      </button>
+    </div>
   </div>
 
   <div class="sidebar-footer p-4 text-xs space-y-3">
