@@ -8,17 +8,11 @@ import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.repository.TeamCarRepository;
 import org.example.repository.TeamProfileRepository;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,19 +24,19 @@ public class TeamProfileService {
     private final PecRepository pecRepository;
     private final RallyRepository rallyRepository;
     private final TeamCarRepository teamCarRepository;
-    private final Path uploadRoot;
+    private final FileStorageService fileStorageService;
 
     public TeamProfileService(
             TeamProfileRepository teamProfileRepository,
             PecRepository pecRepository,
             RallyRepository rallyRepository,
             TeamCarRepository teamCarRepository,
-            @Value("${recce.upload-dir:uploads}") String uploadDir) {
+            FileStorageService fileStorageService) {
         this.teamProfileRepository = teamProfileRepository;
         this.pecRepository = pecRepository;
         this.rallyRepository = rallyRepository;
         this.teamCarRepository = teamCarRepository;
-        this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.fileStorageService = fileStorageService;
     }
 
     public TeamProfileDTO getProfile() {
@@ -112,16 +106,18 @@ public class TeamProfileService {
         return saved;
     }
 
-    @Transactional
     public TeamCarEntity uploadCarPhoto(String carId, MultipartFile file) {
         TeamCarEntity car = teamCarRepository.findById(carId)
                 .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
-        String path = storeImage(file, "cars/" + carId, "car-photo");
-        deleteStoredFile(car.getPhotoStoragePath());
+        validateImage(file);
+        String previousPath = car.getPhotoStoragePath();
+        String path = fileStorageService.store(file, "cars/" + carId, "car-photo");
         car.setPhotoFileName(file.getOriginalFilename());
         car.setPhotoContentType(file.getContentType());
         car.setPhotoStoragePath(path);
-        return teamCarRepository.save(car);
+        TeamCarEntity saved = teamCarRepository.save(car);
+        fileStorageService.delete(previousPath);
+        return saved;
     }
 
     public Resource getCarPhotoResource(String carId) {
@@ -130,7 +126,7 @@ public class TeamProfileService {
         if (car.getPhotoStoragePath() == null) {
             throw new RuntimeException("Fotografia do carro nao encontrada");
         }
-        return new FileSystemResource(car.getPhotoStoragePath());
+        return fileStorageService.loadAsResource(car.getPhotoStoragePath());
     }
 
     public String getCarPhotoContentType(String carId) {
@@ -158,7 +154,11 @@ public class TeamProfileService {
 
     @Transactional
     public void deleteCar(String carId) {
+        String photoPath = teamCarRepository.findById(carId)
+                .map(TeamCarEntity::getPhotoStoragePath)
+                .orElse(null);
         teamCarRepository.deleteById(carId);
+        fileStorageService.delete(photoPath);
         TeamProfileEntity profile = getOrCreateProfile();
         if (carId.equals(profile.getSelectedCarId())) {
             profile.setSelectedCarId(null);
@@ -168,15 +168,17 @@ public class TeamProfileService {
         }
     }
 
-    @Transactional
     public TeamProfileDTO uploadLogo(MultipartFile file) {
         TeamProfileEntity profile = getOrCreateProfile();
-        String path = storeImage(file, "team-profile", "logo");
-        deleteStoredFile(profile.getLogoStoragePath());
+        validateImage(file);
+        String previousPath = profile.getLogoStoragePath();
+        String path = fileStorageService.store(file, "team-profile", "logo");
         profile.setLogoFileName(file.getOriginalFilename());
         profile.setLogoContentType(file.getContentType());
         profile.setLogoStoragePath(path);
-        return toDTO(teamProfileRepository.save(profile));
+        TeamProfileDTO saved = toDTO(teamProfileRepository.save(profile));
+        fileStorageService.delete(previousPath);
+        return saved;
     }
 
     public Resource getLogoResource() {
@@ -184,7 +186,7 @@ public class TeamProfileService {
         if (profile.getLogoStoragePath() == null) {
             throw new RuntimeException("Imagem do perfil nao encontrada");
         }
-        return new FileSystemResource(profile.getLogoStoragePath());
+        return fileStorageService.loadAsResource(profile.getLogoStoragePath());
     }
 
     public String getLogoContentType() {
@@ -302,40 +304,12 @@ public class TeamProfileService {
         teamProfileRepository.save(profile);
     }
 
-    private String storeImage(MultipartFile file, String folder, String prefix) {
-        try {
-            if (file == null || file.isEmpty()) {
-                throw new RuntimeException("Ficheiro vazio");
-            }
-            if (file.getContentType() != null && !file.getContentType().startsWith("image/")) {
-                throw new RuntimeException("O ficheiro deve ser uma imagem");
-            }
-
-            String original = StringUtils.cleanPath(file.getOriginalFilename() == null ? "logo" : file.getOriginalFilename());
-            String extension = "";
-            int dotIndex = original.lastIndexOf('.');
-            if (dotIndex >= 0) {
-                extension = original.substring(dotIndex);
-            }
-
-            Path targetDir = uploadRoot.resolve(folder).normalize();
-            Files.createDirectories(targetDir);
-            Path target = targetDir.resolve(prefix + "-" + UUID.randomUUID() + extension).normalize();
-            if (!target.startsWith(uploadRoot)) {
-                throw new RuntimeException("Caminho de ficheiro invalido");
-            }
-            file.transferTo(target.toFile());
-            return target.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao guardar imagem: " + e.getMessage());
+    private void validateImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("Ficheiro vazio");
         }
-    }
-
-    private void deleteStoredFile(String storagePath) {
-        if (storagePath == null) return;
-        try {
-            Files.deleteIfExists(Paths.get(storagePath));
-        } catch (Exception ignored) {
+        if (file.getContentType() != null && !file.getContentType().startsWith("image/")) {
+            throw new RuntimeException("O ficheiro deve ser uma imagem");
         }
     }
 }

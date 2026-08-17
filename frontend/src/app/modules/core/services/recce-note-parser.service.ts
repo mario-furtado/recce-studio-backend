@@ -63,7 +63,9 @@ export class RecceNoteParserService {
   parse(rawText: string): ParsedRecceNote {
     const cleanText = this.normalizeWhitespace(rawText);
     const tokens = this.tokenize(cleanText);
-    const customRules = this.noteDictionary?.getActiveRules() || [];
+    const dictionaryRules = this.noteDictionary?.getRules() || [];
+    const customRules = dictionaryRules.filter((rule) => rule.enabled);
+    const disabledRules = dictionaryRules.filter((rule) => !rule.enabled);
     const compact: string[] = [];
     const observations: string[] = [];
     let lastCurveEmitted = false;
@@ -80,6 +82,13 @@ export class RecceNoteParserService {
       if (customRule) {
         compact.push(customRule.text);
         index += customRule.consumed - 1;
+        lastCurveEmitted = false;
+        continue;
+      }
+
+      const disabledRule = this.customRuleAt(tokens, index, disabledRules);
+      if (disabledRule) {
+        index += disabledRule.consumed - 1;
         lastCurveEmitted = false;
         continue;
       }

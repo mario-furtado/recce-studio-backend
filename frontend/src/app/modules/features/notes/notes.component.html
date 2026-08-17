@@ -7,7 +7,7 @@
         <div class="rs-eyebrow">Notas</div>
         <h1 class="rs-page-title">Dicionario de notas</h1>
         <p class="rs-page-subtitle">
-          Define como a voz do navegador vira nota compacta durante o reconhecimento.
+          Gere as notas base da app e as personalizacoes do utilizador.
         </p>
       </div>
 
@@ -103,7 +103,7 @@
     <div class="flex items-center justify-between gap-3">
       <h2 class="rs-section-title">Regras existentes</h2>
       <span class="themed-chip text-[11px] px-2 py-1">
-        {{ rules.length }} regras
+        {{ rules.length }} notas
       </span>
     </div>
 
@@ -111,7 +111,7 @@
       *ngIf="rules.length === 0"
       class="rounded-xl border border-dashed border-slate-800 p-5 text-sm text-slate-400"
     >
-      Ainda nao existem regras personalizadas.
+      Ainda nao existem notas configuradas.
     </div>
 
     <div
@@ -131,6 +131,18 @@
             class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
           >
             {{ rule.category }}
+          </span>
+          <span
+            *ngIf="rule.base && !rule.overridden"
+            class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
+          >
+            Base
+          </span>
+          <span
+            *ngIf="rule.overridden"
+            class="text-[11px] text-emerald-200 rounded-full border border-emerald-500/30 px-2 py-0.5"
+          >
+            Personalizada
           </span>
           <span
             *ngIf="rule.localOnly"
@@ -159,12 +171,13 @@
           Editar
         </button>
         <button
+          *ngIf="canDelete(rule)"
           type="button"
           (click)="deleteRule(rule)"
-          class="danger-button px-3 py-2 rounded-lg text-xs font-bold"
-          title="Eliminar regra"
+          [class]="rule.overridden ? 'soft-button px-3 py-2 rounded-lg text-xs font-bold' : 'danger-button px-3 py-2 rounded-lg text-xs font-bold'"
+          [attr.title]="rule.overridden ? 'Repor nota base' : 'Eliminar regra'"
         >
-          Eliminar
+          {{ deleteLabel(rule) }}
         </button>
       </div>
     </div>

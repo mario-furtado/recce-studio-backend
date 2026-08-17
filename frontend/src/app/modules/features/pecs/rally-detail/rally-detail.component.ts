@@ -9,6 +9,7 @@ import {
   TeamCar,
   TeamProfileService,
 } from '../../../core/services/team-profile.service';
+import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 
 @Component({
@@ -55,6 +56,7 @@ export class RallyDetailComponent implements OnInit {
     private rallyService: RallyService,
     private pecService: PecService,
     private teamProfileService: TeamProfileService,
+    private confirmDialog: ConfirmDialogService,
     private shared: SharedProperties,
   ) {}
 
@@ -156,10 +158,17 @@ export class RallyDetailComponent implements OnInit {
     this.router.navigate(['recce/', pecId]);
   }
 
-  deletePec(pecId: string, pecName: string, event: Event): void {
+  async deletePec(pecId: string, pecName: string, event: Event): Promise<void> {
     event.stopPropagation();
     if (this.isCompleted) return;
-    if (!confirm(`Tens a certeza que queres eliminar a ${pecName}?`)) return;
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar PEC',
+      message: `Queres mesmo eliminar "${pecName}"?`,
+      detail: 'As notas, ficheiros e dados associados a esta PEC serão removidos.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
 
     this.pecService.deletePecById(pecId).subscribe({
       next: () => {

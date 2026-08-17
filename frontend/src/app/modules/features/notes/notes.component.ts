@@ -6,6 +6,7 @@ import {
   CustomNoteDictionaryRule,
   NoteDictionaryService,
 } from '../../core/services/note-dictionary.service';
+import { ConfirmDialogService } from '../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../core/shared/shared-properties';
 
 @Component({
@@ -26,12 +27,13 @@ export class NotesComponent implements OnInit, OnDestroy {
   constructor(
     public shared: SharedProperties,
     private noteDictionary: NoteDictionaryService,
+    private confirmDialog: ConfirmDialogService,
   ) {}
 
   ngOnInit(): void {
     this.subscriptions.add(
-      this.noteDictionary.rules$.subscribe((rules) => {
-        this.rules = rules;
+      this.noteDictionary.rules$.subscribe(() => {
+        this.rules = this.noteDictionary.getDisplayRules();
       }),
     );
 
@@ -76,10 +78,13 @@ export class NotesComponent implements OnInit, OnDestroy {
       ? this.rules.find((rule) => rule.id === this.editingRuleId)
       : null;
 
+    const shouldUseBackend = this.shared.connectionMode$.value === 'online' && !currentRule?.localOnly;
+    const canUpdateExisting = !!currentRule?.id && !this.noteDictionary.isBasePlaceholder(currentRule);
+
     this.isSaving = true;
-    if (this.shared.connectionMode$.value === 'online' && !currentRule?.localOnly) {
-      const request = currentRule?.id
-        ? this.noteDictionary.updateRule(currentRule.id, payload)
+    if (shouldUseBackend) {
+      const request = canUpdateExisting
+        ? this.noteDictionary.updateRule(currentRule!.id!, payload)
         : this.noteDictionary.createRule(payload);
 
       request.subscribe({
@@ -95,11 +100,11 @@ export class NotesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (currentRule?.id) {
+    if (canUpdateExisting) {
       this.noteDictionary.updateLocalRule({
         ...payload,
-        id: currentRule.id,
-        localOnly: currentRule.localOnly,
+        id: currentRule!.id,
+        localOnly: currentRule!.localOnly,
       });
     } else {
       this.noteDictionary.createLocalRule(payload);
@@ -116,6 +121,9 @@ export class NotesComponent implements OnInit, OnDestroy {
       category: rule.category || '',
       enabled: rule.enabled,
       localOnly: rule.localOnly,
+      base: rule.base,
+      overridden: rule.overridden,
+      baseSymbol: rule.baseSymbol,
     };
   }
 
@@ -128,13 +136,30 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.persistRule({ ...rule, enabled: !rule.enabled }, 'Regra atualizada');
   }
 
-  deleteRule(rule: CustomNoteDictionaryRule): void {
+  async deleteRule(rule: CustomNoteDictionaryRule): Promise<void> {
     if (!rule.id) return;
-    if (!window.confirm(`Eliminar a regra "${rule.phrase}"?`)) return;
+    const isBaseRule = this.noteDictionary.isBaseRule(rule);
+    const isRestore = isBaseRule && rule.overridden;
+    const confirmed = await this.confirmDialog.confirm({
+      title: isRestore ? 'Repor nota base' : 'Eliminar regra',
+      message: isRestore
+        ? `Queres repor "${rule.phrase}" para o valor base da app?`
+        : `Queres eliminar a regra "${rule.phrase}"?`,
+      detail: isRestore
+        ? `A nota volta a escrever "${rule.baseSymbol}".`
+        : 'A conversão personalizada deixa de ser aplicada às próximas notas.',
+      confirmText: isRestore ? 'Repor' : 'Eliminar',
+      tone: isRestore ? 'default' : 'danger',
+    });
+    if (!confirmed) return;
+
+    if (this.noteDictionary.isBasePlaceholder(rule)) {
+      return;
+    }
 
     if (this.shared.connectionMode$.value === 'online' && !rule.localOnly) {
       this.noteDictionary.deleteRule(rule.id).subscribe({
-        next: () => this.shared.success('Regra eliminada'),
+        next: () => this.shared.success(isRestore ? 'Nota reposta' : 'Regra eliminada'),
         error: () =>
           this.shared.error(
             'Erro ao eliminar regra',
@@ -145,7 +170,15 @@ export class NotesComponent implements OnInit, OnDestroy {
     }
 
     this.noteDictionary.deleteLocalRule(rule.id);
-    this.shared.success('Regra eliminada');
+    this.shared.success(isRestore ? 'Nota reposta' : 'Regra eliminada');
+  }
+
+  deleteLabel(rule: CustomNoteDictionaryRule): string {
+    return this.noteDictionary.isBaseRule(rule) && rule.overridden ? 'Repor' : 'Eliminar';
+  }
+
+  canDelete(rule: CustomNoteDictionaryRule): boolean {
+    return !this.noteDictionary.isBaseRule(rule) || !!rule.overridden;
   }
 
   trackRule(_: number, rule: CustomNoteDictionaryRule): string {
@@ -153,8 +186,14 @@ export class NotesComponent implements OnInit, OnDestroy {
   }
 
   private persistRule(rule: CustomNoteDictionaryRule, successTitle: string): void {
-    if (this.shared.connectionMode$.value === 'online' && rule.id && !rule.localOnly) {
-      this.noteDictionary.updateRule(rule.id, rule).subscribe({
+    const canUpdateExisting = !!rule.id && !this.noteDictionary.isBasePlaceholder(rule);
+
+    if (this.shared.connectionMode$.value === 'online' && !rule.localOnly) {
+      const request = canUpdateExisting
+        ? this.noteDictionary.updateRule(rule.id!, rule)
+        : this.noteDictionary.createRule(rule);
+
+      request.subscribe({
         next: () => this.shared.success(successTitle),
         error: () =>
           this.shared.error(
@@ -165,7 +204,11 @@ export class NotesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.noteDictionary.updateLocalRule(rule);
+    if (canUpdateExisting) {
+      this.noteDictionary.updateLocalRule(rule);
+    } else {
+      this.noteDictionary.createLocalRule(rule);
+    }
     this.shared.success(successTitle);
   }
 

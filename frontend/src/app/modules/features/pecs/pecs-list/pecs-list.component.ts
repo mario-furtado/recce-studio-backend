@@ -9,6 +9,7 @@ import {
   TeamCar,
   TeamProfileService,
 } from '../../../core/services/team-profile.service';
+import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 
 type Surface = 'TERRA' | 'ASFALTO' | 'NEVE' | 'MISTO';
@@ -26,6 +27,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
   carFilter = '';
   classFilter = '';
   statusFilter = 'ACTIVE';
+  areFiltersOpen = false;
 
   isCreatingRally = false;
   editingRallyId: string | null = null;
@@ -55,6 +57,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
     private router: Router,
     private rallyService: RallyService,
     private teamProfileService: TeamProfileService,
+    private confirmDialog: ConfirmDialogService,
     private shared: SharedProperties,
   ) {}
 
@@ -192,18 +195,25 @@ export class PecsListComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteRally(rallyId: string, rallyName: string, event: Event): void {
+  async deleteRally(rallyId: string, rallyName: string, event: Event): Promise<void> {
     event.stopPropagation();
     if (!this.ensureOnlineAction()) return;
-    if (confirm(`Tens a certeza que queres eliminar o "${rallyName}"?`)) {
-      this.rallyService.deleteRally(rallyId).subscribe({
-        next: () => {
-          this.rallies = this.rallies.filter((r) => r.id !== rallyId);
-          this.shared.success('Rali eliminado', rallyName);
-        },
-        error: () => this.shared.error('Erro ao eliminar rali'),
-      });
-    }
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar rali',
+      message: `Queres mesmo eliminar "${rallyName}"?`,
+      detail: 'Esta ação remove o rali e as PECs associadas no backend.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    this.rallyService.deleteRally(rallyId).subscribe({
+      next: () => {
+        this.rallies = this.rallies.filter((r) => r.id !== rallyId);
+        this.shared.success('Rali eliminado', rallyName);
+      },
+      error: () => this.shared.error('Erro ao eliminar rali'),
+    });
   }
 
   viewRallyDetails(rallyId: string): void {
@@ -227,6 +237,20 @@ export class PecsListComponent implements OnInit, OnDestroy {
     this.carFilter = '';
     this.classFilter = '';
     this.statusFilter = 'ACTIVE';
+  }
+
+  get activeFiltersCount(): number {
+    return [
+      this.surfaceFilter,
+      this.yearFilter,
+      this.carFilter,
+      this.classFilter,
+      this.statusFilter !== 'ACTIVE' ? this.statusFilter : '',
+    ].filter(Boolean).length;
+  }
+
+  toggleFilters(): void {
+    this.areFiltersOpen = !this.areFiltersOpen;
   }
 
   getCarName(carId?: string): string {

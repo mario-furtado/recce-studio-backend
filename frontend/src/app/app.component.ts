@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, HostListener, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { ConfirmDialogComponent } from './modules/core/shared/components/confirm-dialog/confirm-dialog.component';
 import { SharedProperties } from './modules/core/shared/shared-properties';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -11,7 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet],
+  imports: [CommonModule, RouterOutlet, ConfirmDialogComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })

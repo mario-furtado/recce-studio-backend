@@ -7,6 +7,7 @@ import {
   TeamProfileService,
   TeamStats,
 } from '../../core/services/team-profile.service';
+import { ConfirmDialogService } from '../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../core/shared/shared-properties';
 
 @Component({
@@ -20,6 +21,7 @@ export class TeamProfileComponent implements OnInit {
   isEditing = false;
   isSaving = false;
   logoPreviewUrl: string | null = null;
+  private logoVersion = Date.now();
 
   readonly distanceUnitOptions = ['Quilometros (km)', 'Milhas (mi)'];
   readonly noteSystemOptions = [
@@ -60,6 +62,7 @@ export class TeamProfileComponent implements OnInit {
 
   constructor(
     private teamProfileService: TeamProfileService,
+    private confirmDialog: ConfirmDialogService,
     private shared: SharedProperties,
   ) {}
 
@@ -75,7 +78,7 @@ export class TeamProfileComponent implements OnInit {
         this.team = profile;
         this.draft = { ...profile };
         this.syncSelectStateFromDraft();
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile);
+        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
       },
       error: () => this.shared.error('Erro ao carregar perfil da equipa'),
     });
@@ -128,7 +131,7 @@ export class TeamProfileComponent implements OnInit {
         this.team = profile;
         this.draft = { ...profile };
         this.syncSelectStateFromDraft();
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile);
+        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
         this.isEditing = false;
         this.isSaving = false;
         this.shared.success('Perfil atualizado', profile.name);
@@ -150,8 +153,10 @@ export class TeamProfileComponent implements OnInit {
     this.teamProfileService.uploadLogo(file).subscribe({
       next: (profile) => {
         this.team = profile;
-        this.draft = { ...this.draft, logoFileName: profile.logoFileName, logoUrl: profile.logoUrl };
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile);
+        this.draft = { ...profile };
+        this.syncSelectStateFromDraft();
+        this.logoVersion = Date.now();
+        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
         this.isSaving = false;
         this.shared.success('Imagem atualizada');
       },
@@ -219,8 +224,19 @@ export class TeamProfileComponent implements OnInit {
     });
   }
 
-  deleteCar(car: TeamCar): void {
+  async deleteCar(car: TeamCar): Promise<void> {
     if (!car.id) return;
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar carro',
+      message: `Queres eliminar "${car.name}" da garagem?`,
+      detail: car.active
+        ? 'Este carro está selecionado. O perfil da equipa ficará sem carro ativo.'
+        : 'A foto e os dados deste carro serão removidos da garagem.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.teamProfileService.deleteCar(car.id).subscribe({
       next: () => {
         this.loadCars();

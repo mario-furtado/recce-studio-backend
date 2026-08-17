@@ -10,51 +10,44 @@ import org.example.entity.OfflineRecceSyncEntity;
 import org.example.entity.PecEntity;
 import org.example.repository.OfflineRecceSyncRepository;
 import org.example.repository.PecRepository;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class PecAssetService {
     private final PecRepository pecRepository;
     private final OfflineRecceSyncRepository offlineRecceSyncRepository;
     private final ObjectMapper objectMapper;
-    private final Path uploadRoot;
+    private final FileStorageService fileStorageService;
 
     public PecAssetService(
             PecRepository pecRepository,
             OfflineRecceSyncRepository offlineRecceSyncRepository,
             ObjectMapper objectMapper,
-            @Value("${recce.upload-dir:uploads}") String uploadDir) {
+            FileStorageService fileStorageService) {
         this.pecRepository = pecRepository;
         this.offlineRecceSyncRepository = offlineRecceSyncRepository;
         this.objectMapper = objectMapper;
-        this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.fileStorageService = fileStorageService;
     }
 
     @Transactional
     public PecAssetDTO saveVideo(String pecId, MultipartFile file) {
         PecEntity pec = getPec(pecId);
         ensureCanEdit(pec);
-        String path = storeFile(pecId, "video", file);
-        deleteStoredFile(pec.getVideoStoragePath());
+        String path = fileStorageService.store(file, "pecs/" + pecId, "video");
+        fileStorageService.delete(pec.getVideoStoragePath());
         pec.setVideoFileName(file.getOriginalFilename());
         pec.setVideoContentType(file.getContentType());
         pec.setVideoStoragePath(path);
@@ -66,7 +59,7 @@ public class PecAssetService {
     public PecAssetDTO deleteVideo(String pecId) {
         PecEntity pec = getPec(pecId);
         ensureCanEdit(pec);
-        deleteStoredFile(pec.getVideoStoragePath());
+        fileStorageService.delete(pec.getVideoStoragePath());
         pec.setVideoFileName(null);
         pec.setVideoContentType(null);
         pec.setVideoStoragePath(null);
@@ -78,8 +71,8 @@ public class PecAssetService {
     public PecAssetDTO saveGps(String pecId, MultipartFile file) {
         PecEntity pec = getPec(pecId);
         ensureCanEdit(pec);
-        String path = storeFile(pecId, "gps", file);
-        deleteStoredFile(pec.getGpsStoragePath());
+        String path = fileStorageService.store(file, "pecs/" + pecId, "gps");
+        fileStorageService.delete(pec.getGpsStoragePath());
         pec.setGpsFileName(file.getOriginalFilename());
         pec.setGpsContentType(file.getContentType());
         pec.setGpsStoragePath(path);
@@ -96,7 +89,7 @@ public class PecAssetService {
         if (pec.getVideoStoragePath() == null) {
             throw new RuntimeException("Video nao encontrado para a PEC: " + pecId);
         }
-        return new FileSystemResource(pec.getVideoStoragePath());
+        return fileStorageService.loadAsResource(pec.getVideoStoragePath());
     }
 
     public String getVideoContentType(String pecId) {
@@ -111,12 +104,15 @@ public class PecAssetService {
         }
 
         try {
-            File file = new File(pec.getGpsStoragePath());
-            String lowerName = file.getName().toLowerCase();
+            String lowerName = fileStorageService.fileName(pec.getGpsStoragePath()).toLowerCase();
             if (lowerName.endsWith(".gpx") || "application/gpx+xml".equals(pec.getGpsContentType())) {
-                return parseGpx(file);
+                try (InputStream inputStream = fileStorageService.open(pec.getGpsStoragePath())) {
+                    return parseGpx(inputStream);
+                }
             }
-            return parseJson(file);
+            try (InputStream inputStream = fileStorageService.open(pec.getGpsStoragePath())) {
+                return parseJson(inputStream);
+            }
         } catch (Exception e) {
             throw new RuntimeException("Erro ao ler GPS da PEC: " + e.getMessage());
         }
@@ -142,41 +138,6 @@ public class PecAssetService {
         }
     }
 
-    private String storeFile(String pecId, String kind, MultipartFile file) {
-        try {
-            if (file == null || file.isEmpty()) {
-                throw new RuntimeException("Ficheiro vazio");
-            }
-            String original = StringUtils.cleanPath(file.getOriginalFilename() == null ? kind : file.getOriginalFilename());
-            String extension = "";
-            int dotIndex = original.lastIndexOf('.');
-            if (dotIndex >= 0) {
-                extension = original.substring(dotIndex);
-            }
-
-            Path pecDir = uploadRoot.resolve("pecs").resolve(pecId).normalize();
-            Files.createDirectories(pecDir);
-            Path target = pecDir.resolve(kind + "-" + UUID.randomUUID() + extension).normalize();
-            if (!target.startsWith(uploadRoot)) {
-                throw new RuntimeException("Caminho de ficheiro invalido");
-            }
-            file.transferTo(target.toFile());
-            return target.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao guardar ficheiro: " + e.getMessage());
-        }
-    }
-
-    private void deleteStoredFile(String storagePath) {
-        if (storagePath == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(Paths.get(storagePath));
-        } catch (Exception ignored) {
-        }
-    }
-
     private PecAssetDTO toAssetDTO(PecEntity pec) {
         PecAssetDTO dto = new PecAssetDTO();
         dto.setHasVideo(pec.getVideoStoragePath() != null);
@@ -188,9 +149,9 @@ public class PecAssetService {
         return dto;
     }
 
-    private List<GpsPointDTO> parseGpx(File file) throws Exception {
+    private List<GpsPointDTO> parseGpx(InputStream inputStream) throws Exception {
         List<GpsPointDTO> points = new ArrayList<>();
-        Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file);
+        Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(inputStream);
         NodeList nodes = document.getElementsByTagName("trkpt");
         for (int i = 0; i < nodes.getLength(); i++) {
             org.w3c.dom.Node node = nodes.item(i);
@@ -201,8 +162,8 @@ public class PecAssetService {
         return points;
     }
 
-    private List<GpsPointDTO> parseJson(File file) throws Exception {
-        JsonNode root = objectMapper.readTree(file);
+    private List<GpsPointDTO> parseJson(InputStream inputStream) throws Exception {
+        JsonNode root = objectMapper.readTree(inputStream);
         JsonNode array = root.isArray() ? root : firstArray(root);
         List<GpsPointDTO> points = new ArrayList<>();
         if (array == null) {

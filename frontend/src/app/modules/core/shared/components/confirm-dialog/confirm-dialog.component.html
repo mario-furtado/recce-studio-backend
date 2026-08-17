@@ -1,0 +1,53 @@
+<ng-container *ngIf="state$ | async as state">
+  <section
+    class="confirm-backdrop"
+    role="presentation"
+    (click)="confirmDialog.dismiss()"
+  >
+    <article
+      class="confirm-dialog glass-panel"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="state.title"
+      (click)="onDialogClick($event)"
+    >
+      <div class="confirm-dialog-marker" [class.is-danger]="state.tone === 'danger'"></div>
+
+      <div class="confirm-dialog-header">
+        <div class="confirm-dialog-icon" [class.is-danger]="state.tone === 'danger'">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+            <path d="M10.3 4.4 2.8 17.2A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.8L13.7 4.4a2 2 0 0 0-3.4 0Z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h2>{{ state.title }}</h2>
+          <p>{{ state.message }}</p>
+        </div>
+      </div>
+
+      <p *ngIf="state.detail" class="confirm-dialog-detail">
+        {{ state.detail }}
+      </p>
+
+      <footer class="confirm-dialog-actions">
+        <button
+          type="button"
+          class="soft-button"
+          (click)="confirmDialog.dismiss()"
+        >
+          {{ state.cancelText }}
+        </button>
+        <button
+          #confirmButton
+          type="button"
+          [class]="state.tone === 'danger' ? 'danger-button' : 'accent-button'"
+          (click)="confirmDialog.accept()"
+        >
+          {{ state.confirmText }}
+        </button>
+      </footer>
+    </article>
+  </section>
+</ng-container>

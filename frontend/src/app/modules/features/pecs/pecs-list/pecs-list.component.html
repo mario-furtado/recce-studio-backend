@@ -25,8 +25,28 @@
     </div>
   </div>
 
+  <button
+    type="button"
+    (click)="toggleFilters()"
+    class="mobile-filter-toggle soft-button w-full justify-between px-4 py-3 rounded-xl text-sm font-bold"
+    [attr.aria-expanded]="areFiltersOpen"
+    aria-controls="rallyFilters"
+  >
+    <span>Filtros</span>
+    <span class="flex items-center gap-2">
+      <span *ngIf="activeFiltersCount" class="themed-chip text-[11px] px-2 py-0.5">
+        {{ activeFiltersCount }}
+      </span>
+      <svg viewBox="0 0 24 24" aria-hidden="true" [class.rotate-180]="areFiltersOpen">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </span>
+  </button>
+
   <div
+    id="rallyFilters"
     class="rally-filter-bar glass-panel p-4 rounded-2xl grid grid-cols-1 md:grid-cols-6 gap-3"
+    [class.mobile-open]="areFiltersOpen"
   >
     <select
       [(ngModel)]="statusFilter"

@@ -16,6 +16,7 @@ import {
   PecService,
 } from '../../core/services/pecs.service';
 import { RallyService } from '../../core/services/rally.service';
+import { ConfirmDialogService } from '../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../core/shared/shared-properties';
 
 @Component({
@@ -45,6 +46,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     private pecService: PecService,
     private rallyService: RallyService,
     private router: Router,
+    private confirmDialog: ConfirmDialogService,
     private shared: SharedProperties,
   ) {}
 
@@ -217,9 +219,13 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   async deleteSession(session: OfflineRecceSession): Promise<void> {
-    const confirmed = window.confirm(
-      `Eliminar "${session.temporaryName}" deste dispositivo?`,
-    );
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar reconhecimento offline',
+      message: `Queres eliminar "${session.temporaryName}" deste dispositivo?`,
+      detail: 'Esta ação liberta o armazenamento local e não pode ser desfeita.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
     if (!confirmed) return;
 
     try {

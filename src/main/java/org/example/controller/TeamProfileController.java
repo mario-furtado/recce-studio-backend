@@ -5,6 +5,7 @@ import org.example.dto.TeamStatsDTO;
 import org.example.entity.TeamCarEntity;
 import org.example.service.TeamProfileService;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -80,6 +81,7 @@ public class TeamProfileController {
     public ResponseEntity<Resource> getCarPhoto(@PathVariable String carId) {
         Resource resource = teamProfileService.getCarPhotoResource(carId);
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(teamProfileService.getCarPhotoContentType(carId)))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(resource);
@@ -94,6 +96,7 @@ public class TeamProfileController {
     public ResponseEntity<Resource> getLogo() {
         Resource resource = teamProfileService.getLogoResource();
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(teamProfileService.getLogoContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(resource);
