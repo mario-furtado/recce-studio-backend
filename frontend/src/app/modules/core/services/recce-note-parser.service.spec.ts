@@ -146,6 +146,8 @@ describe('RecceNoteParserService', () => {
   });
 
   it('parses compact direction commands produced by speech recognition', () => {
+    expect(service.parse('direita 3').compactText).toBe('D3');
+    expect(service.parse('esquerda 3').compactText).toBe('E3');
     expect(service.parse('e3').compactText).toBe('E3');
     expect(service.parse('d4').compactText).toBe('D4');
   });

@@ -14,6 +14,7 @@ import { SettingsComponent } from './modules/features/settings/settings.componen
 import { authGuard } from './modules/core/guards/auth.guard';
 import { TutorialComponent } from './modules/features/tutorial/tutorial.component';
 import { OfflineReccesComponent } from './modules/features/offline-recces/offline-recces.component';
+import { NotesComponent } from './modules/features/notes/notes.component';
 
 export const routes: Routes = [
   // 1. Rota Pública de Login (Sem Sidebar)
@@ -33,6 +34,7 @@ export const routes: Routes = [
       { path: 'rally/:id', component: RallyDetailComponent },
       { path: 'recce-mode', component: RecceModeComponent },
       { path: 'offline-recces', component: OfflineReccesComponent },
+      { path: 'notes', component: NotesComponent },
       { path: 'team-profile', component: TeamProfileComponent },
       { path: 'settings', component: SettingsComponent },
       { path: 'tutorial', component: TutorialComponent },

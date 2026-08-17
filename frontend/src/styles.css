@@ -2617,7 +2617,7 @@ svg polyline[stroke='var(--accent)'] {
 
   .sidebar-nav {
     display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     gap: 0.35rem !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -2633,7 +2633,7 @@ svg polyline[stroke='var(--accent)'] {
     gap: 0.22rem !important;
     padding: 0.45rem 0.18rem !important;
     border-radius: 0.75rem !important;
-    font-size: 0.58rem !important;
+    font-size: 0.54rem !important;
     line-height: 1.05;
   }
 

@@ -44,7 +44,7 @@
           (shared.connectionMode$ | async) === 'offline'
         "
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? 'Ralis & PECs' : null"
+        [attr.title]="isCollapsed ? 'Ralis & PECs' : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -60,7 +60,7 @@
         [routerLink]="(shared.connectionMode$ | async) === 'offline' ? '/recce-mode' : '/new-recce'"
         routerLinkActive="selected-ring text-white font-semibold"
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? ((shared.connectionMode$ | async) === 'offline' ? 'Reconhecimento' : 'Criar Nova PEC') : null"
+        [attr.title]="isCollapsed ? ((shared.connectionMode$ | async) === 'offline' ? 'Reconhecimento' : 'Criar Nova PEC') : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -76,7 +76,7 @@
         routerLink="/offline-recces"
         routerLinkActive="selected-ring text-white font-semibold"
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? 'Reconhecimentos Offline' : null"
+        [attr.title]="isCollapsed ? 'Reconhecimentos Offline' : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -90,13 +90,28 @@
       </a>
 
       <a
+        routerLink="/notes"
+        routerLinkActive="selected-ring text-white font-semibold"
+        class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
+        [attr.title]="isCollapsed ? 'Notas' : null"
+      >
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M6 4h12v16H6z" />
+            <path d="M9 8h6M9 12h6M9 16h3" />
+          </svg>
+        </span>
+        <span *ngIf="!isCollapsed" class="whitespace-nowrap">Notas</span>
+      </a>
+
+      <a
         routerLink="/team-profile"
         routerLinkActive="selected-ring text-white font-semibold"
         [class.offline-disabled]="
           (shared.connectionMode$ | async) === 'offline'
         "
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? 'Perfil da Equipa' : null"
+        [attr.title]="isCollapsed ? 'Perfil da Equipa' : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -117,7 +132,7 @@
           (shared.connectionMode$ | async) === 'offline'
         "
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? 'Configuracoes' : null"
+        [attr.title]="isCollapsed ? 'Configuracoes' : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -136,7 +151,7 @@
         routerLink="/tutorial"
         routerLinkActive="selected-ring text-white font-semibold"
         class="sidebar-link interactive-card flex items-center gap-3 px-3 py-3"
-        [title]="isCollapsed ? 'Tutorial' : null"
+        [attr.title]="isCollapsed ? 'Tutorial' : null"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -155,6 +170,13 @@
         class="mobile-session-button"
         [disabled]="isSwitchingConnectionMode"
         [class.is-offline]="(shared.connectionMode$ | async) === 'offline'"
+        [attr.title]="
+          isSwitchingConnectionMode
+            ? 'A validar ligacao'
+            : (shared.connectionMode$ | async) === 'offline'
+              ? 'Mudar para modo online'
+              : 'Mudar para modo offline'
+        "
       >
         <span
           class="rs-status-dot"
@@ -176,6 +198,7 @@
         type="button"
         (click)="logout()"
         class="mobile-session-button mobile-logout-button"
+        title="Terminar sessao"
       >
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -195,7 +218,7 @@
       class="connection-toggle soft-button w-full px-3 py-2 text-xs"
       [disabled]="isSwitchingConnectionMode"
       [class.selected-ring]="(shared.connectionMode$ | async) === 'offline'"
-      [title]="
+      [attr.title]="
         isCollapsed
           ? (shared.connectionMode$ | async) === 'offline'
             ? 'Modo Offline'
@@ -223,7 +246,7 @@
       type="button"
       (click)="logout()"
       class="soft-button w-full px-3 py-2 text-xs hover:text-red-100"
-      [title]="isCollapsed ? 'Logout' : null"
+      [attr.title]="isCollapsed ? 'Logout' : null"
     >
       <span class="nav-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24">

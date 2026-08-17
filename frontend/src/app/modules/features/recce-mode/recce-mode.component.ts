@@ -67,6 +67,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   private awaitingVoiceMarkerAt = 0;
   private pushToTalkRawText = '';
   private pushToTalkPointerId: number | null = null;
+  private lastInterimTranscript = '';
   private offlineSessionId: string | null = null;
   private resumeSession: OfflineRecceSession | null = null;
   private offlineSaveQueue: Promise<unknown> = Promise.resolve();
@@ -154,11 +155,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         localStorage.setItem(`recce_session_id_${this.pecId}`, completedSessionId);
       }
 
-      // 2. Fazer Download do Ficheiro de Backup com o NOME da PEC
-      this.downloadBackupFile(finalMarkers);
-      this.downloadAudioBackupFile(audioBlob);
-
-      // 3. Emite o evento para o pai alternar a vista/tab para o 'STUDIO'
+      // 2. Emite o evento para o pai alternar a vista/tab para o 'STUDIO'
       this.navigateToStudio.emit();
       if (this.shouldNavigateToOfflineQueue()) {
         this.router.navigate(['/offline-recces']);
@@ -392,6 +389,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         this.prepareVoiceNote(transcript, result[0]?.confidence ?? null);
       } else {
         this.liveTranscript = transcript;
+        this.lastInterimTranscript = transcript;
       }
     }
   }
@@ -485,6 +483,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     this.awaitingVoiceMarkerIndex = marker.index;
     this.awaitingVoiceMarkerAt = Date.now();
     this.pushToTalkRawText = '';
+    this.lastInterimTranscript = '';
     this.liveTranscript = '';
     this.speechStatus = this.speechSupported ? 'A ouvir nota' : 'Timestamp marcado';
 
@@ -512,6 +511,11 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       }
     }
 
+    const fallbackTranscript = (this.liveTranscript || this.lastInterimTranscript).trim();
+    if (fallbackTranscript) {
+      this.prepareVoiceNote(fallbackTranscript, null);
+    }
+
     this.stopSpeechRecognition();
     this.isPushToTalkActive = false;
     this.pushToTalkPointerId = null;
@@ -530,9 +534,25 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   }
 
   private appendPushToTalkText(rawText: string): string {
+    const nextText = rawText.trim();
+    if (!nextText) return this.pushToTalkRawText;
+
+    if (this.pushToTalkRawText === nextText) {
+      return this.pushToTalkRawText;
+    }
+
+    if (nextText.startsWith(this.pushToTalkRawText)) {
+      this.pushToTalkRawText = nextText;
+      return this.pushToTalkRawText;
+    }
+
+    if (this.pushToTalkRawText.startsWith(nextText)) {
+      return this.pushToTalkRawText;
+    }
+
     this.pushToTalkRawText = this.pushToTalkRawText
-      ? `${this.pushToTalkRawText} ${rawText}`.trim()
-      : rawText.trim();
+      ? `${this.pushToTalkRawText} ${nextText}`.trim()
+      : nextText;
     return this.pushToTalkRawText;
   }
 
@@ -634,49 +654,6 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     const remSecs = seconds % 60;
     const tenths = Math.floor((totalSeconds % 1) * 10);
     return `${mins.toString().padStart(2, '0')}:${remSecs.toString().padStart(2, '0')}.${tenths}`;
-  }
-
-  private downloadBackupFile(markers: ClickMarker[]): void {
-    // Sanitiza o nome da PEC para evitar caracteres inválidos no nome do ficheiro
-    const rawName = this.pecName || this.pecId || 'PEC';
-    const sanitizedName = rawName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/gi, '_');
-
-    const fileName = `recce_${sanitizedName}_timestamps.json`;
-
-    const dataStr =
-      'data:text/json;charset=utf-8,' +
-      encodeURIComponent(JSON.stringify(markers, null, 2));
-
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', fileName);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  }
-
-  private downloadAudioBackupFile(audioBlob: Blob | null): void {
-    if (!audioBlob) return;
-
-    const rawName = this.pecName || this.pecId || 'PEC';
-    const sanitizedName = rawName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_-]/gi, '_');
-    const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm';
-    const fileName = `recce_${sanitizedName}_audio.${extension}`;
-    const url = window.URL.createObjectURL(audioBlob);
-    const downloadAnchor = document.createElement('a');
-
-    downloadAnchor.href = url;
-    downloadAnchor.download = fileName;
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    window.URL.revokeObjectURL(url);
   }
 
   private startTimer(initialElapsedSeconds = 0): void {

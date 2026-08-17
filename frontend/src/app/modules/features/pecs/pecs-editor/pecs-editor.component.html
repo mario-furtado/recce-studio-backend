@@ -37,7 +37,7 @@
         (click)="deleteVideo()"
         [disabled]="isLocked"
         class="danger-button text-xs text-white px-3 py-1.5 rounded-lg font-semibold"
-        [title]="videoFileName"
+        [attr.title]="videoFileName || 'Eliminar video'"
       >
         <span class="desktop-label">Eliminar Video</span>
         <span class="mobile-label">Del Video</span>

@@ -12,6 +12,7 @@ public class SpaForwardController {
             "/new-recce",
             "/recce-mode",
             "/offline-recces",
+            "/notes",
             "/team-profile",
             "/settings",
             "/tutorial",
