@@ -7,6 +7,7 @@ import org.example.service.FileStorageService;
 import org.example.service.TeamProfileService;
 import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -151,6 +152,7 @@ public class RallyController {
             Resource resource = fileStorageService.loadAsResource(rally.getLogoStoragePath());
             String contentType = rally.getLogoContentType() != null ? rally.getLogoContentType() : "application/octet-stream";
             return ResponseEntity.<Resource>ok()
+                    .cacheControl(CacheControl.noStore())
                     .contentType(MediaType.parseMediaType(contentType))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                     .body(resource);

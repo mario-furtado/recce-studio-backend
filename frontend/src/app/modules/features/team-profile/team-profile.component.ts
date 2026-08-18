@@ -22,6 +22,7 @@ export class TeamProfileComponent implements OnInit {
   isSaving = false;
   logoPreviewUrl: string | null = null;
   private logoVersion = Date.now();
+  private failedCarPhotoIds = new Set<string>();
 
   readonly distanceUnitOptions = ['Quilometros (km)', 'Milhas (mi)'];
   readonly noteSystemOptions = [
@@ -87,6 +88,7 @@ export class TeamProfileComponent implements OnInit {
   loadCars(): void {
     this.teamProfileService.getCars().subscribe({
       next: (cars) => {
+        this.failedCarPhotoIds.clear();
         this.cars = cars;
         const selected = cars.find((car) => car.active);
         if (selected) {
@@ -256,7 +258,8 @@ export class TeamProfileComponent implements OnInit {
     if (!car.id || !file) return;
 
     this.teamProfileService.uploadCarPhoto(car.id, file).subscribe({
-      next: () => {
+      next: (updatedCar) => {
+        this.failedCarPhotoIds.delete(updatedCar.id || car.id || '');
         this.loadCars();
         this.shared.success('Fotografia do carro atualizada');
       },
@@ -269,7 +272,20 @@ export class TeamProfileComponent implements OnInit {
   }
 
   getCarPhotoUrl(car: TeamCar): string | null {
+    if (car.id && this.failedCarPhotoIds.has(car.id)) {
+      return null;
+    }
     return this.teamProfileService.getCarPhotoUrl(car);
+  }
+
+  onLogoImageError(): void {
+    this.logoPreviewUrl = null;
+  }
+
+  onCarPhotoError(car: TeamCar): void {
+    if (car.id) {
+      this.failedCarPhotoIds.add(car.id);
+    }
   }
 
   private syncSelectStateFromDraft(): void {

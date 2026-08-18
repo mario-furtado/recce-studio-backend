@@ -5,6 +5,7 @@
         <img
           *ngIf="logoPreviewUrl; else logoFallback"
           [src]="logoPreviewUrl"
+          (error)="onLogoImageError()"
           alt="Logo da equipa"
           class="w-full h-full object-cover"
         />
@@ -116,6 +117,7 @@
                 <img
                   *ngIf="getCarPhotoUrl(car); else carPhotoFallback"
                   [src]="getCarPhotoUrl(car)"
+                  (error)="onCarPhotoError(car)"
                   alt="Fotografia do carro"
                   class="w-full h-full object-cover"
                 />
