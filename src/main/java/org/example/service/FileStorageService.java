@@ -7,6 +7,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -26,6 +28,8 @@ import java.util.UUID;
 
 @Service
 public class FileStorageService {
+    private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
+
     private final String storageType;
     private final Path uploadRoot;
     private final String bucketName;
@@ -40,12 +44,20 @@ public class FileStorageService {
             @Value("${recce.storage.s3.access-key:}") String accessKey,
             @Value("${recce.storage.s3.secret-key:}") String secretKey,
             @Value("${recce.storage.s3.url-style:virtual}") String urlStyle) {
-        this.storageType = storageType == null ? "local" : storageType.trim().toLowerCase();
+        String requestedStorageType = storageType == null ? "local" : storageType.trim().toLowerCase();
+        boolean hasS3Credentials = StringUtils.hasText(bucketName)
+                && StringUtils.hasText(endpoint)
+                && StringUtils.hasText(accessKey)
+                && StringUtils.hasText(secretKey);
+        this.storageType = "local".equals(requestedStorageType) && hasS3Credentials
+                ? "s3"
+                : requestedStorageType;
         this.uploadRoot = Paths.get(uploadDir).toAbsolutePath().normalize();
         this.bucketName = bucketName;
         this.s3Client = isS3()
                 ? buildS3Client(endpoint, region, accessKey, secretKey, urlStyle)
                 : null;
+        log.info("File storage initialized with type {}", this.storageType);
     }
 
     public String store(MultipartFile file, String folder, String prefix) {
@@ -74,8 +86,10 @@ public class FileStorageService {
                         .contentLength(file.getSize())
                         .build();
                 s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+                log.info("Stored file in S3 bucket {} with key {}", bucketName, key);
                 return key;
             } catch (Exception e) {
+                log.warn("Failed to store file in S3 bucket {}: {}", bucketName, e.getMessage());
                 throw new RuntimeException("Erro ao guardar ficheiro no bucket: " + e.getMessage());
             }
         }
@@ -88,6 +102,7 @@ public class FileStorageService {
                 throw new RuntimeException("Caminho de ficheiro invalido");
             }
             file.transferTo(target.toFile());
+            log.info("Stored file locally at {}", target);
             return target.toString();
         } catch (Exception e) {
             throw new RuntimeException("Erro ao guardar ficheiro: " + e.getMessage());

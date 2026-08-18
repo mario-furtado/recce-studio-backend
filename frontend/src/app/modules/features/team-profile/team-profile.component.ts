@@ -138,7 +138,7 @@ export class TeamProfileComponent implements OnInit {
       },
       error: (err) => {
         console.error('Erro ao guardar perfil da equipa:', err);
-        this.shared.error('Erro ao guardar perfil da equipa');
+        this.shared.error('Erro ao guardar perfil da equipa', this.backendMessage(err));
         this.isSaving = false;
       },
     });
@@ -162,7 +162,7 @@ export class TeamProfileComponent implements OnInit {
       },
       error: (err) => {
         console.error('Erro ao carregar imagem:', err);
-        this.shared.error('Erro ao carregar imagem do perfil');
+        this.shared.error('Erro ao carregar imagem do perfil', this.backendMessage(err));
         this.isSaving = false;
       },
     });
@@ -262,7 +262,7 @@ export class TeamProfileComponent implements OnInit {
       },
       error: (err) => {
         console.error('Erro ao carregar fotografia do carro:', err);
-        this.shared.error('Erro ao carregar fotografia do carro');
+        this.shared.error('Erro ao carregar fotografia do carro', this.backendMessage(err));
       },
     });
     input.value = '';
@@ -296,6 +296,11 @@ export class TeamProfileComponent implements OnInit {
     this.draft.noteSystem = this.selectedNoteSystemOption === 'Outro'
       ? this.customNoteSystem.trim()
       : this.selectedNoteSystemOption;
+  }
+
+  private backendMessage(err: unknown): string | undefined {
+    const error = err as { error?: { message?: string }; message?: string };
+    return error.error?.message || error.message;
   }
 
   private emptyProfile(): TeamProfile {

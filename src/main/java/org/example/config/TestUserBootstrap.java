@@ -9,14 +9,20 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
 @Component
 public class TestUserBootstrap implements CommandLineRunner {
+    private static final Logger log = LoggerFactory.getLogger(TestUserBootstrap.class);
+
     private final AuthUserRepository authUserRepository;
     private final TeamProfileService teamProfileService;
     private final String environment;
+    private final String railwayEnvironment;
+    private final String enabledOverride;
     private final boolean enabled;
     private final String email;
     private final String password;
@@ -25,12 +31,16 @@ public class TestUserBootstrap implements CommandLineRunner {
             AuthUserRepository authUserRepository,
             TeamProfileService teamProfileService,
             @Value("${recce.environment:dev}") String environment,
+            @Value("${RAILWAY_ENVIRONMENT_NAME:}") String railwayEnvironment,
+            @Value("${RECCE_TEST_USER_ENABLED:}") String enabledOverride,
             @Value("${recce.test-user.enabled:false}") boolean enabled,
             @Value("${recce.test-user.email:test@reccestudio.local}") String email,
             @Value("${recce.test-user.password:}") String password) {
         this.authUserRepository = authUserRepository;
         this.teamProfileService = teamProfileService;
         this.environment = environment;
+        this.railwayEnvironment = railwayEnvironment;
+        this.enabledOverride = enabledOverride;
         this.enabled = enabled;
         this.email = email;
         this.password = password;
@@ -43,6 +53,10 @@ public class TestUserBootstrap implements CommandLineRunner {
         }
 
         if (isProductionEnvironment()) {
+            if (!StringUtils.hasText(enabledOverride)) {
+                log.warn("Test user disabled automatically in production environment.");
+                return;
+            }
             throw new IllegalStateException("RECCE_TEST_USER_ENABLED nao pode estar ativo em PROD.");
         }
 
@@ -75,8 +89,12 @@ public class TestUserBootstrap implements CommandLineRunner {
     }
 
     private boolean isProductionEnvironment() {
-        String value = environment == null ? "" : environment.trim().toLowerCase();
-        return "prod".equals(value) || "production".equals(value);
+        return isProductionValue(environment) || isProductionValue(railwayEnvironment);
+    }
+
+    private boolean isProductionValue(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase();
+        return "prod".equals(normalized) || "production".equals(normalized);
     }
 
     private String newToken() {
