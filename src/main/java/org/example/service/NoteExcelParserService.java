@@ -3,6 +3,7 @@ package org.example.service;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.example.dto.ClickMarkerDto;
+import org.example.dto.NoteAlignmentDTO;
 import org.example.entity.NoteEntity;
 import org.example.entity.PecEntity;
 import org.example.entity.RallyEntity;
@@ -320,7 +321,7 @@ public class NoteExcelParserService {
     public List<NoteEntity> parseAndSaveExcelNotes(String pecId, MultipartFile file) {
         ensurePecCanBeEdited(pecId);
         List<NoteEntity> notesToSave = new ArrayList<>();
-        List<NoteEntity> existingTimestamps = noteRepository.findByPecIdOrderByOriginalTimestampAsc(pecId);
+        List<NoteEntity> existingTimestamps = noteRepository.findByPecIdOrderByIdAsc(pecId);
         DataFormatter formatter = new DataFormatter();
 
         try (InputStream is = file.getInputStream();
@@ -346,7 +347,7 @@ public class NoteExcelParserService {
                     int noteIndex = notesToSave.size();
                     timestamp = noteIndex < existingTimestamps.size()
                             ? existingTimestamps.get(noteIndex).getOriginalTimestamp()
-                            : 0.0;
+                            : null;
                 }
 
                 String speedRating = cellText(row.getCell(2), formatter);
@@ -359,6 +360,12 @@ public class NoteExcelParserService {
                         .build());
             }
 
+            if (looksLikeUntimedImport(notesToSave)) {
+                for (NoteEntity note : notesToSave) {
+                    note.setOriginalTimestamp(null);
+                }
+            }
+
             noteRepository.deleteByPecId(pecId);
             return noteRepository.saveAll(notesToSave);
         } catch (Exception e) {
@@ -367,7 +374,7 @@ public class NoteExcelParserService {
     }
 
     public List<NoteEntity> getNotesByPecId(String pecId) {
-        return noteRepository.findByPecIdOrderByOriginalTimestampAsc(pecId);
+        return noteRepository.findByPecIdOrderByIdAsc(pecId);
     }
 
     public NoteEntity saveNote(String pecId, NoteEntity note) {
@@ -385,10 +392,47 @@ public class NoteExcelParserService {
         }
         existing.setText(note.getText());
         existing.setSpeedRating(note.getSpeedRating());
-        if (note.getOriginalTimestamp() != null) {
-            existing.setOriginalTimestamp(note.getOriginalTimestamp());
-        }
+        existing.setOriginalTimestamp(note.getOriginalTimestamp());
         return noteRepository.save(existing);
+    }
+
+    @Transactional
+    public List<NoteEntity> alignNote(String pecId, Long noteId, NoteAlignmentDTO alignment) {
+        ensurePecCanBeEdited(pecId);
+        NoteEntity target = noteRepository.findById(noteId)
+                .orElseThrow(() -> new RuntimeException("Nota nao encontrada com ID: " + noteId));
+        if (!pecId.equals(target.getPecId())) {
+            throw new RuntimeException("Nota nao pertence a esta PEC");
+        }
+
+        double oldTimestamp = timestampOrZero(target.getOriginalTimestamp());
+        Double targetTimestamp = alignment != null ? alignment.getTargetTimestamp() : null;
+        Double normalizedTimestamp = targetTimestamp != null
+                ? roundTimestamp(Math.max(0.0, targetTimestamp))
+                : null;
+        double delta = normalizedTimestamp != null ? normalizedTimestamp - oldTimestamp : 0.0;
+        boolean shiftFollowing = alignment != null && Boolean.TRUE.equals(alignment.getShiftFollowing());
+
+        List<NoteEntity> notes = noteRepository.findByPecIdOrderByIdAsc(pecId);
+        boolean afterTarget = false;
+        for (NoteEntity note : notes) {
+            if (note.getId().equals(noteId)) {
+                if (alignment != null) {
+                    note.setText(alignment.getText());
+                    note.setSpeedRating(alignment.getSpeedRating());
+                }
+                note.setOriginalTimestamp(normalizedTimestamp);
+                afterTarget = true;
+                continue;
+            }
+
+            if (afterTarget && shiftFollowing && normalizedTimestamp != null && hasUsableTimestamp(note.getOriginalTimestamp())) {
+                double shiftedTimestamp = Math.max(0.0, note.getOriginalTimestamp() + delta);
+                note.setOriginalTimestamp(roundTimestamp(shiftedTimestamp));
+            }
+        }
+
+        return noteRepository.saveAll(notes);
     }
 
     public void deleteNote(String pecId, Long noteId) {
@@ -465,6 +509,30 @@ public class NoteExcelParserService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean hasUsableTimestamp(Double timestamp) {
+        return timestamp != null && timestamp > 0.0;
+    }
+
+    private boolean looksLikeUntimedImport(List<NoteEntity> notes) {
+        if (notes == null || notes.size() <= 1) {
+            return false;
+        }
+        for (NoteEntity note : notes) {
+            if (note.getOriginalTimestamp() == null || Math.abs(note.getOriginalTimestamp()) > 0.0001) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private double timestampOrZero(Double timestamp) {
+        return timestamp != null ? timestamp : 0.0;
+    }
+
+    private double roundTimestamp(double timestamp) {
+        return Math.round(timestamp * 10.0) / 10.0;
     }
 
     private Double parseTimestamp(Cell cell, DataFormatter formatter) {

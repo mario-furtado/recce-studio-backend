@@ -7,9 +7,16 @@ import { ClickMarker, GpsTrackPoint } from './tracking.service';
 
 export interface Note {
   id?: number | string;
-  originalTimestamp: number;
+  originalTimestamp: number | null;
   text: string;
   speedRating?: string;
+}
+
+export interface NoteAlignmentRequest {
+  targetTimestamp: number | null;
+  text: string;
+  speedRating?: string;
+  shiftFollowing: boolean;
 }
 
 export interface PecAssets {
@@ -121,6 +128,17 @@ export class PecService {
     return this.http.patch<Note>(
       `${this.apiUrl}/${pecId}/notes/${noteId}`,
       note,
+    );
+  }
+
+  alignNote(
+    pecId: string,
+    noteId: string,
+    alignment: NoteAlignmentRequest,
+  ): Observable<Note[]> {
+    return this.http.patch<Note[]>(
+      `${this.apiUrl}/${pecId}/notes/${noteId}/align`,
+      alignment,
     );
   }
 

@@ -347,7 +347,7 @@
             </span>
 
             <span class="text-xs font-bold opacity-75 shrink-0">
-              {{ (note.originalTimestamp + timeOffset).toFixed(1) }}s
+              {{ noteTimeLabel(note) }}
             </span>
 
             <div
@@ -383,6 +383,32 @@
                   class="themed-input w-full text-slate-300 text-[11px] rounded px-2 py-1"
                   placeholder="Observações / mudança..."
                 />
+                <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    [(ngModel)]="editingNoteTimestamp"
+                    class="themed-input w-full text-white text-xs rounded px-2 py-1"
+                    placeholder="Tempo no video (s)"
+                  />
+                  <button
+                    type="button"
+                    (click)="saveEditedNoteAtCurrentTime(note, $event)"
+                    class="soft-button px-2 py-1 rounded text-slate-200 text-[11px] font-semibold whitespace-nowrap"
+                    title="Guardar esta nota no tempo atual do video/audio"
+                  >
+                    Afixar aqui
+                  </button>
+                </div>
+                <label class="flex items-center gap-2 text-[11px] text-slate-400">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="editingShiftFollowing"
+                    class="accent-red-600"
+                  />
+                  Mover notas seguintes que já têm tempo
+                </label>
                 <div class="flex justify-end gap-1">
                   <button
                     type="button"

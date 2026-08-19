@@ -1,6 +1,7 @@
 package org.example.controller;
 
 import org.example.dto.ClickMarkerDto;
+import org.example.dto.NoteAlignmentDTO;
 import org.example.dto.NoteOffsetDTO;
 import org.example.entity.NoteEntity;
 import org.example.service.NoteExcelParserService;
@@ -71,6 +72,14 @@ public class PecNoteController {
             @PathVariable Long noteId,
             @RequestBody NoteEntity note) {
         return ResponseEntity.ok(excelParserService.updateNote(pecId, noteId, note));
+    }
+
+    @PatchMapping("/{pecId}/notes/{noteId}/align")
+    public ResponseEntity<List<NoteEntity>> alignNote(
+            @PathVariable String pecId,
+            @PathVariable Long noteId,
+            @RequestBody NoteAlignmentDTO alignment) {
+        return ResponseEntity.ok(excelParserService.alignNote(pecId, noteId, alignment));
     }
 
     @DeleteMapping("/{pecId}/notes/{noteId}")

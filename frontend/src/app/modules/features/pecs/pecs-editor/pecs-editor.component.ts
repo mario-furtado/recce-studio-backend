@@ -20,6 +20,7 @@ import {
 import { OfflineRecceStoreService } from '../../../core/services/offline-recce-store.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 import { apiUrl } from '../../../core/services/api.config';
+import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 
 interface GpsSketchPoint {
   x: number;
@@ -70,12 +71,15 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   editingNoteId: string | null = null;
   editingNoteText: string = '';
   editingNoteObservation: string = '';
+  editingNoteTimestamp: number | null = null;
+  editingShiftFollowing: boolean = true;
 
   constructor(
     private route: ActivatedRoute,
     private pecService: PecService,
     private offlineStore: OfflineRecceStoreService,
     private shared: SharedProperties,
+    private confirmDialog: ConfirmDialogService,
   ) {}
 
   ngOnInit(): void {
@@ -161,12 +165,14 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   setNotes(dbNotes: any[]): void {
-    this.notes = (dbNotes || []).map((n) => ({
-      id: String(n.id),
-      originalTimestamp: n.originalTimestamp,
-      text: n.text || 'Nota sem descricao',
-      speedRating: n.speedRating,
-    }));
+    this.notes = this.sortNotesForTimeline(
+      (dbNotes || []).map((n) => ({
+        id: String(n.id),
+        originalTimestamp: this.normalizeOptionalTimestamp(n.originalTimestamp),
+        text: n.text || 'Nota sem descricao',
+        speedRating: n.speedRating,
+      })),
+    );
     this.hasNotes = this.notes.length > 0;
   }
 
@@ -263,7 +269,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
     const currentNote = [...this.notes]
       .reverse()
-      .find((n) => n.originalTimestamp + this.timeOffset <= this.currentTime);
+      .find((n) => {
+        const timestamp = this.noteVideoTimestamp(n);
+        return timestamp !== null && timestamp <= this.currentTime;
+      });
 
     if (currentNote) {
       this.activeNoteId = currentNote.id;
@@ -299,12 +308,12 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       next: (saved: any) => {
         const savedNote: Note = {
           id: String(saved.id),
-          originalTimestamp: saved.originalTimestamp,
+          originalTimestamp: this.normalizeOptionalTimestamp(saved.originalTimestamp),
           text: saved.text,
           speedRating: saved.speedRating,
         };
         this.notes.push(savedNote);
-        this.notes.sort((a, b) => a.originalTimestamp - b.originalTimestamp);
+        this.notes = this.sortNotesForTimeline(this.notes);
         this.activeNoteId = savedNote.id;
         this.newNoteText = '';
         this.isAddingNote = false;
@@ -318,9 +327,19 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteNote(noteId: string, event: Event): void {
+  async deleteNote(noteId: string, event: Event): Promise<void> {
     event.stopPropagation();
     if (this.isLocked) return;
+    const note = this.notes.find((item) => item.id === noteId);
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar nota',
+      message: 'Queres mesmo eliminar esta nota?',
+      detail: note?.text || 'Esta nota será removida do caderno da PEC.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     if (noteId.startsWith('local-') || noteId.startsWith('note-')) {
       this.removeNoteFromList(noteId);
       return;
@@ -346,6 +365,8 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.editingNoteId = note.id;
     this.editingNoteText = note.text;
     this.editingNoteObservation = note.speedRating || '';
+    this.editingNoteTimestamp = this.noteVideoTimestamp(note);
+    this.editingShiftFollowing = false;
   }
 
   cancelEditNote(event?: Event): void {
@@ -353,17 +374,47 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.editingNoteId = null;
     this.editingNoteText = '';
     this.editingNoteObservation = '';
+    this.editingNoteTimestamp = null;
+    this.editingShiftFollowing = false;
   }
 
   saveEditedNote(note: Note, event: Event): void {
     event.stopPropagation();
     if (!note.id || !this.editingNoteText.trim() || this.isLocked) return;
 
+    const targetTimestamp = this.storageTimestampFromVideoTimestamp(
+      this.normalizeOptionalTimestamp(this.editingNoteTimestamp),
+    );
     const updatedNote: Note = {
       ...note,
+      originalTimestamp: targetTimestamp,
       text: this.editingNoteText.trim(),
       speedRating: this.editingNoteObservation.trim(),
     };
+
+    if (this.isPersistedNoteId(note.id)) {
+      this.pecService.alignNote(this.pecId, note.id, {
+        targetTimestamp,
+        text: updatedNote.text,
+        speedRating: updatedNote.speedRating || '',
+        shiftFollowing: this.editingShiftFollowing,
+      }).subscribe({
+        next: (savedNotes: any[]) => {
+          this.timeOffset = 0;
+          this.setNotes(savedNotes);
+          this.cancelEditNote();
+          this.onTimeUpdate();
+          this.shared.success(
+            this.editingShiftFollowing ? 'Nota alinhada' : 'Nota atualizada',
+          );
+        },
+        error: (err) => {
+          console.error('Erro ao alinhar nota:', err);
+          this.shared.error('Erro ao alinhar nota');
+        },
+      });
+      return;
+    }
 
     this.pecService.updateNote(this.pecId, note.id, updatedNote).subscribe({
       next: (saved: any) => {
@@ -371,12 +422,13 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
           existing.id === note.id
             ? {
                 id: String(saved.id),
-                originalTimestamp: saved.originalTimestamp,
+                originalTimestamp: this.normalizeOptionalTimestamp(saved.originalTimestamp),
                 text: saved.text,
                 speedRating: saved.speedRating,
               }
             : existing,
         );
+        this.notes = this.sortNotesForTimeline(this.notes);
         this.cancelEditNote();
         this.shared.success('Nota atualizada');
       },
@@ -385,6 +437,17 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         this.shared.error('Erro ao editar nota');
       },
     });
+  }
+
+  setEditingTimestampToCurrentTime(event: Event): void {
+    event.stopPropagation();
+    this.editingNoteTimestamp = this.roundTimestamp(this.currentTime);
+  }
+
+  saveEditedNoteAtCurrentTime(note: Note, event: Event): void {
+    event.stopPropagation();
+    this.editingNoteTimestamp = this.roundTimestamp(this.currentTime);
+    this.saveEditedNote(note, event);
   }
 
   setPlaybackSpeed(speed: number): void {
@@ -399,8 +462,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   setAnchorAtCurrentTime(): void {
     if (this.notes.length === 0 || this.isLocked) return;
+    const firstTimestamp = this.notes[0].originalTimestamp ?? 0;
     const offsetToApply = parseFloat(
-      (this.currentTime - this.notes[0].originalTimestamp).toFixed(1),
+      (this.currentTime - firstTimestamp).toFixed(1),
     );
 
     this.pecService.applyNotesOffset(this.pecId, offsetToApply).subscribe({
@@ -418,12 +482,19 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   jumpToNote(note: Note): void {
-    const targetTime = note.originalTimestamp + this.timeOffset;
+    const targetTime = this.noteVideoTimestamp(note);
     const media = this.activeMediaElement();
-    if (media && targetTime >= 0) {
+    if (media && targetTime !== null && targetTime >= 0) {
       media.currentTime = targetTime;
       media.play();
+      return;
     }
+    this.activeNoteId = note.id;
+  }
+
+  noteTimeLabel(note: Note): string {
+    const timestamp = this.noteVideoTimestamp(note);
+    return timestamp === null ? 'sem tempo' : `${timestamp.toFixed(1)}s`;
   }
 
   onDownloadTemplate(): void {
@@ -501,8 +572,17 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     event.target.value = '';
   }
 
-  deleteVideo(): void {
+  async deleteVideo(): Promise<void> {
     if (this.isLocked) return;
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar video',
+      message: 'Queres eliminar o video desta PEC?',
+      detail: this.videoFileName || 'O ficheiro de video associado será removido.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.pecService.deleteVideo(this.pecId).subscribe({
       next: (assets) => {
         this.applyAssets(assets);
@@ -515,8 +595,17 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteAudio(): void {
+  async deleteAudio(): Promise<void> {
     if (this.isLocked) return;
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Eliminar audio',
+      message: 'Queres eliminar o audio desta PEC?',
+      detail: this.audioFileName || 'O audio gravado/importado será removido.',
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
     this.pecService.deleteAudio(this.pecId).subscribe({
       next: (assets) => {
         this.applyAssets(assets);
@@ -531,6 +620,60 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.revokeAudioSource();
+  }
+
+  private noteVideoTimestamp(note: Note): number | null {
+    if (note.originalTimestamp === null || note.originalTimestamp === undefined) {
+      return null;
+    }
+    return this.roundTimestamp(note.originalTimestamp + this.timeOffset);
+  }
+
+  private storageTimestampFromVideoTimestamp(videoTimestamp: number | null): number | null {
+    if (videoTimestamp === null) {
+      return null;
+    }
+    return this.roundTimestamp(Math.max(0, videoTimestamp - this.timeOffset));
+  }
+
+  private normalizeOptionalTimestamp(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const parsed = Number(String(value).replace(',', '.'));
+    return Number.isFinite(parsed) ? this.roundTimestamp(Math.max(0, parsed)) : null;
+  }
+
+  private sortNotesForTimeline(notes: Note[]): Note[] {
+    return notes
+      .map((note, index) => ({ note, index }))
+      .sort((left, right) => {
+        const leftTime = this.noteVideoTimestamp(left.note);
+        const rightTime = this.noteVideoTimestamp(right.note);
+
+        if (leftTime === null && rightTime === null) {
+          return left.index - right.index;
+        }
+        if (leftTime === null) {
+          return 1;
+        }
+        if (rightTime === null) {
+          return -1;
+        }
+        if (leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+        return left.index - right.index;
+      })
+      .map((item) => item.note);
+  }
+
+  private roundTimestamp(value: number): number {
+    return Math.round(value * 10) / 10;
+  }
+
+  private isPersistedNoteId(noteId: string): boolean {
+    return !noteId.startsWith('local-') && !noteId.startsWith('note-');
   }
 
   private activeMediaElement(): HTMLMediaElement | null {

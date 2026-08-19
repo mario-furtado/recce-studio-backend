@@ -11,6 +11,10 @@ public interface NoteRepository extends JpaRepository<NoteEntity, Long> {
 
     // Procura todas as notas de uma determinada PEC, ordenadas por tempo cronológico
     List<NoteEntity> findByPecIdOrderByOriginalTimestampAsc(String pecId);
+
+    // Mantem a ordem natural do caderno/importacao para alinhamentos manuais.
+    List<NoteEntity> findByPecIdOrderByIdAsc(String pecId);
+
     long countByPecId(String pecId);
 
     // Apaga as notas anteriores se o utilizador voltar a carregar um Excel novo para a mesma PEC

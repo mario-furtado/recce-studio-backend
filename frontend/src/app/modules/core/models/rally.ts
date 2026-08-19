@@ -37,7 +37,7 @@ export interface Rally {
 
 export interface Note {
   id: string;
-  originalTimestamp: number; // Tempo em segundos gravado na app móvel
+  originalTimestamp: number | null; // Tempo em segundos gravado na app móvel
   text: string; // Ex: "D4 c/ salto"
   speedRating?: string;
 }
