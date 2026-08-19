@@ -83,6 +83,11 @@ export class TeamProfileService {
     return this.http.post<TeamCar>(`${this.apiUrl}/cars/${carId}/photo`, formData);
   }
 
+  getCarPhotoBlob(carId: string, version?: string | number): Observable<Blob> {
+    const query = version ? `?v=${encodeURIComponent(String(version))}` : '';
+    return this.http.get(`${this.apiUrl}/cars/${carId}/photo${query}`, { responseType: 'blob' });
+  }
+
   getCarPhotoUrl(car: TeamCar): string | null {
     if (!car.id || !car.photoFileName) {
       return null;
@@ -95,6 +100,11 @@ export class TeamProfileService {
     const formData = new FormData();
     formData.append('file', file);
     return this.http.post<TeamProfile>(`${this.apiUrl}/logo`, formData);
+  }
+
+  getLogoBlob(version?: string | number): Observable<Blob> {
+    const query = version ? `?v=${encodeURIComponent(String(version))}` : '';
+    return this.http.get(`${this.apiUrl}/logo${query}`, { responseType: 'blob' });
   }
 
   toAbsoluteLogoUrl(profile: TeamProfile, version?: number | string): string | null {

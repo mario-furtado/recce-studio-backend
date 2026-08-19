@@ -25,6 +25,7 @@ export interface Rally {
   icon: string;
   logoFileName?: string;
   logoUrl?: string;
+  logoStoragePath?: string;
   carId?: string;
   carClass?: string;
   pecsCount?: number;
@@ -50,6 +51,7 @@ export interface RallyDetail {
   icon: string;
   logoFileName?: string;
   logoUrl?: string;
+  logoStoragePath?: string;
   carId?: string;
   carClass?: string;
   pecsCount?: number;

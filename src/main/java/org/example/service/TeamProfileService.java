@@ -129,6 +129,15 @@ public class TeamProfileService {
         return fileStorageService.loadAsResource(car.getPhotoStoragePath());
     }
 
+    public byte[] getCarPhotoBytes(String carId) {
+        TeamCarEntity car = teamCarRepository.findById(carId)
+                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        if (car.getPhotoStoragePath() == null) {
+            throw new RuntimeException("Fotografia do carro nao encontrada");
+        }
+        return fileStorageService.loadBytes(car.getPhotoStoragePath());
+    }
+
     public String getCarPhotoContentType(String carId) {
         TeamCarEntity car = teamCarRepository.findById(carId)
                 .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
@@ -187,6 +196,14 @@ public class TeamProfileService {
             throw new RuntimeException("Imagem do perfil nao encontrada");
         }
         return fileStorageService.loadAsResource(profile.getLogoStoragePath());
+    }
+
+    public byte[] getLogoBytes() {
+        TeamProfileEntity profile = getOrCreateProfile();
+        if (profile.getLogoStoragePath() == null) {
+            throw new RuntimeException("Imagem do perfil nao encontrada");
+        }
+        return fileStorageService.loadBytes(profile.getLogoStoragePath());
     }
 
     public String getLogoContentType() {
@@ -308,8 +325,16 @@ public class TeamProfileService {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("Ficheiro vazio");
         }
-        if (file.getContentType() != null && !file.getContentType().startsWith("image/")) {
-            throw new RuntimeException("O ficheiro deve ser uma imagem");
+        String contentType = file.getContentType();
+        if (!isBrowserSupportedImage(contentType)) {
+            throw new RuntimeException("A imagem deve estar em JPG, PNG, WebP ou GIF.");
         }
+    }
+
+    private boolean isBrowserSupportedImage(String contentType) {
+        return "image/jpeg".equalsIgnoreCase(contentType)
+                || "image/png".equalsIgnoreCase(contentType)
+                || "image/webp".equalsIgnoreCase(contentType)
+                || "image/gif".equalsIgnoreCase(contentType);
     }
 }

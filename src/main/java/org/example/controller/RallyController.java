@@ -5,7 +5,6 @@ import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.service.FileStorageService;
 import org.example.service.TeamProfileService;
-import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -117,6 +116,13 @@ public class RallyController {
                 || updatedData.getCarClass() != null;
     }
 
+    private boolean isBrowserSupportedImage(String contentType) {
+        return "image/jpeg".equalsIgnoreCase(contentType)
+                || "image/png".equalsIgnoreCase(contentType)
+                || "image/webp".equalsIgnoreCase(contentType)
+                || "image/gif".equalsIgnoreCase(contentType);
+    }
+
     @PostMapping("/{id}/logo")
     public ResponseEntity<RallyEntity> uploadLogo(@PathVariable String id, @RequestParam("file") MultipartFile file) {
         return rallyRepository.findById(id).map(rally -> {
@@ -126,8 +132,8 @@ public class RallyController {
             if (file == null || file.isEmpty()) {
                 throw new IllegalArgumentException("Imagem obrigatoria.");
             }
-            if (file.getContentType() != null && !file.getContentType().startsWith("image/")) {
-                throw new IllegalArgumentException("O ficheiro deve ser uma imagem.");
+            if (!isBrowserSupportedImage(file.getContentType())) {
+                throw new IllegalArgumentException("A imagem deve estar em JPG, PNG, WebP ou GIF.");
             }
 
             String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "logo";
@@ -144,18 +150,19 @@ public class RallyController {
     }
 
     @GetMapping("/{id}/logo")
-    public ResponseEntity<Resource> getLogo(@PathVariable String id) {
+    public ResponseEntity<byte[]> getLogo(@PathVariable String id) {
         return rallyRepository.findById(id).map(rally -> {
             if (rally.getLogoStoragePath() == null) {
-                return ResponseEntity.notFound().<Resource>build();
+                return ResponseEntity.notFound().<byte[]>build();
             }
-            Resource resource = fileStorageService.loadAsResource(rally.getLogoStoragePath());
+            byte[] image = fileStorageService.loadBytes(rally.getLogoStoragePath());
             String contentType = rally.getLogoContentType() != null ? rally.getLogoContentType() : "application/octet-stream";
-            return ResponseEntity.<Resource>ok()
+            return ResponseEntity.<byte[]>ok()
                     .cacheControl(CacheControl.noStore())
                     .contentType(MediaType.parseMediaType(contentType))
                     .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                    .body(resource);
+                    .contentLength(image.length)
+                    .body(image);
         }).orElse(ResponseEntity.notFound().build());
     }
 

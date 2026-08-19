@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   TeamCar,
@@ -17,12 +17,13 @@ import { SharedProperties } from '../../core/shared/shared-properties';
   templateUrl: './team-profile.component.html',
   styleUrl: './team-profile.component.css',
 })
-export class TeamProfileComponent implements OnInit {
+export class TeamProfileComponent implements OnInit, OnDestroy {
   isEditing = false;
   isSaving = false;
   logoPreviewUrl: string | null = null;
   private logoVersion = Date.now();
   private failedCarPhotoIds = new Set<string>();
+  private carPhotoUrls = new Map<string, string>();
 
   readonly distanceUnitOptions = ['Quilometros (km)', 'Milhas (mi)'];
   readonly noteSystemOptions = [
@@ -73,13 +74,18 @@ export class TeamProfileComponent implements OnInit {
     this.loadStats();
   }
 
+  ngOnDestroy(): void {
+    this.revokeLogoUrl();
+    this.revokeCarPhotoUrls();
+  }
+
   loadTeamProfile(): void {
     this.teamProfileService.getProfile().subscribe({
       next: (profile) => {
         this.team = profile;
         this.draft = { ...profile };
         this.syncSelectStateFromDraft();
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
+        this.loadLogoImage(profile);
       },
       error: () => this.shared.error('Erro ao carregar perfil da equipa'),
     });
@@ -90,6 +96,7 @@ export class TeamProfileComponent implements OnInit {
       next: (cars) => {
         this.failedCarPhotoIds.clear();
         this.cars = cars;
+        this.loadCarPhotos(cars);
         const selected = cars.find((car) => car.active);
         if (selected) {
           this.team = {
@@ -133,7 +140,7 @@ export class TeamProfileComponent implements OnInit {
         this.team = profile;
         this.draft = { ...profile };
         this.syncSelectStateFromDraft();
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
+        this.loadLogoImage(profile);
         this.isEditing = false;
         this.isSaving = false;
         this.shared.success('Perfil atualizado', profile.name);
@@ -158,7 +165,7 @@ export class TeamProfileComponent implements OnInit {
         this.draft = { ...profile };
         this.syncSelectStateFromDraft();
         this.logoVersion = Date.now();
-        this.logoPreviewUrl = this.teamProfileService.toAbsoluteLogoUrl(profile, this.logoVersion);
+        this.loadLogoImage(profile);
         this.isSaving = false;
         this.shared.success('Imagem atualizada');
       },
@@ -275,7 +282,7 @@ export class TeamProfileComponent implements OnInit {
     if (car.id && this.failedCarPhotoIds.has(car.id)) {
       return null;
     }
-    return this.teamProfileService.getCarPhotoUrl(car);
+    return car.id ? this.carPhotoUrls.get(car.id) || null : null;
   }
 
   onLogoImageError(): void {
@@ -317,6 +324,67 @@ export class TeamProfileComponent implements OnInit {
   private backendMessage(err: unknown): string | undefined {
     const error = err as { error?: { message?: string }; message?: string };
     return error.error?.message || error.message;
+  }
+
+  private loadLogoImage(profile: TeamProfile): void {
+    this.revokeLogoUrl();
+    if (!profile.logoUrl) {
+      this.logoPreviewUrl = null;
+      return;
+    }
+
+    this.teamProfileService.getLogoBlob(this.logoVersion).subscribe({
+      next: (blob) => {
+        this.revokeLogoUrl();
+        this.logoPreviewUrl = URL.createObjectURL(blob);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar imagem do perfil:', err);
+        this.logoPreviewUrl = null;
+      },
+    });
+  }
+
+  private loadCarPhotos(cars: TeamCar[]): void {
+    this.revokeCarPhotoUrls();
+    cars
+      .filter((car) => car.id && car.photoFileName)
+      .forEach((car) => {
+        const carId = car.id as string;
+        this.teamProfileService.getCarPhotoBlob(
+          carId,
+          car.photoStoragePath || car.photoFileName || Date.now(),
+        ).subscribe({
+          next: (blob) => {
+            this.revokeCarPhotoUrl(carId);
+            this.carPhotoUrls.set(carId, URL.createObjectURL(blob));
+          },
+          error: (err) => {
+            console.error('Erro ao carregar fotografia do carro:', err);
+            this.failedCarPhotoIds.add(carId);
+          },
+        });
+      });
+  }
+
+  private revokeLogoUrl(): void {
+    if (this.logoPreviewUrl?.startsWith('blob:')) {
+      URL.revokeObjectURL(this.logoPreviewUrl);
+    }
+    this.logoPreviewUrl = null;
+  }
+
+  private revokeCarPhotoUrl(carId: string): void {
+    const previousUrl = this.carPhotoUrls.get(carId);
+    if (previousUrl) {
+      URL.revokeObjectURL(previousUrl);
+      this.carPhotoUrls.delete(carId);
+    }
+  }
+
+  private revokeCarPhotoUrls(): void {
+    this.carPhotoUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.carPhotoUrls.clear();
   }
 
   private emptyProfile(): TeamProfile {

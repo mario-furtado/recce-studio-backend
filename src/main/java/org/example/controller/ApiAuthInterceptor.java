@@ -48,6 +48,7 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
         return "/api/team-profile/logo".equals(path)
                 || path.matches("^/api/team-profile/cars/[^/]+/photo$")
                 || path.matches("^/api/rallies/[^/]+/logo$")
-                || path.matches("^/api/pecs/[^/]+/video$");
+                || path.matches("^/api/pecs/[^/]+/video$")
+                || path.matches("^/api/pecs/[^/]+/audio$");
     }
 }

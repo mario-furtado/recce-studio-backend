@@ -104,14 +104,12 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       this.isWaitingGps = true;
       this.primeAudioCue();
 
-      const [gpsReady, audioReady] = await Promise.all([
-        this.trackingService.requestGpsAndStart(
-          this.resumeSession?.markers || [],
-          this.resumeSession?.durationSeconds || 0,
-          this.resumeSession?.gpsTrack || [],
-        ),
-        this.startAudioCapture(),
-      ]);
+      const gpsReady = await this.trackingService.requestGpsAndStart(
+        this.resumeSession?.markers || [],
+        this.resumeSession?.durationSeconds || 0,
+        this.resumeSession?.gpsTrack || [],
+      );
+      const audioReady = gpsReady ? await this.startAudioCapture() : false;
       this.isWaitingGps = false;
 
       if (gpsReady) {
@@ -280,7 +278,10 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     try {
       this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.audioChunks = [];
-      this.mediaRecorder = new MediaRecorder(this.audioStream);
+      const mimeType = this.preferredAudioMimeType();
+      this.mediaRecorder = mimeType
+        ? new MediaRecorder(this.audioStream, { mimeType })
+        : new MediaRecorder(this.audioStream);
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.audioChunks.push(event.data);
@@ -326,6 +327,18 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   private stopAudioTracks(): void {
     this.audioStream?.getTracks().forEach((track) => track.stop());
     this.audioStream = null;
+  }
+
+  private preferredAudioMimeType(): string | undefined {
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+    ];
+
+    return candidates.find((mimeType) => MediaRecorder.isTypeSupported?.(mimeType));
   }
 
   private startSpeechRecognition(): void {
@@ -569,7 +582,9 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         pecName: this.pecName || undefined,
       });
       this.offlineSessionId = session.id;
-      this.shared.info('Reconhecimento offline preparado', 'A sessao esta a ser guardada neste dispositivo.');
+      if (this.shouldAnnounceOfflineSession()) {
+        this.shared.info('Reconhecimento offline preparado', 'A sessao esta a ser guardada neste dispositivo.');
+      }
     } catch (error) {
       console.error('Erro ao criar sessao offline:', error);
       this.shared.error('Erro no armazenamento offline', 'O reconhecimento continua, mas pode nao ficar guardado no dispositivo.');
@@ -609,6 +624,12 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   }
 
   private shouldNavigateToOfflineQueue(): boolean {
+    return this.shared.connectionMode$.value === 'offline'
+      || this.isStandaloneOfflineRecce()
+      || !!this.resumeSession;
+  }
+
+  private shouldAnnounceOfflineSession(): boolean {
     return this.shared.connectionMode$.value === 'offline'
       || this.isStandaloneOfflineRecce()
       || !!this.resumeSession;

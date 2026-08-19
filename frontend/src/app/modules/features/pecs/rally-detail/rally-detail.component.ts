@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -18,9 +18,10 @@ import { SharedProperties } from '../../../core/shared/shared-properties';
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './rally-detail.component.html',
 })
-export class RallyDetailComponent implements OnInit {
+export class RallyDetailComponent implements OnInit, OnDestroy {
   rallyId: string | null = null;
   searchTerm = '';
+  rallyLogoObjectUrl: string | null = null;
 
   rally: RallyDetail = {
     id: '',
@@ -66,6 +67,10 @@ export class RallyDetailComponent implements OnInit {
     this.getRally();
   }
 
+  ngOnDestroy(): void {
+    this.revokeRallyLogoObjectUrl();
+  }
+
   loadCars(): void {
     this.teamProfileService.getCars().subscribe({
       next: (cars) => (this.cars = cars),
@@ -92,6 +97,7 @@ export class RallyDetailComponent implements OnInit {
           pecsCount: data.pecsCount,
           status: data.status || 'DRAFT',
         };
+        this.loadRallyLogo(data);
         this.getRallyPecs();
       },
       error: () => this.shared.error('Erro ao carregar rali'),
@@ -231,7 +237,7 @@ export class RallyDetailComponent implements OnInit {
   }
 
   get rallyLogoUrl(): string | null {
-    return this.rallyService.getRallyLogoUrl(this.rally as Rally);
+    return this.rallyLogoObjectUrl;
   }
 
   get rallyInitials(): string {
@@ -253,5 +259,33 @@ export class RallyDetailComponent implements OnInit {
       },
       error: () => this.shared.error('Erro ao atualizar estado do rali'),
     });
+  }
+
+  private loadRallyLogo(rally: Rally): void {
+    this.revokeRallyLogoObjectUrl();
+    if (!rally.id || !rally.logoFileName) {
+      return;
+    }
+
+    this.rallyService.getRallyLogoBlob(
+      rally.id,
+      rally.logoStoragePath || rally.logoFileName || Date.now(),
+    ).subscribe({
+      next: (blob) => {
+        this.revokeRallyLogoObjectUrl();
+        this.rallyLogoObjectUrl = URL.createObjectURL(blob);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar logo do rali:', err);
+        this.rallyLogoObjectUrl = null;
+      },
+    });
+  }
+
+  private revokeRallyLogoObjectUrl(): void {
+    if (this.rallyLogoObjectUrl) {
+      URL.revokeObjectURL(this.rallyLogoObjectUrl);
+      this.rallyLogoObjectUrl = null;
+    }
   }
 }

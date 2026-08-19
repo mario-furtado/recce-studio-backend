@@ -9,6 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { Note } from '../../../core/models/rally';
 import { ClickMarker, GpsTrackPoint } from '../../../core/services/tracking.service';
 import {
@@ -37,6 +38,7 @@ interface GpsSketchPoint {
 })
 export class PecsEditorComponent implements OnInit, OnDestroy {
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLVideoElement>;
+  @ViewChild('audioPlayer') audioPlayer!: ElementRef<HTMLAudioElement>;
 
   @Input() pecId: string = '';
   @Input() pecName: string = '';
@@ -45,9 +47,11 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   pecTitle: string = 'PEC Studio';
 
   hasVideo: boolean = false;
+  hasAudio: boolean = false;
   hasGpx: boolean = false;
   hasNotes: boolean = false;
   videoFileName: string = '';
+  audioFileName: string = '';
   gpsFileName: string = '';
   gpsTrack: GpsPoint[] = [];
   gpsMarkers: ClickMarker[] = [];
@@ -57,6 +61,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   activeNoteId: string | null = null;
   currentTime: number = 0;
   videoSrc: string = '';
+  audioSrc: string = '';
 
   isAddingNote: boolean = false;
   newNoteText: string = '';
@@ -118,11 +123,20 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       gpsTrack,
     }).subscribe({
       next: async () => {
+        const audioUploaded = await this.uploadStoredAudioForSession(sessionId);
+        if (!audioUploaded) {
+          this.shared.error(
+            'Notas sincronizadas, mas audio falhou',
+            'O reconhecimento fica guardado localmente para tentares novamente.',
+          );
+          return;
+        }
         localStorage.removeItem(`recce_timestamps_${this.pecId}`);
         localStorage.removeItem(`recce_gps_track_${this.pecId}`);
         localStorage.removeItem(`recce_session_id_${this.pecId}`);
         await this.offlineStore.deleteSession(sessionId).catch(() => undefined);
         this.loadNotesFromDatabase();
+        this.loadAssets();
         this.loadGpsTrack();
         this.loadRecceMarkers();
       },
@@ -165,12 +179,15 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   applyAssets(assets: PecAssets): void {
     this.hasVideo = assets.hasVideo;
+    this.hasAudio = assets.hasAudio;
     this.hasGpx = assets.hasGps;
     this.videoFileName = assets.videoFileName || '';
+    this.audioFileName = assets.audioFileName || '';
     this.gpsFileName = assets.gpsFileName || '';
     this.videoSrc = assets.videoUrl
       ? apiUrl(assets.videoUrl)
       : '';
+    this.loadAudioSource(assets);
 
     this.loadGpsTrack();
     this.loadRecceMarkers();
@@ -240,8 +257,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   onTimeUpdate(): void {
-    if (!this.videoPlayer) return;
-    this.currentTime = this.videoPlayer.nativeElement.currentTime;
+    const media = this.activeMediaElement();
+    if (!media) return;
+    this.currentTime = media.currentTime;
 
     const currentNote = [...this.notes]
       .reverse()
@@ -254,9 +272,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   openAddNoteForm(): void {
     if (this.isLocked) return;
-    if (this.videoPlayer) {
-      this.videoPlayer.nativeElement.pause();
-      this.currentTime = this.videoPlayer.nativeElement.currentTime;
+    const media = this.activeMediaElement();
+    if (media) {
+      media.pause();
+      this.currentTime = media.currentTime;
     }
     this.newNoteText = '';
     this.newNoteObservation = '';
@@ -373,6 +392,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     if (this.videoPlayer) {
       this.videoPlayer.nativeElement.playbackRate = speed;
     }
+    if (this.audioPlayer) {
+      this.audioPlayer.nativeElement.playbackRate = speed;
+    }
   }
 
   setAnchorAtCurrentTime(): void {
@@ -397,9 +419,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   jumpToNote(note: Note): void {
     const targetTime = note.originalTimestamp + this.timeOffset;
-    if (this.videoPlayer && targetTime >= 0) {
-      this.videoPlayer.nativeElement.currentTime = targetTime;
-      this.videoPlayer.nativeElement.play();
+    const media = this.activeMediaElement();
+    if (media && targetTime >= 0) {
+      media.currentTime = targetTime;
+      media.play();
     }
   }
 
@@ -435,7 +458,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     event.target.value = '';
   }
 
-  onFileSelect(event: any, type: 'video' | 'gpx'): void {
+  onFileSelect(event: any, type: 'video' | 'audio' | 'gpx'): void {
     if (this.isLocked) return;
     const file: File = event.target.files[0];
     if (!file) return;
@@ -449,6 +472,17 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         error: (err) => {
           console.error('Erro ao guardar video:', err);
           this.shared.error('Erro ao guardar video');
+        },
+      });
+    } else if (type === 'audio') {
+      this.pecService.uploadAudio(this.pecId, file, file.name).subscribe({
+        next: (assets) => {
+          this.applyAssets(assets);
+          this.shared.success('Audio guardado');
+        },
+        error: (err) => {
+          console.error('Erro ao guardar audio:', err);
+          this.shared.error('Erro ao guardar audio');
         },
       });
     } else {
@@ -481,7 +515,87 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnDestroy(): void {}
+  deleteAudio(): void {
+    if (this.isLocked) return;
+    this.pecService.deleteAudio(this.pecId).subscribe({
+      next: (assets) => {
+        this.applyAssets(assets);
+        this.shared.success('Audio eliminado');
+      },
+      error: (err) => {
+        console.error('Erro ao eliminar audio:', err);
+        this.shared.error('Erro ao eliminar audio');
+      },
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.revokeAudioSource();
+  }
+
+  private activeMediaElement(): HTMLMediaElement | null {
+    if (this.videoPlayer?.nativeElement && this.videoSrc) {
+      return this.videoPlayer.nativeElement;
+    }
+    if (this.audioPlayer?.nativeElement && this.audioSrc) {
+      return this.audioPlayer.nativeElement;
+    }
+    return null;
+  }
+
+  private loadAudioSource(assets: PecAssets): void {
+    this.revokeAudioSource();
+    if (!assets.hasAudio) return;
+
+    this.pecService.getAudioBlob(this.pecId).subscribe({
+      next: (blob) => {
+        this.revokeAudioSource();
+        this.audioSrc = URL.createObjectURL(blob);
+      },
+      error: (err) => {
+        console.error('Erro ao carregar audio da PEC:', err);
+        this.audioSrc = '';
+      },
+    });
+  }
+
+  private revokeAudioSource(): void {
+    if (this.audioSrc) {
+      URL.revokeObjectURL(this.audioSrc);
+      this.audioSrc = '';
+    }
+  }
+
+  private async uploadStoredAudioForSession(sessionId: string): Promise<boolean> {
+    const session = await this.offlineStore.getSession(sessionId).catch(() => null);
+    if (!session?.audioBlobId) return true;
+
+    const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
+    if (!audioBlob) return true;
+
+    try {
+      await firstValueFrom(
+        this.pecService.uploadAudio(
+          this.pecId,
+          audioBlob,
+          this.audioFileNameFromMime(session.audioMimeType || audioBlob.type),
+        ),
+      );
+      return true;
+    } catch (error) {
+      console.error('Erro ao enviar audio do reconhecimento:', error);
+      return false;
+    }
+  }
+
+  private audioFileNameFromMime(mimeType?: string): string {
+    const normalized = (mimeType || '').toLowerCase();
+    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
+    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
+    if (normalized.includes('ogg')) return 'recce-audio.ogg';
+    if (normalized.includes('wav')) return 'recce-audio.wav';
+    return 'recce-audio.webm';
+  }
 
   private projectGpsPointAt(lat: number, lng: number, sequenceIndex: number, sequenceTotal: number): { x: number; y: number } {
     const bounds = this.gpsBounds();

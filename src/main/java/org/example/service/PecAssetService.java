@@ -68,6 +68,32 @@ public class PecAssetService {
     }
 
     @Transactional
+    public PecAssetDTO saveAudio(String pecId, MultipartFile file) {
+        PecEntity pec = getPec(pecId);
+        ensureCanEdit(pec);
+        validateAudio(file);
+        String path = fileStorageService.store(file, "pecs/" + pecId, "audio");
+        fileStorageService.delete(pec.getAudioStoragePath());
+        pec.setAudioFileName(file.getOriginalFilename());
+        pec.setAudioContentType(file.getContentType());
+        pec.setAudioStoragePath(path);
+        pec.setUpdatedAt(LocalDate.now());
+        return toAssetDTO(pecRepository.save(pec));
+    }
+
+    @Transactional
+    public PecAssetDTO deleteAudio(String pecId) {
+        PecEntity pec = getPec(pecId);
+        ensureCanEdit(pec);
+        fileStorageService.delete(pec.getAudioStoragePath());
+        pec.setAudioFileName(null);
+        pec.setAudioContentType(null);
+        pec.setAudioStoragePath(null);
+        pec.setUpdatedAt(LocalDate.now());
+        return toAssetDTO(pecRepository.save(pec));
+    }
+
+    @Transactional
     public PecAssetDTO saveGps(String pecId, MultipartFile file) {
         PecEntity pec = getPec(pecId);
         ensureCanEdit(pec);
@@ -95,6 +121,19 @@ public class PecAssetService {
     public String getVideoContentType(String pecId) {
         PecEntity pec = getPec(pecId);
         return pec.getVideoContentType() != null ? pec.getVideoContentType() : "application/octet-stream";
+    }
+
+    public Resource getAudioResource(String pecId) {
+        PecEntity pec = getPec(pecId);
+        if (pec.getAudioStoragePath() == null) {
+            throw new RuntimeException("Audio nao encontrado para a PEC: " + pecId);
+        }
+        return fileStorageService.loadAsResource(pec.getAudioStoragePath());
+    }
+
+    public String getAudioContentType(String pecId) {
+        PecEntity pec = getPec(pecId);
+        return pec.getAudioContentType() != null ? pec.getAudioContentType() : "application/octet-stream";
     }
 
     public List<GpsPointDTO> getGpsTrack(String pecId) {
@@ -143,10 +182,25 @@ public class PecAssetService {
         dto.setHasVideo(pec.getVideoStoragePath() != null);
         dto.setVideoFileName(pec.getVideoFileName());
         dto.setVideoUrl(pec.getVideoStoragePath() != null ? "/api/pecs/" + pec.getId() + "/video" : null);
+        dto.setHasAudio(pec.getAudioStoragePath() != null);
+        dto.setAudioFileName(pec.getAudioFileName());
+        dto.setAudioUrl(pec.getAudioStoragePath() != null ? "/api/pecs/" + pec.getId() + "/audio" : null);
         dto.setHasGps(pec.getGpsStoragePath() != null);
         dto.setGpsFileName(pec.getGpsFileName());
         dto.setGpsUrl(pec.getGpsStoragePath() != null ? "/api/pecs/" + pec.getId() + "/gps/track" : null);
         return dto;
+    }
+
+    private void validateAudio(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("Ficheiro audio vazio");
+        }
+        String contentType = file.getContentType();
+        if (contentType != null
+                && !contentType.toLowerCase().startsWith("audio/")
+                && !"video/webm".equalsIgnoreCase(contentType)) {
+            throw new RuntimeException("O ficheiro deve ser audio.");
+        }
     }
 
     private List<GpsPointDTO> parseGpx(InputStream inputStream) throws Exception {
@@ -174,8 +228,11 @@ public class PecAssetService {
             Double lng = number(item, "lng", "lon", "longitude");
             Double speed = number(item, "speedKmh", "speed_kmh", "speed");
             Double timestamp = number(item, "timestamp", "time", "t");
+            Double accuracy = number(item, "accuracy", "accuracyM", "accuracy_m");
             if (lat != null && lng != null) {
-                points.add(new GpsPointDTO(lat, lng, speed, timestamp));
+                GpsPointDTO point = new GpsPointDTO(lat, lng, speed, timestamp);
+                point.setAccuracy(accuracy);
+                points.add(point);
             }
         }
         return points;

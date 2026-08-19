@@ -38,6 +38,11 @@ export class RallyService {
     return rally.logoFileName ? `${this.apiUrl}/${rally.id}/logo` : null;
   }
 
+  getRallyLogoBlob(id: string, version?: string | number): Observable<Blob> {
+    const query = version ? `?v=${encodeURIComponent(String(version))}` : '';
+    return this.http.get(`${this.apiUrl}/${id}/logo${query}`, { responseType: 'blob' });
+  }
+
   deleteRally(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
   }

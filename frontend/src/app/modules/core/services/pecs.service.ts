@@ -16,6 +16,9 @@ export interface PecAssets {
   hasVideo: boolean;
   videoFileName?: string;
   videoUrl?: string;
+  hasAudio: boolean;
+  audioFileName?: string;
+  audioUrl?: string;
   hasGps: boolean;
   gpsFileName?: string;
   gpsUrl?: string;
@@ -26,6 +29,7 @@ export interface GpsPoint {
   lng: number;
   speedKmh?: number;
   timestamp?: number;
+  accuracy?: number | null;
 }
 
 export interface PecPatch {
@@ -157,6 +161,20 @@ export class PecService {
 
   deleteVideo(pecId: string): Observable<PecAssets> {
     return this.http.delete<PecAssets>(`${this.apiUrl}/${pecId}/video`);
+  }
+
+  uploadAudio(pecId: string, file: Blob, fileName = 'recce-audio.webm'): Observable<PecAssets> {
+    const formData = new FormData();
+    formData.append('file', file, fileName);
+    return this.http.post<PecAssets>(`${this.apiUrl}/${pecId}/audio`, formData);
+  }
+
+  deleteAudio(pecId: string): Observable<PecAssets> {
+    return this.http.delete<PecAssets>(`${this.apiUrl}/${pecId}/audio`);
+  }
+
+  getAudioBlob(pecId: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/${pecId}/audio`, { responseType: 'blob' });
   }
 
   uploadGps(pecId: string, file: File): Observable<PecAssets> {

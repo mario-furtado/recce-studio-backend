@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { forkJoin, of, Subscription } from 'rxjs';
+import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { NewPec, Pec, Rally } from '../../core/models/rally';
 import { AuthService } from '../../core/services/auth.service';
@@ -360,6 +360,23 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
           })
           .subscribe({
             next: async (response) => {
+              const audioUploaded = await this.uploadSessionAudio(
+                session,
+                response.pecId,
+              );
+              if (!audioUploaded) {
+                const updated = await this.offlineStore.markSessionReadyToSync(
+                  session.id,
+                  'Notas sincronizadas, mas falhou o envio do audio.',
+                );
+                this.replaceSession(updated);
+                this.shared.error(
+                  'Audio nao sincronizado',
+                  'As notas foram enviadas, mas o audio ficou guardado localmente para tentares novamente.',
+                );
+                this.syncingSessionId = null;
+                return;
+              }
               await this.offlineStore.deleteSession(session.id);
               this.sessions = this.sessions.filter(
                 (item) => item.id !== session.id,
@@ -396,6 +413,38 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
         this.shared.error('Erro ao preparar sincronizacao');
         this.syncingSessionId = null;
       });
+  }
+
+  private async uploadSessionAudio(
+    session: OfflineRecceSession,
+    pecId: string,
+  ): Promise<boolean> {
+    if (!session.audioBlobId) return true;
+    const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
+    if (!audioBlob) return true;
+
+    try {
+      await firstValueFrom(
+        this.pecService.uploadAudio(
+          pecId,
+          audioBlob,
+          this.audioFileNameFromMime(session.audioMimeType || audioBlob.type),
+        ),
+      );
+      return true;
+    } catch (error) {
+      console.error('Erro ao sincronizar audio offline:', error);
+      return false;
+    }
+  }
+
+  private audioFileNameFromMime(mimeType?: string): string {
+    const normalized = (mimeType || '').toLowerCase();
+    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
+    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
+    if (normalized.includes('ogg')) return 'recce-audio.ogg';
+    if (normalized.includes('wav')) return 'recce-audio.wav';
+    return 'recce-audio.webm';
   }
 
   private nextPecNumber(rallyId?: string): number {

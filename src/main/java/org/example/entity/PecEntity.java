@@ -37,6 +37,15 @@ public class PecEntity {
     @Column(name = "video_storage_path")
     private String videoStoragePath;
 
+    @Column(name = "audio_file_name")
+    private String audioFileName;
+
+    @Column(name = "audio_content_type")
+    private String audioContentType;
+
+    @Column(name = "audio_storage_path")
+    private String audioStoragePath;
+
     @Column(name = "gps_file_name")
     private String gpsFileName;
 
@@ -94,6 +103,15 @@ public class PecEntity {
 
     public String getVideoStoragePath() { return videoStoragePath; }
     public void setVideoStoragePath(String videoStoragePath) { this.videoStoragePath = videoStoragePath; }
+
+    public String getAudioFileName() { return audioFileName; }
+    public void setAudioFileName(String audioFileName) { this.audioFileName = audioFileName; }
+
+    public String getAudioContentType() { return audioContentType; }
+    public void setAudioContentType(String audioContentType) { this.audioContentType = audioContentType; }
+
+    public String getAudioStoragePath() { return audioStoragePath; }
+    public void setAudioStoragePath(String audioStoragePath) { this.audioStoragePath = audioStoragePath; }
 
     public String getGpsFileName() { return gpsFileName; }
     public void setGpsFileName(String gpsFileName) { this.gpsFileName = gpsFileName; }

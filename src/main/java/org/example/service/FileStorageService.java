@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
@@ -145,6 +146,32 @@ public class FileStorageService {
             return Files.newInputStream(Paths.get(storageKey));
         } catch (Exception e) {
             throw new RuntimeException("Erro ao abrir ficheiro: " + e.getMessage());
+        }
+    }
+
+    public byte[] loadBytes(String storageKey) {
+        if (!StringUtils.hasText(storageKey)) {
+            throw new RuntimeException("Ficheiro nao encontrado");
+        }
+
+        if (!isS3Key(storageKey)) {
+            try {
+                return Files.readAllBytes(Paths.get(storageKey));
+            } catch (Exception e) {
+                throw new RuntimeException("Erro ao ler ficheiro: " + e.getMessage());
+            }
+        }
+
+        try (InputStream inputStream = open(storageKey);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, read);
+            }
+            return outputStream.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao ler ficheiro do bucket: " + e.getMessage());
         }
     }
 

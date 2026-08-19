@@ -5,6 +5,7 @@ public class GpsPointDTO {
     private double lng;
     private Double speedKmh;
     private Double timestamp;
+    private Double accuracy;
 
     public GpsPointDTO() {}
 
@@ -26,4 +27,7 @@ public class GpsPointDTO {
 
     public Double getTimestamp() { return timestamp; }
     public void setTimestamp(Double timestamp) { this.timestamp = timestamp; }
+
+    public Double getAccuracy() { return accuracy; }
+    public void setAccuracy(Double accuracy) { this.accuracy = accuracy; }
 }

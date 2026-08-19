@@ -44,6 +44,34 @@
       </button>
 
       <label
+        *ngIf="!hasAudio"
+        [class.pointer-events-none]="isLocked"
+        [class.opacity-40]="isLocked"
+        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
+      >
+        <input
+          type="file"
+          (change)="onFileSelect($event, 'audio')"
+          accept="audio/*"
+          class="hidden"
+        />
+        <span class="desktop-label">+ Add Audio</span>
+        <span class="mobile-label">Audio</span>
+      </label>
+
+      <button
+        *ngIf="hasAudio"
+        type="button"
+        (click)="deleteAudio()"
+        [disabled]="isLocked"
+        class="danger-button text-xs text-white px-3 py-1.5 rounded-lg font-semibold"
+        [attr.title]="audioFileName || 'Eliminar audio'"
+      >
+        <span class="desktop-label">Eliminar Audio</span>
+        <span class="mobile-label">Del Audio</span>
+      </button>
+
+      <label
         [class.pointer-events-none]="isLocked"
         [class.opacity-40]="isLocked"
         class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
@@ -128,6 +156,25 @@
         <ng-template #noVideo>
           <div class="text-sm text-slate-500">Sem video carregado</div>
         </ng-template>
+      </div>
+
+      <div
+        *ngIf="audioSrc"
+        class="surface-card rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+      >
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-slate-300">Audio da PEC</div>
+          <div class="text-[11px] text-slate-500 truncate">
+            {{ audioFileName || "Reconhecimento gravado" }}
+          </div>
+        </div>
+        <audio
+          #audioPlayer
+          [src]="audioSrc"
+          (timeupdate)="onTimeUpdate()"
+          controls
+          class="w-full"
+        ></audio>
       </div>
 
       <div

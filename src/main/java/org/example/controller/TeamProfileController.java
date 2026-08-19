@@ -4,7 +4,6 @@ import org.example.dto.TeamProfileDTO;
 import org.example.dto.TeamStatsDTO;
 import org.example.entity.TeamCarEntity;
 import org.example.service.TeamProfileService;
-import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -78,13 +77,14 @@ public class TeamProfileController {
     }
 
     @GetMapping("/cars/{carId}/photo")
-    public ResponseEntity<Resource> getCarPhoto(@PathVariable String carId) {
-        Resource resource = teamProfileService.getCarPhotoResource(carId);
+    public ResponseEntity<byte[]> getCarPhoto(@PathVariable String carId) {
+        byte[] image = teamProfileService.getCarPhotoBytes(carId);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(teamProfileService.getCarPhotoContentType(carId)))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                .body(resource);
+                .contentLength(image.length)
+                .body(image);
     }
 
     @PostMapping("/logo")
@@ -93,12 +93,13 @@ public class TeamProfileController {
     }
 
     @GetMapping("/logo")
-    public ResponseEntity<Resource> getLogo() {
-        Resource resource = teamProfileService.getLogoResource();
+    public ResponseEntity<byte[]> getLogo() {
+        byte[] image = teamProfileService.getLogoBytes();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(teamProfileService.getLogoContentType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                .body(resource);
+                .contentLength(image.length)
+                .body(image);
     }
 }

@@ -47,6 +47,25 @@ public class PecAssetController {
                 .body(resource);
     }
 
+    @PostMapping("/{pecId}/audio")
+    public ResponseEntity<PecAssetDTO> uploadAudio(@PathVariable String pecId, @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(pecAssetService.saveAudio(pecId, file));
+    }
+
+    @DeleteMapping("/{pecId}/audio")
+    public ResponseEntity<PecAssetDTO> deleteAudio(@PathVariable String pecId) {
+        return ResponseEntity.ok(pecAssetService.deleteAudio(pecId));
+    }
+
+    @GetMapping("/{pecId}/audio")
+    public ResponseEntity<Resource> getAudio(@PathVariable String pecId) {
+        Resource resource = pecAssetService.getAudioResource(pecId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(pecAssetService.getAudioContentType(pecId)))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(resource);
+    }
+
     @PostMapping("/{pecId}/gps")
     public ResponseEntity<PecAssetDTO> uploadGps(@PathVariable String pecId, @RequestParam("file") MultipartFile file) {
         return ResponseEntity.ok(pecAssetService.saveGps(pecId, file));

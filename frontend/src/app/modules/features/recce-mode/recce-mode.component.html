@@ -33,16 +33,25 @@
         class="text-[10px] uppercase font-semibold text-slate-400 block tracking-wider"
         >GPS</span
       >
-      <ng-container
-        *ngIf="trackingService.currentCoords$ | async as gps; else noGps"
-      >
-        <span class="text-xs sm:text-sm font-bold text-sky-400"
-          >{{ gps.speed | number: "1.0-0" }} km/h</span
+      <ng-container *ngIf="trackingService.gpsStatus$ | async as gpsStatus">
+        <ng-container *ngIf="trackingService.currentCoords$ | async as gps">
+          <span class="text-xs sm:text-sm font-bold text-sky-400">
+            {{ gps.speed | number: "1.0-0" }} km/h
+          </span>
+        </ng-container>
+        <span
+          class="text-[11px] block"
+          [class.text-sky-400]="gpsStatus.state === 'active'"
+          [class.text-amber-400]="gpsStatus.state === 'searching' || gpsStatus.state === 'degraded'"
+          [class.text-red-400]="gpsStatus.state === 'error'"
+          [class.text-slate-400]="gpsStatus.state === 'idle'"
         >
+          {{ gpsStatus.label }} · {{ gpsStatus.points }} pts
+          <ng-container *ngIf="gpsStatus.accuracy">
+            · ±{{ gpsStatus.accuracy | number: "1.0-0" }}m
+          </ng-container>
+        </span>
       </ng-container>
-      <ng-template #noGps>
-        <span class="text-xs text-amber-500 animate-pulse">A procurar...</span>
-      </ng-template>
     </div>
   </div>
 

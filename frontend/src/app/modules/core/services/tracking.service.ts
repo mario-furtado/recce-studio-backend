@@ -21,6 +21,14 @@ export interface GpsTrackPoint {
   lng: number;
   speedKmh: number;
   timestamp: number;
+  accuracy?: number | null;
+}
+
+export interface GpsStatus {
+  state: 'idle' | 'searching' | 'active' | 'degraded' | 'error';
+  label: string;
+  points: number;
+  accuracy: number | null;
 }
 
 @Injectable({
@@ -35,7 +43,14 @@ export class TrackingService {
     lat: number;
     lng: number;
     speed: number;
+    accuracy: number | null;
   } | null>(null);
+  public gpsStatus$ = new BehaviorSubject<GpsStatus>({
+    state: 'idle',
+    label: 'GPS inativo',
+    points: 0,
+    accuracy: null,
+  });
   public markers: ClickMarker[] = [];
   public gpsTrack: GpsTrackPoint[] = [];
 
@@ -43,6 +58,7 @@ export class TrackingService {
   private currentLng: number | null = null;
   private currentAlt: number | null = null;
   private currentSpeed: number | null = null;
+  private currentAccuracy: number | null = null;
 
   constructor(private shared: SharedProperties) {}
 
@@ -53,6 +69,12 @@ export class TrackingService {
   ): Promise<boolean> {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) {
+        this.gpsStatus$.next({
+          state: 'error',
+          label: 'GPS indisponivel',
+          points: 0,
+          accuracy: null,
+        });
         this.shared.error(
           'GPS indisponível',
           'O seu dispositivo não suporta geolocalização.',
@@ -60,44 +82,70 @@ export class TrackingService {
         return resolve(false);
       }
 
+      let resolvedStart = false;
+      this.initializeRecording(initialMarkers, initialElapsedSeconds, initialGpsTrack);
+      this.gpsStatus$.next({
+        state: 'searching',
+        label: 'A procurar GPS',
+        points: this.gpsTrack.length,
+        accuracy: null,
+      });
+
+      const resolveStart = () => {
+        if (resolvedStart) return;
+        resolvedStart = true;
+        resolve(true);
+      };
+
+      const startFallback = window.setTimeout(resolveStart, 6000);
+
       this.watchId = navigator.geolocation.watchPosition(
         (position) => {
+          window.clearTimeout(startFallback);
           this.currentLat = position.coords.latitude;
           this.currentLng = position.coords.longitude;
           this.currentAlt = position.coords.altitude;
           this.currentSpeed = position.coords.speed
             ? position.coords.speed * 3.6
             : 0;
+          this.currentAccuracy = position.coords.accuracy ?? null;
 
           this.currentCoords$.next({
             lat: this.currentLat,
             lng: this.currentLng,
             speed: this.currentSpeed,
+            accuracy: this.currentAccuracy,
           });
 
-          if (!this.isRecording) {
-            this.isRecording = true;
-            this.startTime =
-              Date.now() - Math.max(0, initialElapsedSeconds) * 1000;
-            this.markers = initialMarkers.map((marker) => ({ ...marker }));
-            this.gpsTrack = initialGpsTrack.map((point) => ({ ...point }));
-            resolve(true);
-          }
-
           this.recordGpsPoint();
+          this.updateGpsStatus('active', this.currentAccuracy);
+          resolveStart();
         },
         (error) => {
           console.error('Erro ao aceder ao GPS:', error);
-          this.shared.error(
-            'Permissão de GPS necessaria',
-            'Autorize o GPS para iniciar a gravação.',
-          );
-          resolve(false);
+          window.clearTimeout(startFallback);
+          if (error.code === error.PERMISSION_DENIED) {
+            this.gpsStatus$.next({
+              state: 'error',
+              label: 'GPS bloqueado',
+              points: this.gpsTrack.length,
+              accuracy: null,
+            });
+            this.shared.error(
+              'Permissão de GPS necessaria',
+              'Autorize o GPS para gravar o traçado do reconhecimento.',
+            );
+            resolve(false);
+            return;
+          }
+
+          this.updateGpsStatus('degraded', null);
+          resolveStart();
         },
         {
           enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000,
+          maximumAge: 5000,
+          timeout: 30000,
         },
       );
     });
@@ -152,6 +200,12 @@ export class TrackingService {
       navigator.geolocation.clearWatch(this.watchId);
       this.watchId = null;
     }
+    this.gpsStatus$.next({
+      state: 'idle',
+      label: 'GPS parado',
+      points: this.gpsTrack.length,
+      accuracy: this.currentAccuracy,
+    });
     return this.markers;
   }
 
@@ -178,6 +232,37 @@ export class TrackingService {
       lng: this.currentLng,
       speedKmh: this.currentSpeed || 0,
       timestamp,
+      accuracy: this.currentAccuracy,
+    });
+    this.updateGpsStatus('active', this.currentAccuracy);
+  }
+
+  private initializeRecording(
+    initialMarkers: ClickMarker[],
+    initialElapsedSeconds: number,
+    initialGpsTrack: GpsTrackPoint[],
+  ): void {
+    this.isRecording = true;
+    this.startTime = Date.now() - Math.max(0, initialElapsedSeconds) * 1000;
+    this.markers = initialMarkers.map((marker) => ({ ...marker }));
+    this.gpsTrack = initialGpsTrack.map((point) => ({ ...point }));
+    this.currentLat = null;
+    this.currentLng = null;
+    this.currentAlt = null;
+    this.currentSpeed = null;
+    this.currentAccuracy = null;
+    this.currentCoords$.next(null);
+  }
+
+  private updateGpsStatus(
+    state: 'active' | 'degraded',
+    accuracy: number | null,
+  ): void {
+    this.gpsStatus$.next({
+      state,
+      label: state === 'active' ? 'GPS ativo' : 'GPS fraco',
+      points: this.gpsTrack.length,
+      accuracy,
     });
   }
 }

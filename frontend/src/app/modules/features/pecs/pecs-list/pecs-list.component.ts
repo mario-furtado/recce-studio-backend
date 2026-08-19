@@ -37,6 +37,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
   rallies: Rally[] = [];
   cars: TeamCar[] = [];
   private readonly subscriptions = new Subscription();
+  private rallyLogoUrls = new Map<string, string>();
 
   rallyForm: {
     name: string;
@@ -76,6 +77,8 @@ export class PecsListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+    this.revokeRallyLogoUrls();
+    this.clearLogoSelection();
   }
 
   loadRalliesFromApi(): void {
@@ -85,7 +88,10 @@ export class PecsListComponent implements OnInit, OnDestroy {
     }
 
     this.rallyService.getRallies().subscribe({
-      next: (data: Rally[]) => (this.rallies = data),
+      next: (data: Rally[]) => {
+        this.rallies = data;
+        this.loadRallyLogos(data);
+      },
       error: () => this.shared.error('Erro ao carregar ralis'),
     });
   }
@@ -273,7 +279,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
   }
 
   getRallyLogoUrl(rally: Rally): string | null {
-    return this.rallyService.getRallyLogoUrl(rally);
+    return this.rallyLogoUrls.get(rally.id) || null;
   }
 
   getRallyInitials(name: string): string {
@@ -308,6 +314,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
       next: (updatedRally) => {
         const index = this.rallies.findIndex((r) => r.id === updatedRally.id);
         if (index !== -1) this.rallies[index] = updatedRally;
+        this.loadRallyLogo(updatedRally);
         this.cancelForm();
         this.shared.success(successTitle, updatedRally.name);
       },
@@ -322,6 +329,46 @@ export class PecsListComponent implements OnInit, OnDestroy {
     if (this.logoPreviewUrl) URL.revokeObjectURL(this.logoPreviewUrl);
     this.selectedLogoFile = null;
     this.logoPreviewUrl = null;
+  }
+
+  private loadRallyLogos(rallies: Rally[]): void {
+    this.revokeRallyLogoUrls();
+    rallies
+      .filter((rally) => rally.id && rally.logoFileName)
+      .forEach((rally) => this.loadRallyLogo(rally));
+  }
+
+  private loadRallyLogo(rally: Rally): void {
+    if (!rally.id || !rally.logoFileName) {
+      return;
+    }
+
+    this.rallyService.getRallyLogoBlob(
+      rally.id,
+      rally.logoStoragePath || rally.logoFileName || Date.now(),
+    ).subscribe({
+      next: (blob) => {
+        this.revokeRallyLogoUrl(rally.id);
+        this.rallyLogoUrls.set(rally.id, URL.createObjectURL(blob));
+      },
+      error: (err) => {
+        console.error('Erro ao carregar logo do rali:', err);
+        this.revokeRallyLogoUrl(rally.id);
+      },
+    });
+  }
+
+  private revokeRallyLogoUrl(rallyId: string): void {
+    const previousUrl = this.rallyLogoUrls.get(rallyId);
+    if (previousUrl) {
+      URL.revokeObjectURL(previousUrl);
+      this.rallyLogoUrls.delete(rallyId);
+    }
+  }
+
+  private revokeRallyLogoUrls(): void {
+    this.rallyLogoUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.rallyLogoUrls.clear();
   }
 
   private get isOnlineMode(): boolean {
