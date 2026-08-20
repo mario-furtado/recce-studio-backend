@@ -106,10 +106,12 @@ public class PecAssetService {
         return toAssetDTO(pecRepository.save(pec));
     }
 
+    @Transactional(readOnly = true)
     public PecAssetDTO getAssets(String pecId) {
         return toAssetDTO(getPec(pecId));
     }
 
+    @Transactional(readOnly = true)
     public Resource getVideoResource(String pecId) {
         PecEntity pec = getPec(pecId);
         if (pec.getVideoStoragePath() == null) {
@@ -118,11 +120,13 @@ public class PecAssetService {
         return fileStorageService.loadAsResource(pec.getVideoStoragePath());
     }
 
+    @Transactional(readOnly = true)
     public String getVideoContentType(String pecId) {
         PecEntity pec = getPec(pecId);
         return pec.getVideoContentType() != null ? pec.getVideoContentType() : "application/octet-stream";
     }
 
+    @Transactional(readOnly = true)
     public Resource getAudioResource(String pecId) {
         PecEntity pec = getPec(pecId);
         if (pec.getAudioStoragePath() == null) {
@@ -131,6 +135,7 @@ public class PecAssetService {
         return fileStorageService.loadAsResource(pec.getAudioStoragePath());
     }
 
+    @Transactional(readOnly = true)
     public byte[] getAudioBytes(String pecId) {
         PecEntity pec = getPec(pecId);
         if (pec.getAudioStoragePath() == null) {
@@ -139,11 +144,13 @@ public class PecAssetService {
         return fileStorageService.loadBytes(pec.getAudioStoragePath());
     }
 
+    @Transactional(readOnly = true)
     public String getAudioContentType(String pecId) {
         PecEntity pec = getPec(pecId);
         return pec.getAudioContentType() != null ? pec.getAudioContentType() : "application/octet-stream";
     }
 
+    @Transactional(readOnly = true)
     public List<GpsPointDTO> getGpsTrack(String pecId) {
         PecEntity pec = getPec(pecId);
         if (pec.getGpsStoragePath() == null) {
@@ -165,6 +172,7 @@ public class PecAssetService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<ClickMarkerDto> getRecceMarkers(String pecId) {
         getPec(pecId);
         for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {

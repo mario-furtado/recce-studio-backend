@@ -3,7 +3,6 @@ package org.example.entity;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
-import javax.persistence.Lob;
 import javax.persistence.Table;
 import java.time.LocalDateTime;
 
@@ -43,12 +42,10 @@ public class OfflineRecceSyncEntity {
     @Column(name = "duration_seconds", nullable = false)
     private double durationSeconds;
 
-    @Lob
-    @Column(name = "markers_json")
+    @Column(name = "markers_json", columnDefinition = "TEXT")
     private String markersJson;
 
-    @Lob
-    @Column(name = "gps_track_json")
+    @Column(name = "gps_track_json", columnDefinition = "TEXT")
     private String gpsTrackJson;
 
     @Column(name = "synced_at", nullable = false)
