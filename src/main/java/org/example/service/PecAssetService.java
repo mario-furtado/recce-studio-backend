@@ -131,6 +131,14 @@ public class PecAssetService {
         return fileStorageService.loadAsResource(pec.getAudioStoragePath());
     }
 
+    public byte[] getAudioBytes(String pecId) {
+        PecEntity pec = getPec(pecId);
+        if (pec.getAudioStoragePath() == null) {
+            throw new RuntimeException("Audio nao encontrado para a PEC: " + pecId);
+        }
+        return fileStorageService.loadBytes(pec.getAudioStoragePath());
+    }
+
     public String getAudioContentType(String pecId) {
         PecEntity pec = getPec(pecId);
         return pec.getAudioContentType() != null ? pec.getAudioContentType() : "application/octet-stream";
@@ -159,10 +167,13 @@ public class PecAssetService {
 
     public List<ClickMarkerDto> getRecceMarkers(String pecId) {
         getPec(pecId);
-        return offlineRecceSyncRepository.findTopByPecIdOrderBySyncedAtDesc(pecId)
-                .map(OfflineRecceSyncEntity::getMarkersJson)
-                .map(this::parseMarkerJson)
-                .orElseGet(ArrayList::new);
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+            List<ClickMarkerDto> markers = safeParseMarkerJson(sync.getMarkersJson());
+            if (!markers.isEmpty()) {
+                return markers;
+            }
+        }
+        return new ArrayList<>();
     }
 
     private PecEntity getPec(String pecId) {
@@ -178,6 +189,7 @@ public class PecAssetService {
     }
 
     private PecAssetDTO toAssetDTO(PecEntity pec) {
+        boolean hasSyncedGps = hasSyncedGps(pec.getId());
         PecAssetDTO dto = new PecAssetDTO();
         dto.setHasVideo(pec.getVideoStoragePath() != null);
         dto.setVideoFileName(pec.getVideoFileName());
@@ -185,9 +197,9 @@ public class PecAssetService {
         dto.setHasAudio(pec.getAudioStoragePath() != null);
         dto.setAudioFileName(pec.getAudioFileName());
         dto.setAudioUrl(pec.getAudioStoragePath() != null ? "/api/pecs/" + pec.getId() + "/audio" : null);
-        dto.setHasGps(pec.getGpsStoragePath() != null);
-        dto.setGpsFileName(pec.getGpsFileName());
-        dto.setGpsUrl(pec.getGpsStoragePath() != null ? "/api/pecs/" + pec.getId() + "/gps/track" : null);
+        dto.setHasGps(pec.getGpsStoragePath() != null || hasSyncedGps);
+        dto.setGpsFileName(pec.getGpsFileName() != null ? pec.getGpsFileName() : (hasSyncedGps ? "Reconhecimento sincronizado" : null));
+        dto.setGpsUrl(pec.getGpsStoragePath() != null || hasSyncedGps ? "/api/pecs/" + pec.getId() + "/gps/track" : null);
         return dto;
     }
 
@@ -196,9 +208,21 @@ public class PecAssetService {
             throw new RuntimeException("Ficheiro audio vazio");
         }
         String contentType = file.getContentType();
-        if (contentType != null
-                && !contentType.toLowerCase().startsWith("audio/")
-                && !"video/webm".equalsIgnoreCase(contentType)) {
+        String lowerContentType = contentType != null ? contentType.toLowerCase() : "";
+        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+        boolean validContentType = lowerContentType.isEmpty()
+                || lowerContentType.startsWith("audio/")
+                || lowerContentType.startsWith("video/webm")
+                || lowerContentType.startsWith("video/mp4")
+                || "application/octet-stream".equals(lowerContentType);
+        boolean validExtension = fileName.endsWith(".webm")
+                || fileName.endsWith(".m4a")
+                || fileName.endsWith(".mp4")
+                || fileName.endsWith(".mp3")
+                || fileName.endsWith(".ogg")
+                || fileName.endsWith(".wav")
+                || fileName.endsWith(".aac");
+        if (!validContentType && !validExtension) {
             throw new RuntimeException("O ficheiro deve ser audio.");
         }
     }
@@ -239,10 +263,44 @@ public class PecAssetService {
     }
 
     private List<GpsPointDTO> getOfflineGpsTrack(String pecId) {
-        return offlineRecceSyncRepository.findTopByPecIdOrderBySyncedAtDesc(pecId)
-                .map(OfflineRecceSyncEntity::getGpsTrackJson)
-                .map(this::parseGpsTrackJson)
-                .orElseGet(ArrayList::new);
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+            List<GpsPointDTO> track = safeParseGpsTrackJson(sync.getGpsTrackJson());
+            if (!track.isEmpty()) {
+                return track;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private boolean hasSyncedGps(String pecId) {
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+            if (!safeParseGpsTrackJson(sync.getGpsTrackJson()).isEmpty()) {
+                return true;
+            }
+            List<ClickMarkerDto> markers = safeParseMarkerJson(sync.getMarkersJson());
+            for (ClickMarkerDto marker : markers) {
+                if (marker.getLatitude() != null && marker.getLongitude() != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private List<GpsPointDTO> safeParseGpsTrackJson(String json) {
+        try {
+            return parseGpsTrackJson(json);
+        } catch (RuntimeException ignored) {
+            return new ArrayList<>();
+        }
+    }
+
+    private List<ClickMarkerDto> safeParseMarkerJson(String json) {
+        try {
+            return parseMarkerJson(json);
+        } catch (RuntimeException ignored) {
+            return new ArrayList<>();
+        }
     }
 
     private List<GpsPointDTO> parseGpsTrackJson(String json) {

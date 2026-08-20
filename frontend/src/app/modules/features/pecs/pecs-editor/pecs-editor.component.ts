@@ -133,12 +133,12 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
             'Notas sincronizadas, mas audio falhou',
             'O reconhecimento fica guardado localmente para tentares novamente.',
           );
-          return;
+        } else {
+          localStorage.removeItem(`recce_timestamps_${this.pecId}`);
+          localStorage.removeItem(`recce_gps_track_${this.pecId}`);
+          localStorage.removeItem(`recce_session_id_${this.pecId}`);
+          await this.offlineStore.deleteSession(sessionId).catch(() => undefined);
         }
-        localStorage.removeItem(`recce_timestamps_${this.pecId}`);
-        localStorage.removeItem(`recce_gps_track_${this.pecId}`);
-        localStorage.removeItem(`recce_session_id_${this.pecId}`);
-        await this.offlineStore.deleteSession(sessionId).catch(() => undefined);
         this.loadNotesFromDatabase();
         this.loadAssets();
         this.loadGpsTrack();

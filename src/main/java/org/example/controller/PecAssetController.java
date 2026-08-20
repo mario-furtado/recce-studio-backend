@@ -58,12 +58,13 @@ public class PecAssetController {
     }
 
     @GetMapping("/{pecId}/audio")
-    public ResponseEntity<Resource> getAudio(@PathVariable String pecId) {
-        Resource resource = pecAssetService.getAudioResource(pecId);
+    public ResponseEntity<byte[]> getAudio(@PathVariable String pecId) {
+        byte[] audio = pecAssetService.getAudioBytes(pecId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(pecAssetService.getAudioContentType(pecId)))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                .body(resource);
+                .contentLength(audio.length)
+                .body(audio);
     }
 
     @PostMapping("/{pecId}/gps")
