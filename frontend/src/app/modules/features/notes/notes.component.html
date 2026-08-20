@@ -7,7 +7,7 @@
         <div class="rs-eyebrow">Notas</div>
         <h1 class="rs-page-title">Dicionario de notas</h1>
         <p class="rs-page-subtitle">
-          Gere as notas base da app e as personalizacoes do utilizador.
+          Gere as notas base e personalizacoes sem duplicar variantes desnecessarias.
         </p>
       </div>
 
@@ -37,9 +37,12 @@
           name="phrase"
           [(ngModel)]="form.phrase"
           class="themed-input mt-1 w-full px-4 py-3"
-          placeholder="direita tres"
+          placeholder="direita 3"
           title="Palavra ou frase dita no reconhecimento"
         />
+        <span class="mt-1 block text-[11px] text-slate-500">
+          Numeros em digito e por extenso sao tratados como equivalentes.
+        </span>
       </label>
 
       <label class="block">
@@ -100,85 +103,131 @@
   </section>
 
   <section class="glass-panel rounded-2xl p-6 space-y-3">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="rs-section-title">Regras existentes</h2>
-      <span class="themed-chip text-[11px] px-2 py-1">
-        {{ rules.length }} notas
-      </span>
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h2 class="rs-section-title">Regras existentes</h2>
+        <p class="text-xs text-slate-400">
+          Variantes equivalentes aparecem juntas para manter a lista compacta.
+        </p>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+        <input
+          type="search"
+          name="noteSearch"
+          [(ngModel)]="searchTerm"
+          (ngModelChange)="onSearchChange()"
+          class="themed-input px-3 py-2 text-sm min-w-[220px]"
+          placeholder="Pesquisar notas"
+          title="Pesquisar por frase, simbolo ou grupo"
+        />
+        <span class="themed-chip text-[11px] px-2 py-1 whitespace-nowrap">
+          {{ rules.length }} regras · {{ groups.length }} grupos
+        </span>
+      </div>
     </div>
 
     <div
-      *ngIf="rules.length === 0"
+      *ngIf="groups.length === 0"
       class="rounded-xl border border-dashed border-slate-800 p-5 text-sm text-slate-400"
     >
-      Ainda nao existem notas configuradas.
+      Ainda nao existem notas para mostrar.
     </div>
 
     <div
-      *ngFor="let rule of rules; trackBy: trackRule"
-      class="note-rule-row rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-      [class.opacity-55]="!rule.enabled"
+      *ngFor="let group of groups; trackBy: trackGroup"
+      class="rounded-xl border border-slate-800 bg-slate-950/35 overflow-hidden"
     >
-      <div class="min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-sm font-bold text-white">{{ rule.phrase }}</span>
-          <span class="text-xs text-slate-500">-></span>
-          <span class="themed-chip text-xs px-2 py-0.5">
-            {{ rule.symbol }}
+        <button
+          type="button"
+          (click)="toggleGroup(group)"
+          class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+          [attr.title]="isGroupExpanded(group) ? 'Recolher grupo' : 'Expandir grupo'"
+        >
+          <span class="flex items-center gap-3 min-w-0">
+            <span class="text-lg font-black text-red-400 w-5 text-center">
+              {{ isGroupExpanded(group) ? "−" : "+" }}
+            </span>
+            <span class="min-w-0">
+              <span class="block text-sm font-black text-white">
+                {{ group.label }}
+              </span>
+              <span class="block text-[11px] text-slate-400">
+                {{ group.enabled }}/{{ group.total }} ativas
+                <ng-container *ngIf="group.custom">
+                  · {{ group.custom }} personalizadas
+                </ng-container>
+              </span>
+            </span>
           </span>
-          <span
-            *ngIf="rule.category"
-            class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
-          >
-            {{ rule.category }}
+          <span class="themed-chip text-[11px] px-2 py-1">
+            {{ group.total }}
           </span>
-          <span
-            *ngIf="rule.base && !rule.overridden"
-            class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
-          >
-            Base
-          </span>
-          <span
-            *ngIf="rule.overridden"
-            class="text-[11px] text-emerald-200 rounded-full border border-emerald-500/30 px-2 py-0.5"
-          >
-            Personalizada
-          </span>
-          <span
-            *ngIf="rule.localOnly"
-            class="text-[11px] text-amber-200 rounded-full border border-amber-500/30 px-2 py-0.5"
-          >
-            Local
-          </span>
-        </div>
-      </div>
+        </button>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          (click)="toggleRule(rule)"
-          class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
-          [attr.title]="rule.enabled ? 'Desativar regra' : 'Ativar regra'"
+      <div *ngIf="isGroupExpanded(group)" class="divide-y divide-slate-800/80">
+        <div
+          *ngFor="let row of group.rows; trackBy: trackRow"
+          class="note-rule-row p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+          [class.opacity-55]="!row.enabled"
         >
-          {{ rule.enabled ? "Desativar" : "Ativar" }}
-        </button>
-        <button
-          type="button"
-          (click)="editRule(rule)"
-          class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
-          title="Editar regra"
-        >
-          Editar
-        </button>
-        <button
-          *ngIf="canDelete(rule)"
-          type="button"
-          (click)="deleteRule(rule)"
-          [class]="rule.overridden ? 'soft-button px-3 py-2 rounded-lg text-xs font-bold' : 'danger-button px-3 py-2 rounded-lg text-xs font-bold'"
-          [attr.title]="rule.overridden ? 'Repor nota base' : 'Eliminar regra'"
-        >
-          {{ deleteLabel(rule) }}
-        </button>
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm font-bold text-white">
+                {{ row.phraseLabel }}
+              </span>
+              <span class="text-xs text-slate-500">-></span>
+              <span class="themed-chip text-xs px-2 py-0.5">
+                {{ row.symbol }}
+              </span>
+              <span
+                *ngIf="row.base && !row.overridden"
+                class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
+              >
+                Base
+              </span>
+              <span
+                *ngIf="row.overridden"
+                class="text-[11px] text-emerald-200 rounded-full border border-emerald-500/30 px-2 py-0.5"
+              >
+                Personalizada
+              </span>
+              <span
+                *ngIf="row.localOnly"
+                class="text-[11px] text-amber-200 rounded-full border border-amber-500/30 px-2 py-0.5"
+              >
+                Local
+              </span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              (click)="toggleRow(row)"
+              class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
+              [attr.title]="row.enabled ? 'Desativar regra' : 'Ativar regra'"
+            >
+              {{ row.enabled ? "Desativar" : "Ativar" }}
+            </button>
+            <button
+              type="button"
+              (click)="editRow(row)"
+              class="soft-button px-3 py-2 rounded-lg text-xs font-bold"
+              title="Editar regra"
+            >
+              Editar
+            </button>
+            <button
+              *ngIf="canDeleteRow(row)"
+              type="button"
+              (click)="deleteRule(row.primaryRule)"
+              [class]="row.overridden ? 'soft-button px-3 py-2 rounded-lg text-xs font-bold' : 'danger-button px-3 py-2 rounded-lg text-xs font-bold'"
+              [attr.title]="row.overridden ? 'Repor nota base' : 'Eliminar regra'"
+            >
+              {{ rowDeleteLabel(row) }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </section>

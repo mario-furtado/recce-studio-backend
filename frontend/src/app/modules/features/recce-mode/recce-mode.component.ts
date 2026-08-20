@@ -550,23 +550,66 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     const nextText = rawText.trim();
     if (!nextText) return this.pushToTalkRawText;
 
-    if (this.pushToTalkRawText === nextText) {
+    const currentKey = this.transcriptKey(this.pushToTalkRawText);
+    const nextKey = this.transcriptKey(nextText);
+
+    if (currentKey === nextKey) {
       return this.pushToTalkRawText;
     }
 
-    if (nextText.startsWith(this.pushToTalkRawText)) {
+    if (nextKey.startsWith(currentKey)) {
       this.pushToTalkRawText = nextText;
       return this.pushToTalkRawText;
     }
 
-    if (this.pushToTalkRawText.startsWith(nextText)) {
+    if (currentKey.startsWith(nextKey)) {
       return this.pushToTalkRawText;
     }
 
-    this.pushToTalkRawText = this.pushToTalkRawText
-      ? `${this.pushToTalkRawText} ${nextText}`.trim()
-      : nextText;
+    const mergedText = this.mergeOverlappingTranscript(this.pushToTalkRawText, nextText);
+    this.pushToTalkRawText = mergedText || nextText;
     return this.pushToTalkRawText;
+  }
+
+  private mergeOverlappingTranscript(currentText: string, nextText: string): string {
+    const currentTokens = currentText.split(/\s+/).filter(Boolean);
+    const nextTokens = nextText.split(/\s+/).filter(Boolean);
+    if (currentTokens.length === 0) return nextText;
+
+    const currentKeys = currentTokens.map((token) => this.transcriptTokenKey(token));
+    const nextKeys = nextTokens.map((token) => this.transcriptTokenKey(token));
+    const maxOverlap = Math.min(currentKeys.length, nextKeys.length);
+
+    for (let size = maxOverlap; size > 0; size--) {
+      const currentTail = currentKeys.slice(currentKeys.length - size);
+      const nextHead = nextKeys.slice(0, size);
+      if (currentTail.every((token, index) => token === nextHead[index])) {
+        return [...currentTokens, ...nextTokens.slice(size)].join(' ');
+      }
+    }
+
+    return `${currentText} ${nextText}`.trim();
+  }
+
+  private transcriptKey(text: string): string {
+    return text
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => this.transcriptTokenKey(token))
+      .join(' ');
+  }
+
+  private transcriptTokenKey(token: string): string {
+    const normalized = token
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+
+    if (['e', 'esq', 'esquerda'].includes(normalized)) return 'esquerda';
+    if (['d', 'dir', 'direita'].includes(normalized)) return 'direita';
+    if (normalized === 'tres') return '3';
+    return normalized;
   }
 
   private async startOfflineSession(): Promise<void> {

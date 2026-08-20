@@ -320,7 +320,30 @@ export class RecceNoteParserService {
   }
 
   private matchesTokens(tokens: VoiceToken[], index: number, phraseTokens: string[]): boolean {
-    return phraseTokens.every((word, offset) => tokens[index + offset]?.norm === word);
+    return phraseTokens.every((word, offset) => this.tokensEquivalent(tokens[index + offset]?.norm, word));
+  }
+
+  private tokensEquivalent(spokenToken: string | undefined, ruleToken: string): boolean {
+    if (!spokenToken) return false;
+    if (spokenToken === ruleToken) return true;
+    return this.numberAlias(spokenToken) === this.numberAlias(ruleToken);
+  }
+
+  private numberAlias(token: string): string {
+    const aliases: Record<string, string> = {
+      um: '1',
+      uma: '1',
+      dois: '2',
+      duas: '2',
+      tres: '3',
+      quatro: '4',
+      cinco: '5',
+      seis: '6',
+      sete: '7',
+      oito: '8',
+      nove: '9',
+    };
+    return aliases[token] || token;
   }
 
   private normalizeWhitespace(text: string): string {
@@ -544,10 +567,58 @@ export class RecceNoteParserService {
   }
 
   private cleanupCompact(text: string): string {
-    return text
+    const tokens = text
       .replace(/\s+/g, ' ')
       .replace(/>\s+>/g, '>')
-      .trim();
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+
+    return this.removeDuplicatedVoiceTokens(tokens).join(' ');
+  }
+
+  private removeDuplicatedVoiceTokens(tokens: string[]): string[] {
+    return tokens.filter((token, index) => {
+      const next = tokens[index + 1];
+      if (!next) return true;
+
+      if ((token === 'E' || token === 'D') && new RegExp(`^${token}[1-9][+-]?$`).test(next)) {
+        return false;
+      }
+
+      if (token === next && this.canCollapseDuplicateCompactToken(token)) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  private canCollapseDuplicateCompactToken(token: string): boolean {
+    return [
+      'ATT',
+      '!',
+      'LB',
+      'SL',
+      'PT',
+      'TR',
+      'TR+',
+      'C',
+      'C+',
+      'C-',
+      'NC',
+      'AF',
+      'CNT',
+      'CRZ',
+      'CHICANE',
+      'G',
+      'META',
+      'AGUA',
+      's/',
+      '>',
+      '>>',
+      '+',
+    ].includes(token);
   }
 
   private cleanupObservation(observations: string[]): string {

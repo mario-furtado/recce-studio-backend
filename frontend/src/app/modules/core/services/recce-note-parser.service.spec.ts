@@ -152,6 +152,13 @@ describe('RecceNoteParserService', () => {
     expect(service.parse('d4').compactText).toBe('D4');
   });
 
+  it('cleans duplicated fragments produced by speech recognition', () => {
+    expect(service.parse('é esquerda 3').compactText).toBe('E3');
+    expect(service.parse('e esquerda tres').compactText).toBe('E3');
+    expect(service.parse('d direita quatro').compactText).toBe('D4');
+    expect(service.parse('lomba lomba').compactText).toBe('LB');
+  });
+
   it('ignores speech filler words between direction and rating', () => {
     expect(service.parse('direita acelera tres').compactText).toBe('D3');
     expect(service.parse('d acelera 4').compactText).toBe('D4');
@@ -159,7 +166,7 @@ describe('RecceNoteParserService', () => {
 
   it('applies custom dictionary symbols before base parser rules', () => {
     const customParser = new RecceNoteParserService({
-      getActiveRules: () => [
+      getRules: () => [
         { phrase: 'trava', symbol: 'T', enabled: true },
         { phrase: 'sinal', symbol: 'Sin', enabled: true },
       ],
@@ -170,5 +177,17 @@ describe('RecceNoteParserService', () => {
       observation: '',
       rawText: 'Trava no sinal',
     });
+  });
+
+  it('matches custom dictionary numeric aliases', () => {
+    const customParser = new RecceNoteParserService({
+      getRules: () => [
+        { phrase: 'esquerda 4', symbol: 'E4!', enabled: true },
+        { phrase: 'sinal quatro', symbol: 'S4', enabled: true },
+      ],
+    } as any);
+
+    expect(customParser.parse('esquerda quatro').compactText).toBe('E4!');
+    expect(customParser.parse('sinal 4').compactText).toBe('S4');
   });
 });
