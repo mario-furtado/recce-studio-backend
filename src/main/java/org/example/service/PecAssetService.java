@@ -75,7 +75,7 @@ public class PecAssetService {
         String path = fileStorageService.store(file, "pecs/" + pecId, "audio");
         fileStorageService.delete(pec.getAudioStoragePath());
         pec.setAudioFileName(file.getOriginalFilename());
-        pec.setAudioContentType(file.getContentType());
+        pec.setAudioContentType(normalizeAudioContentType(file.getContentType(), file.getOriginalFilename()));
         pec.setAudioStoragePath(path);
         pec.setUpdatedAt(LocalDate.now());
         return toAssetDTO(pecRepository.save(pec));
@@ -225,6 +225,27 @@ public class PecAssetService {
         if (!validContentType && !validExtension) {
             throw new RuntimeException("O ficheiro deve ser audio.");
         }
+    }
+
+    private String normalizeAudioContentType(String contentType, String originalFilename) {
+        String lowerContentType = contentType != null ? contentType.toLowerCase() : "";
+        String fileName = originalFilename != null ? originalFilename.toLowerCase() : "";
+        if (lowerContentType.contains("mp4") || lowerContentType.contains("aac") || fileName.endsWith(".m4a") || fileName.endsWith(".mp4")) {
+            return "audio/mp4";
+        }
+        if (lowerContentType.contains("mpeg") || lowerContentType.contains("mp3") || fileName.endsWith(".mp3")) {
+            return "audio/mpeg";
+        }
+        if (lowerContentType.contains("ogg") || fileName.endsWith(".ogg")) {
+            return "audio/ogg";
+        }
+        if (lowerContentType.contains("wav") || fileName.endsWith(".wav")) {
+            return "audio/wav";
+        }
+        if (lowerContentType.startsWith("audio/")) {
+            return lowerContentType;
+        }
+        return "audio/webm";
     }
 
     private List<GpsPointDTO> parseGpx(InputStream inputStream) throws Exception {

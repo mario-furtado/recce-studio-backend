@@ -99,8 +99,7 @@ export class TrackingService {
 
       const startFallback = window.setTimeout(resolveStart, 6000);
 
-      this.watchId = navigator.geolocation.watchPosition(
-        (position) => {
+      const handlePosition = (position: GeolocationPosition) => {
           window.clearTimeout(startFallback);
           this.currentLat = position.coords.latitude;
           this.currentLng = position.coords.longitude;
@@ -120,8 +119,9 @@ export class TrackingService {
           this.recordGpsPoint();
           this.updateGpsStatus('active', this.currentAccuracy);
           resolveStart();
-        },
-        (error) => {
+      };
+
+      const handleError = (error: GeolocationPositionError) => {
           console.error('Erro ao aceder ao GPS:', error);
           window.clearTimeout(startFallback);
           if (error.code === error.PERMISSION_DENIED) {
@@ -141,10 +141,24 @@ export class TrackingService {
 
           this.updateGpsStatus('degraded', null);
           resolveStart();
-        },
+      };
+
+      navigator.geolocation.getCurrentPosition(
+        handlePosition,
+        handleError,
         {
           enableHighAccuracy: true,
-          maximumAge: 5000,
+          maximumAge: 1000,
+          timeout: 15000,
+        },
+      );
+
+      this.watchId = navigator.geolocation.watchPosition(
+        handlePosition,
+        handleError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
           timeout: 30000,
         },
       );

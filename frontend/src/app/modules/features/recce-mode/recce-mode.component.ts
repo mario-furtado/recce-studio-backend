@@ -21,6 +21,8 @@ import {
   OfflineRecceSession,
   OfflineRecceStoreService,
 } from '../../core/services/offline-recce-store.service';
+import { PecService } from '../../core/services/pecs.service';
+import { firstValueFrom } from 'rxjs';
 
 interface PendingVoiceNote {
   parsed: ParsedRecceNote;
@@ -80,6 +82,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     private noteParser: RecceNoteParserService,
     private shared: SharedProperties,
     private offlineStore: OfflineRecceStoreService,
+    private pecService: PecService,
   ) {}
 
   ngOnInit(): void {
@@ -137,27 +140,24 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
       const finalMarkers = this.trackingService.stopRecce();
       const finalGpsTrack = this.trackingService.getGpsTrack();
-      const completedSessionId = this.offlineSessionId;
-      await this.completeOfflineSession(finalMarkers, audioBlob);
+      const completedSession = await this.completeOfflineSession(finalMarkers, audioBlob);
+      const syncStatus = await this.syncCompletedSessionIfOnline(
+        completedSession,
+        finalMarkers,
+        finalGpsTrack,
+        audioBlob,
+      );
 
-      // 1. Guardar temporariamente no Browser para o Studio/Editor carregar
-      localStorage.setItem(
-        `recce_timestamps_${this.pecId}`,
-        JSON.stringify(finalMarkers),
-      );
-      localStorage.setItem(
-        `recce_gps_track_${this.pecId}`,
-        JSON.stringify(finalGpsTrack),
-      );
-      if (completedSessionId) {
-        localStorage.setItem(`recce_session_id_${this.pecId}`, completedSessionId);
+      if (syncStatus === 'offline') {
+        this.storeLocalCompletion(finalMarkers, finalGpsTrack, completedSession?.id || null);
       }
 
-      // 2. Emite o evento para o pai alternar a vista/tab para o 'STUDIO'
-      this.navigateToStudio.emit();
-      if (this.shouldNavigateToOfflineQueue()) {
+      if (syncStatus === 'offline' && this.shouldNavigateToOfflineQueue()) {
         this.router.navigate(['/offline-recces']);
+        return;
       }
+
+      this.navigateToStudio.emit();
     }
   }
 
@@ -604,19 +604,127 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     });
   }
 
-  private async completeOfflineSession(markers: ClickMarker[], audioBlob: Blob | null): Promise<void> {
-    if (!this.offlineSessionId) return;
+  private async completeOfflineSession(markers: ClickMarker[], audioBlob: Blob | null): Promise<OfflineRecceSession | null> {
+    if (!this.offlineSessionId) return null;
 
     try {
       await this.offlineSaveQueue;
-      await this.offlineStore.completeSession(this.offlineSessionId, markers, audioBlob, this.trackingService.getGpsTrack());
-      this.shared.success('Reconhecimento guardado offline', 'Fica disponivel para sincronizar quando estiver online.');
+      return await this.offlineStore.completeSession(this.offlineSessionId, markers, audioBlob, this.trackingService.getGpsTrack());
     } catch (error) {
       console.error('Erro ao fechar sessao offline:', error);
       this.shared.error('Erro ao guardar offline', 'O JSON de backup foi descarregado como alternativa.');
+      return null;
     } finally {
       this.offlineSessionId = null;
     }
+  }
+
+  private async syncCompletedSessionIfOnline(
+    session: OfflineRecceSession | null,
+    markers: ClickMarker[],
+    gpsTrack: ReturnType<TrackingService['getGpsTrack']>,
+    audioBlob: Blob | null,
+  ): Promise<'synced' | 'partial' | 'offline'> {
+    if (!session || !this.shouldSyncImmediately()) {
+      this.shared.success('Reconhecimento guardado offline', 'Fica disponivel para sincronizar quando estiver online.');
+      return 'offline';
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.pecService.syncOfflineRecce({
+          sessionId: session.id,
+          deviceId: session.deviceId,
+          userEmail: session.userEmail,
+          temporaryName: session.temporaryName,
+          pecId: this.pecId,
+          createdAt: session.createdAt,
+          finishedAt: session.finishedAt,
+          notesCount: markers.length,
+          durationSeconds: session.durationSeconds,
+          markers,
+          gpsTrack,
+        }),
+      );
+
+      const audioUploaded = await this.uploadAudioBlob(response.pecId, audioBlob);
+      if (!audioUploaded) {
+        await this.offlineStore.markSessionReadyToSync(
+          session.id,
+          'Notas e GPS sincronizados, mas falhou o envio do audio.',
+        );
+        this.shared.error(
+          'Audio nao sincronizado',
+          'Notas e GPS foram guardados no backend. O audio fica local para tentar novamente.',
+        );
+        return 'partial';
+      }
+
+      await this.offlineStore.deleteSession(session.id);
+      this.clearLocalCompletion();
+      this.shared.success('Reconhecimento sincronizado', response.pecName || response.pecId);
+      return 'synced';
+    } catch (error) {
+      console.error('Erro ao sincronizar reconhecimento online:', error);
+      await this.offlineStore.markSessionReadyToSync(
+        session.id,
+        'Falha ao enviar para o backend.',
+      );
+      this.shared.success('Reconhecimento guardado offline', 'Nao foi possivel contactar o backend. Podes sincronizar depois.');
+      return 'offline';
+    }
+  }
+
+  private async uploadAudioBlob(pecId: string, audioBlob: Blob | null): Promise<boolean> {
+    if (!audioBlob) return true;
+
+    try {
+      await firstValueFrom(
+        this.pecService.uploadAudio(
+          pecId,
+          audioBlob,
+          this.audioFileNameFromMime(audioBlob.type),
+        ),
+      );
+      return true;
+    } catch (error) {
+      console.error('Erro ao enviar audio do reconhecimento:', error);
+      return false;
+    }
+  }
+
+  private audioFileNameFromMime(mimeType?: string): string {
+    const normalized = (mimeType || '').toLowerCase();
+    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
+    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
+    if (normalized.includes('ogg')) return 'recce-audio.ogg';
+    if (normalized.includes('wav')) return 'recce-audio.wav';
+    return 'recce-audio.webm';
+  }
+
+  private storeLocalCompletion(
+    markers: ClickMarker[],
+    gpsTrack: ReturnType<TrackingService['getGpsTrack']>,
+    sessionId: string | null,
+  ): void {
+    localStorage.setItem(`recce_timestamps_${this.pecId}`, JSON.stringify(markers));
+    localStorage.setItem(`recce_gps_track_${this.pecId}`, JSON.stringify(gpsTrack));
+    if (sessionId) {
+      localStorage.setItem(`recce_session_id_${this.pecId}`, sessionId);
+    }
+  }
+
+  private clearLocalCompletion(): void {
+    localStorage.removeItem(`recce_timestamps_${this.pecId}`);
+    localStorage.removeItem(`recce_gps_track_${this.pecId}`);
+    localStorage.removeItem(`recce_session_id_${this.pecId}`);
+  }
+
+  private shouldSyncImmediately(): boolean {
+    return this.shared.connectionMode$.value === 'online'
+      && (typeof navigator === 'undefined' || navigator.onLine)
+      && !this.isStandaloneOfflineRecce()
+      && !this.resumeSession;
   }
 
   private isStandaloneOfflineRecce(): boolean {
