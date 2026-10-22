@@ -73,6 +73,7 @@ export class SidebarComponent {
     this.isSwitchingConnectionMode = true;
     this.shared.info('A validar ligação', 'A confirmar sessão com o backend.');
 
+    const token = this.auth.getToken();
     this.auth.validate().subscribe({
       next: () => {
         this.shared.setConnectionMode('online');
@@ -83,6 +84,7 @@ export class SidebarComponent {
       error: (error: HttpErrorResponse) => {
         this.isSwitchingConnectionMode = false;
         if (error.status === 401) {
+          if (this.auth.getToken() !== token) return;
           this.shared.error(
             'Sessão online necessária',
             'Entra novamente para sincronizar com o backend.',

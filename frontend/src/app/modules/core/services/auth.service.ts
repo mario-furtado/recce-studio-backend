@@ -1,8 +1,9 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, timeout } from 'rxjs';
 import { API_BASE_URL } from './api.config';
+import { SharedProperties } from '../shared/shared-properties';
 
 export interface AuthPayload {
   email: string;
@@ -32,6 +33,7 @@ export class AuthService {
   constructor(
     private http: HttpClient,
     private router: Router,
+    private shared: SharedProperties,
   ) {}
 
   login(payload: AuthPayload): Observable<AuthResponse> {
@@ -73,8 +75,29 @@ export class AuthService {
   }
 
   logout(): void {
-    this.clearSession();
-    this.router.navigate(['/login']);
+    const token = this.getToken();
+    if (!token || token === this.offlineToken) {
+      this.clearSession();
+      this.router.navigate(['/login']);
+      return;
+    }
+
+    this.http.post<void>(`${this.apiUrl}/logout`, null, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).pipe(timeout(10000)).subscribe({
+      next: () => {
+        if (this.getToken() !== token) return;
+        this.clearSession();
+        this.router.navigate(['/login']);
+      },
+      error: () => {
+        if (this.getToken() !== token) return;
+        this.shared.error(
+          'Não foi possível terminar sessão',
+          'A sessão foi mantida. Verifica a ligação ao servidor e tenta novamente.',
+        );
+      },
+    });
   }
 
   private storeSession(response: AuthResponse): void {

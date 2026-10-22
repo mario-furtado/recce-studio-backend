@@ -7,19 +7,29 @@ import org.example.entity.AuthUserEntity;
 import org.example.repository.AuthUserRepository;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 import java.util.Optional;
+import java.time.Clock;
 
 @Service
 public class AuthService {
     private final AuthUserRepository authUserRepository;
     private final TeamProfileService teamProfileService;
+    private final Clock clock;
+    private final long tokenTtlMillis;
 
-    public AuthService(AuthUserRepository authUserRepository, TeamProfileService teamProfileService) {
+    public AuthService(AuthUserRepository authUserRepository, TeamProfileService teamProfileService,
+                       Clock clock, @Value("${recce.auth.token-ttl-seconds:28800}") long tokenTtlSeconds) {
+        if (tokenTtlSeconds <= 0) {
+            throw new IllegalArgumentException("A validade dos tokens deve ser positiva.");
+        }
         this.authUserRepository = authUserRepository;
         this.teamProfileService = teamProfileService;
+        this.clock = clock;
+        this.tokenTtlMillis = Math.multiplyExact(tokenTtlSeconds, 1000L);
     }
 
     public AuthResponseDTO register(AuthRequestDTO request) {
@@ -42,7 +52,7 @@ public class AuthService {
         user.setId(UUID.randomUUID().toString());
         user.setEmail(email);
         user.setPasswordHash(BCrypt.hashpw(request.getPassword(), BCrypt.gensalt()));
-        user.setToken(newToken());
+        issueToken(user);
         user.setTeamProfileId(savedProfile.getId());
         authUserRepository.save(user);
 
@@ -59,7 +69,7 @@ public class AuthService {
             throw new IllegalArgumentException("Credenciais invalidas.");
         }
 
-        user.setToken(newToken());
+        issueToken(user);
         authUserRepository.save(user);
         return new AuthResponseDTO(user.getToken(), user.getEmail(), teamProfileService.getProfile(user.getTeamProfileId()));
     }
@@ -75,7 +85,20 @@ public class AuthService {
         if (!StringUtils.hasText(token)) {
             return Optional.empty();
         }
-        return authUserRepository.findByTokenAndActiveTrue(token);
+        return authUserRepository.findByTokenAndActiveTrue(token)
+                .filter(user -> user.getTokenExpiresAtEpochMillis() != null
+                        && user.getTokenExpiresAtEpochMillis() > clock.millis());
+    }
+
+    public void logout(String token) {
+        if (StringUtils.hasText(token)) {
+            authUserRepository.revokeToken(token);
+        }
+    }
+
+    private void issueToken(AuthUserEntity user) {
+        user.setToken(newToken());
+        user.setTokenExpiresAtEpochMillis(Math.addExact(clock.millis(), tokenTtlMillis));
     }
 
     public String getEmailFromAuthorization(String authorization) {

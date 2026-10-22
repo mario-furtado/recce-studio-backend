@@ -20,6 +20,9 @@ public class AuthUserEntity {
     @Column(nullable = false)
     private String token;
 
+    @Column(name = "token_expires_at_epoch_millis")
+    private Long tokenExpiresAtEpochMillis;
+
     @Column(nullable = false)
     private boolean active = true;
 
@@ -36,6 +39,9 @@ public class AuthUserEntity {
 
     public String getToken() { return token; }
     public void setToken(String token) { this.token = token; }
+
+    public Long getTokenExpiresAtEpochMillis() { return tokenExpiresAtEpochMillis; }
+    public void setTokenExpiresAtEpochMillis(Long value) { this.tokenExpiresAtEpochMillis = value; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

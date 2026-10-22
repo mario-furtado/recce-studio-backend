@@ -537,6 +537,7 @@ class TenantIsolationAuditTest {
         user.setEmail(email);
         user.setPasswordHash("not-used-by-this-audit");
         user.setToken(token);
+        user.setTokenExpiresAtEpochMillis(System.currentTimeMillis() + 3600000L);
         user.setActive(true);
         user.setTeamProfileId(teamProfileId);
         return user;

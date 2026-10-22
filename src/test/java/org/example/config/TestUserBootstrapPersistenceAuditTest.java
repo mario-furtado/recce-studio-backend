@@ -14,6 +14,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @SpringBootTest(classes = Main.class, properties = {
         "recce.environment=local",
@@ -45,13 +47,15 @@ class TestUserBootstrapPersistenceAuditTest {
         assertTrue(original.isActive());
         assertEquals("default", original.getTeamProfileId());
         assertTrue(BCrypt.checkpw("local-bootstrap-fixture", original.getPasswordHash()));
-        assertTrue(auth.isTokenValid(original.getToken()));
+        assertFalse(auth.isTokenValid(original.getToken()), "Bootstrap does not issue an authenticated session");
+        assertNull(original.getTokenExpiresAtEpochMillis());
 
         bootstrap.run();
         AuthUserEntity repeated = users.findByEmailIgnoreCase("bootstrap@example.test").orElseThrow(AssertionError::new);
         assertEquals(1, users.count());
         assertEquals(original.getId(), repeated.getId());
         assertEquals(original.getToken(), repeated.getToken());
+        assertNull(repeated.getTokenExpiresAtEpochMillis());
         assertTrue(BCrypt.checkpw("local-bootstrap-fixture", repeated.getPasswordHash()));
 
         AuthRequestDTO request = new AuthRequestDTO();
@@ -62,5 +66,7 @@ class TestUserBootstrapPersistenceAuditTest {
         assertEquals(repeated.getId(), users.findByEmailIgnoreCase("bootstrap@example.test")
                 .orElseThrow(AssertionError::new).getId());
         assertEquals(1, users.count());
+        bootstrap.run();
+        assertFalse(auth.isTokenValid(loggedIn.getToken()), "Reprovisioning credentials invalidates the previous session");
     }
 }

@@ -85,6 +85,7 @@ public class TestUserBootstrap implements CommandLineRunner {
         if (!StringUtils.hasText(user.getToken())) {
             user.setToken(newToken());
         }
+        user.setTokenExpiresAtEpochMillis(null);
         authUserRepository.save(user);
     }
 

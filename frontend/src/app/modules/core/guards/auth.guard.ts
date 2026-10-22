@@ -27,10 +27,11 @@ export const authGuard: CanActivateFn = (_route, state) => {
       : router.createUrlTree(['/offline-recces']);
   }
 
+  const token = auth.getToken();
   return auth.validate().pipe(
     map(() => true),
     catchError(() => {
-      auth.logout();
+      if (auth.getToken() === token) auth.logout();
       return of(router.createUrlTree(['/login']));
     }),
   );
