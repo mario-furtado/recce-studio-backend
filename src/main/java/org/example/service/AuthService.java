@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.UUID;
+import java.util.Optional;
 
 @Service
 public class AuthService {
@@ -34,7 +35,8 @@ public class AuthService {
         profile.setCoDriverName(valueOrDefault(request.getCoDriverName(), ""));
         profile.setNoteSystem(valueOrDefault(request.getNoteSystem(), "1-6 (1 Lento, 6 Rapido)"));
         profile.setDistanceUnit(valueOrDefault(request.getDistanceUnit(), "Quilometros (km)"));
-        TeamProfileDTO savedProfile = teamProfileService.createOrReplaceProfile(profile);
+        String teamProfileId = UUID.randomUUID().toString();
+        TeamProfileDTO savedProfile = teamProfileService.createOrReplaceProfile(teamProfileId, profile);
 
         AuthUserEntity user = new AuthUserEntity();
         user.setId(UUID.randomUUID().toString());
@@ -59,16 +61,26 @@ public class AuthService {
 
         user.setToken(newToken());
         authUserRepository.save(user);
-        return new AuthResponseDTO(user.getToken(), user.getEmail(), teamProfileService.getProfile());
+        return new AuthResponseDTO(user.getToken(), user.getEmail(), teamProfileService.getProfile(user.getTeamProfileId()));
     }
 
     public boolean isTokenValid(String token) {
-        return StringUtils.hasText(token) && authUserRepository.findByTokenAndActiveTrue(token).isPresent();
+        return findActiveUserByToken(token)
+                .map(AuthUserEntity::getTeamProfileId)
+                .filter(StringUtils::hasText)
+                .isPresent();
+    }
+
+    public Optional<AuthUserEntity> findActiveUserByToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            return Optional.empty();
+        }
+        return authUserRepository.findByTokenAndActiveTrue(token);
     }
 
     public String getEmailFromAuthorization(String authorization) {
         String token = extractBearerToken(authorization);
-        return authUserRepository.findByTokenAndActiveTrue(token)
+        return findActiveUserByToken(token)
                 .map(AuthUserEntity::getEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Sessao invalida ou expirada."));
     }

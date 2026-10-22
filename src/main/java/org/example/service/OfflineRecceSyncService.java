@@ -12,6 +12,7 @@ import org.example.entity.OfflineRecceSyncEntity;
 import org.example.entity.PecEntity;
 import org.example.repository.OfflineRecceSyncRepository;
 import org.example.repository.PecRepository;
+import org.example.controller.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,24 +29,30 @@ public class OfflineRecceSyncService {
     private final PecService pecService;
     private final NoteExcelParserService noteService;
     private final ObjectMapper objectMapper;
+    private final TenantContext tenantContext;
 
     public OfflineRecceSyncService(
             OfflineRecceSyncRepository syncRepository,
             PecRepository pecRepository,
             PecService pecService,
             NoteExcelParserService noteService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            TenantContext tenantContext) {
         this.syncRepository = syncRepository;
         this.pecRepository = pecRepository;
         this.pecService = pecService;
         this.noteService = noteService;
         this.objectMapper = objectMapper;
+        this.tenantContext = tenantContext;
     }
 
     @Transactional
     public OfflineRecceSyncResponseDTO sync(OfflineRecceSyncRequestDTO request) {
         validateRequest(request);
-        OfflineRecceSyncEntity existingSync = syncRepository.findByOfflineSessionId(request.getSessionId()).orElse(null);
+        String teamProfileId = tenantContext.requireTeamProfileId();
+        OfflineRecceSyncEntity existingSync = syncRepository
+                .findByOfflineSessionIdAndTeamProfileId(request.getSessionId(), teamProfileId)
+                .orElse(null);
         if (existingSync != null) {
             return toResponse(existingSync);
         }
@@ -56,8 +63,8 @@ public class OfflineRecceSyncService {
                 : Collections.emptyList();
 
         List<NoteEntity> savedNotes = noteService.syncRecceTimestamps(pecId, markers);
-        PecEntity pec = pecRepository.findById(pecId)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+        PecEntity pec = pecRepository.findByIdAndRallyTeamProfileId(pecId, teamProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("PEC nao encontrada com ID: " + pecId));
         pec.setTotalNotes(savedNotes.size());
         pec.setUpdatedAt(LocalDate.now());
         pecRepository.save(pec);
@@ -66,7 +73,8 @@ public class OfflineRecceSyncService {
         sync.setId(UUID.randomUUID().toString());
         sync.setOfflineSessionId(request.getSessionId());
         sync.setDeviceId(request.getDeviceId());
-        sync.setUserEmail(request.getUserEmail());
+        sync.setUserEmail(tenantContext.requireUserEmail());
+        sync.setTeamProfileId(teamProfileId);
         sync.setTemporaryName(request.getTemporaryName());
         sync.setPecId(pecId);
         sync.setPecName(pec.getName());
@@ -84,10 +92,11 @@ public class OfflineRecceSyncService {
 
     private String resolvePecId(OfflineRecceSyncRequestDTO request) {
         if (hasText(request.getPecId())) {
-            if (!pecRepository.existsById(request.getPecId())) {
-                throw new RuntimeException("PEC nao encontrada com ID: " + request.getPecId());
-            }
-            return request.getPecId();
+            return pecRepository.findByIdAndRallyTeamProfileId(
+                            request.getPecId(), tenantContext.requireTeamProfileId())
+                    .map(PecEntity::getId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "PEC nao encontrada com ID: " + request.getPecId()));
         }
 
         if (!hasText(request.getRallyId()) || request.getNewPec() == null) {

@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 import org.springframework.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.util.UUID;
 
 @Component
+@Order(0)
 public class TestUserBootstrap implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(TestUserBootstrap.class);
 
@@ -68,7 +70,7 @@ public class TestUserBootstrap implements CommandLineRunner {
             throw new IllegalStateException("RECCE_TEST_USER_PASSWORD deve ter pelo menos 6 caracteres.");
         }
 
-        TeamProfileDTO profile = teamProfileService.getProfile();
+        TeamProfileDTO profile = teamProfileService.getProfile("default");
         String normalizedEmail = email.trim().toLowerCase();
         AuthUserEntity user = authUserRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> {

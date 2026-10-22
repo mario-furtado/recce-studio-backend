@@ -1,5 +1,6 @@
 package org.example.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
@@ -26,6 +27,10 @@ public class TeamCarEntity {
     private String photoContentType;
     private String photoStoragePath;
 
+    @Column(name = "team_profile_id")
+    @JsonIgnore
+    private String teamProfileId;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -49,4 +54,7 @@ public class TeamCarEntity {
 
     public String getPhotoStoragePath() { return photoStoragePath; }
     public void setPhotoStoragePath(String photoStoragePath) { this.photoStoragePath = photoStoragePath; }
+
+    public String getTeamProfileId() { return teamProfileId; }
+    public void setTeamProfileId(String teamProfileId) { this.teamProfileId = teamProfileId; }
 }

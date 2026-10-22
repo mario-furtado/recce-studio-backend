@@ -8,6 +8,7 @@ import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.repository.TeamCarRepository;
 import org.example.repository.TeamProfileRepository;
+import org.example.controller.TenantContext;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,42 +19,55 @@ import java.util.UUID;
 
 @Service
 public class TeamProfileService {
-    private static final String PROFILE_ID = "default";
-
     private final TeamProfileRepository teamProfileRepository;
     private final PecRepository pecRepository;
     private final RallyRepository rallyRepository;
     private final TeamCarRepository teamCarRepository;
     private final FileStorageService fileStorageService;
+    private final TenantContext tenantContext;
 
     public TeamProfileService(
             TeamProfileRepository teamProfileRepository,
             PecRepository pecRepository,
             RallyRepository rallyRepository,
             TeamCarRepository teamCarRepository,
-            FileStorageService fileStorageService) {
+            FileStorageService fileStorageService,
+            TenantContext tenantContext) {
         this.teamProfileRepository = teamProfileRepository;
         this.pecRepository = pecRepository;
         this.rallyRepository = rallyRepository;
         this.teamCarRepository = teamCarRepository;
         this.fileStorageService = fileStorageService;
+        this.tenantContext = tenantContext;
     }
 
     public TeamProfileDTO getProfile() {
-        ensureDefaultCar();
-        return toDTO(getOrCreateProfile());
+        return getProfile(tenantContext.requireTeamProfileId());
+    }
+
+    public TeamProfileDTO getProfile(String teamProfileId) {
+        ensureDefaultCar(teamProfileId);
+        return toDTO(getOrCreateProfile(teamProfileId));
     }
 
     @Transactional
     public TeamProfileDTO createOrReplaceProfile(TeamProfileDTO dto) {
-        TeamProfileEntity profile = getOrCreateProfile();
+        return createOrReplaceProfile(tenantContext.requireTeamProfileId(), dto);
+    }
+
+    @Transactional
+    public TeamProfileDTO createOrReplaceProfile(String teamProfileId, TeamProfileDTO dto) {
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
+        validateSelectedCar(teamProfileId, dto.getSelectedCarId());
         apply(dto, profile);
         return toDTO(teamProfileRepository.save(profile));
     }
 
     @Transactional
     public TeamProfileDTO updateProfile(TeamProfileDTO dto) {
-        TeamProfileEntity profile = getOrCreateProfile();
+        String teamProfileId = tenantContext.requireTeamProfileId();
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
+        validateSelectedCar(teamProfileId, dto.getSelectedCarId());
         if (dto.getName() != null) profile.setName(dto.getName());
         if (dto.getCar() != null) profile.setCar(dto.getCar());
         if (dto.getCarClass() != null) profile.setCarClass(dto.getCarClass());
@@ -66,17 +80,20 @@ public class TeamProfileService {
     }
 
     public TeamStatsDTO getStats() {
-        return buildStats();
+        return buildStats(tenantContext.requireTeamProfileId());
     }
 
     public List<TeamCarEntity> getCars() {
-        ensureDefaultCar();
-        return teamCarRepository.findAllByOrderByNameAsc();
+        String teamProfileId = tenantContext.requireTeamProfileId();
+        ensureDefaultCar(teamProfileId);
+        return teamCarRepository.findAllByTeamProfileIdOrderByNameAsc(teamProfileId);
     }
 
     @Transactional
     public TeamCarEntity createCar(TeamCarEntity car) {
+        String teamProfileId = tenantContext.requireTeamProfileId();
         car.setId(UUID.randomUUID().toString());
+        car.setTeamProfileId(teamProfileId);
         if (car.getName() == null || car.getName().trim().isEmpty()) {
             throw new RuntimeException("Nome do carro e obrigatorio");
         }
@@ -85,7 +102,7 @@ public class TeamProfileService {
         }
 
         TeamCarEntity saved = teamCarRepository.save(car);
-        if (teamCarRepository.count() == 1 || saved.isActive()) {
+        if (teamCarRepository.countByTeamProfileId(teamProfileId) == 1 || saved.isActive()) {
             selectCar(saved.getId());
         }
         return saved;
@@ -93,8 +110,8 @@ public class TeamProfileService {
 
     @Transactional
     public TeamCarEntity updateCar(String carId, TeamCarEntity data) {
-        TeamCarEntity car = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        TeamCarEntity car = teamCarRepository.findByIdAndTeamProfileId(carId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + carId));
         if (data.getName() != null) car.setName(data.getName());
         if (data.getCarClass() != null) car.setCarClass(data.getCarClass());
         if (data.getNotes() != null) car.setNotes(data.getNotes());
@@ -107,8 +124,8 @@ public class TeamProfileService {
     }
 
     public TeamCarEntity uploadCarPhoto(String carId, MultipartFile file) {
-        TeamCarEntity car = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        TeamCarEntity car = teamCarRepository.findByIdAndTeamProfileId(carId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + carId));
         validateImage(file);
         String previousPath = car.getPhotoStoragePath();
         String path = fileStorageService.store(file, "cars/" + carId, "car-photo");
@@ -121,8 +138,7 @@ public class TeamProfileService {
     }
 
     public Resource getCarPhotoResource(String carId) {
-        TeamCarEntity car = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        TeamCarEntity car = requireOwnedCar(carId);
         if (car.getPhotoStoragePath() == null) {
             throw new RuntimeException("Fotografia do carro nao encontrada");
         }
@@ -130,8 +146,7 @@ public class TeamProfileService {
     }
 
     public byte[] getCarPhotoBytes(String carId) {
-        TeamCarEntity car = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        TeamCarEntity car = requireOwnedCar(carId);
         if (car.getPhotoStoragePath() == null) {
             throw new RuntimeException("Fotografia do carro nao encontrada");
         }
@@ -139,22 +154,22 @@ public class TeamProfileService {
     }
 
     public String getCarPhotoContentType(String carId) {
-        TeamCarEntity car = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        TeamCarEntity car = requireOwnedCar(carId);
         return car.getPhotoContentType() != null ? car.getPhotoContentType() : "application/octet-stream";
     }
 
     @Transactional
     public TeamProfileDTO selectCar(String carId) {
-        TeamCarEntity selected = teamCarRepository.findById(carId)
-                .orElseThrow(() -> new RuntimeException("Carro nao encontrado com ID: " + carId));
+        String teamProfileId = tenantContext.requireTeamProfileId();
+        TeamCarEntity selected = teamCarRepository.findByIdAndTeamProfileId(carId, teamProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + carId));
 
-        for (TeamCarEntity car : teamCarRepository.findAll()) {
+        for (TeamCarEntity car : teamCarRepository.findAllByTeamProfileIdOrderByNameAsc(teamProfileId)) {
             car.setActive(car.getId().equals(carId));
             teamCarRepository.save(car);
         }
 
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
         profile.setSelectedCarId(selected.getId());
         profile.setCar(selected.getName());
         profile.setCarClass(selected.getCarClass());
@@ -163,12 +178,13 @@ public class TeamProfileService {
 
     @Transactional
     public void deleteCar(String carId) {
-        String photoPath = teamCarRepository.findById(carId)
-                .map(TeamCarEntity::getPhotoStoragePath)
-                .orElse(null);
+        String teamProfileId = tenantContext.requireTeamProfileId();
+        TeamCarEntity car = teamCarRepository.findByIdAndTeamProfileId(carId, teamProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + carId));
+        String photoPath = car.getPhotoStoragePath();
         teamCarRepository.deleteById(carId);
         fileStorageService.delete(photoPath);
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
         if (carId.equals(profile.getSelectedCarId())) {
             profile.setSelectedCarId(null);
             profile.setCar(null);
@@ -178,7 +194,7 @@ public class TeamProfileService {
     }
 
     public TeamProfileDTO uploadLogo(MultipartFile file) {
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(tenantContext.requireTeamProfileId());
         validateImage(file);
         String previousPath = profile.getLogoStoragePath();
         String path = fileStorageService.store(file, "team-profile", "logo");
@@ -191,7 +207,7 @@ public class TeamProfileService {
     }
 
     public Resource getLogoResource() {
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(tenantContext.requireTeamProfileId());
         if (profile.getLogoStoragePath() == null) {
             throw new RuntimeException("Imagem do perfil nao encontrada");
         }
@@ -199,7 +215,7 @@ public class TeamProfileService {
     }
 
     public byte[] getLogoBytes() {
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(tenantContext.requireTeamProfileId());
         if (profile.getLogoStoragePath() == null) {
             throw new RuntimeException("Imagem do perfil nao encontrada");
         }
@@ -207,18 +223,31 @@ public class TeamProfileService {
     }
 
     public String getLogoContentType() {
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(tenantContext.requireTeamProfileId());
         return profile.getLogoContentType() != null ? profile.getLogoContentType() : "application/octet-stream";
     }
 
-    private TeamProfileEntity getOrCreateProfile() {
-        return teamProfileRepository.findById(PROFILE_ID)
-                .orElseGet(() -> teamProfileRepository.save(defaultProfile()));
+    private TeamProfileEntity getOrCreateProfile(String teamProfileId) {
+        return teamProfileRepository.findById(teamProfileId)
+                .orElseGet(() -> teamProfileRepository.save(defaultProfile(teamProfileId)));
     }
 
-    private TeamProfileEntity defaultProfile() {
+    private TeamCarEntity requireOwnedCar(String carId) {
+        return teamCarRepository.findByIdAndTeamProfileId(carId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + carId));
+    }
+
+    private void validateSelectedCar(String teamProfileId, String selectedCarId) {
+        if (selectedCarId == null || selectedCarId.trim().isEmpty()) {
+            return;
+        }
+        teamCarRepository.findByIdAndTeamProfileId(selectedCarId, teamProfileId)
+                .orElseThrow(() -> new ResourceNotFoundException("Carro nao encontrado com ID: " + selectedCarId));
+    }
+
+    private TeamProfileEntity defaultProfile(String teamProfileId) {
         TeamProfileEntity profile = new TeamProfileEntity();
-        profile.setId(PROFILE_ID);
+        profile.setId(teamProfileId);
         profile.setName("Recce Studio Racing");
         profile.setCar("Skoda Fabia RS");
         profile.setCarClass("Rally2");
@@ -257,30 +286,30 @@ public class TeamProfileService {
         dto.setDistanceUnit(profile.getDistanceUnit());
         dto.setLogoFileName(profile.getLogoFileName());
         dto.setLogoUrl(profile.getLogoStoragePath() != null ? "/api/team-profile/logo" : null);
-        TeamStatsDTO stats = buildStats();
+        TeamStatsDTO stats = buildStats(profile.getId());
         dto.setTotalPecs(stats.getTotalPecs());
         dto.setTotalKm(stats.getTotalKm());
         dto.setActiveEvents(stats.getActiveEvents());
         return dto;
     }
 
-    private TeamStatsDTO buildStats() {
-        TeamProfileEntity profile = getOrCreateProfile();
+    private TeamStatsDTO buildStats(String teamProfileId) {
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
         String selectedCarId = profile.getSelectedCarId();
 
         if (selectedCarId == null || selectedCarId.trim().isEmpty()) {
-            double totalKm = pecRepository.findAll()
+            double totalKm = pecRepository.findByRallyTeamProfileId(teamProfileId)
                     .stream()
                     .mapToDouble(pec -> pec.getDistanceKm())
                     .sum();
-            long activeEvents = rallyRepository.findAll()
+            long activeEvents = rallyRepository.findByTeamProfileId(teamProfileId)
                     .stream()
                     .filter(rally -> !"COMPLETED".equalsIgnoreCase(rally.getStatus()))
                     .count();
-            return new TeamStatsDTO(pecRepository.count(), totalKm, activeEvents);
+            return new TeamStatsDTO(pecRepository.findByRallyTeamProfileId(teamProfileId).size(), totalKm, activeEvents);
         }
 
-        List<org.example.entity.RallyEntity> carRallies = rallyRepository.findAll()
+        List<org.example.entity.RallyEntity> carRallies = rallyRepository.findByTeamProfileId(teamProfileId)
                 .stream()
                 .filter(rally -> selectedCarId.equals(rally.getCarId()))
                 .collect(java.util.stream.Collectors.toList());
@@ -303,18 +332,19 @@ public class TeamProfileService {
         return new TeamStatsDTO(totalPecs, totalKm, activeEvents);
     }
 
-    private void ensureDefaultCar() {
-        if (teamCarRepository.count() > 0) {
+    private void ensureDefaultCar(String teamProfileId) {
+        if (teamCarRepository.countByTeamProfileId(teamProfileId) > 0) {
             return;
         }
         TeamCarEntity car = new TeamCarEntity();
         car.setId(UUID.randomUUID().toString());
+        car.setTeamProfileId(teamProfileId);
         car.setName("Skoda Fabia RS");
         car.setCarClass("Rally2");
         car.setActive(true);
         teamCarRepository.save(car);
 
-        TeamProfileEntity profile = getOrCreateProfile();
+        TeamProfileEntity profile = getOrCreateProfile(teamProfileId);
         profile.setSelectedCarId(car.getId());
         profile.setCar(car.getName());
         profile.setCarClass(car.getCarClass());

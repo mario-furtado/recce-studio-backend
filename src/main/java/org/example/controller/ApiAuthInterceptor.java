@@ -1,11 +1,14 @@
 package org.example.controller;
 
 import org.example.service.AuthService;
+import org.example.entity.AuthUserEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Optional;
 
 @Component
 public class ApiAuthInterceptor implements HandlerInterceptor {
@@ -30,7 +33,15 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
                 ? authorization.substring("Bearer ".length()).trim()
                 : null;
 
-        if (authService.isTokenValid(token)) {
+        Optional<AuthUserEntity> authenticatedUser = authService.findActiveUserByToken(token);
+        if (authenticatedUser.isPresent()) {
+            AuthUserEntity user = authenticatedUser.get();
+            if (!StringUtils.hasText(user.getTeamProfileId())) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN, "A conta autenticada nao tem equipa associada.");
+                return false;
+            }
+            request.setAttribute(TenantContext.TEAM_PROFILE_ID_ATTRIBUTE, user.getTeamProfileId());
+            request.setAttribute(TenantContext.USER_EMAIL_ATTRIBUTE, user.getEmail());
             return true;
         }
 
@@ -45,10 +56,7 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
             path = path.substring(contextPath.length());
         }
 
-        return "/api/team-profile/logo".equals(path)
-                || path.matches("^/api/team-profile/cars/[^/]+/photo$")
-                || path.matches("^/api/rallies/[^/]+/logo$")
-                || path.matches("^/api/pecs/[^/]+/video$")
+        return path.matches("^/api/pecs/[^/]+/video$")
                 || path.matches("^/api/pecs/[^/]+/audio$");
     }
 }

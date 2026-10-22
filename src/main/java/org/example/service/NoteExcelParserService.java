@@ -10,6 +10,7 @@ import org.example.entity.RallyEntity;
 import org.example.repository.NoteRepository;
 import org.example.repository.PecRepository;
 import org.example.repository.TeamCarRepository;
+import org.example.controller.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,11 +28,14 @@ public class NoteExcelParserService {
     private final NoteRepository noteRepository;
     private final PecRepository pecRepository;
     private final TeamCarRepository teamCarRepository;
+    private final TenantContext tenantContext;
 
-    public NoteExcelParserService(NoteRepository noteRepository, PecRepository pecRepository, TeamCarRepository teamCarRepository) {
+    public NoteExcelParserService(NoteRepository noteRepository, PecRepository pecRepository,
+                                  TeamCarRepository teamCarRepository, TenantContext tenantContext) {
         this.noteRepository = noteRepository;
         this.pecRepository = pecRepository;
         this.teamCarRepository = teamCarRepository;
+        this.tenantContext = tenantContext;
     }
 
     public byte[] generateCleanExcelTemplate() {
@@ -43,8 +47,7 @@ public class NoteExcelParserService {
     }
 
     public byte[] generateExcelTemplate(String pecId, List<NoteEntity> notes) {
-        PecEntity pec = pecRepository.findById(pecId)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+        PecEntity pec = requirePec(pecId);
         return generateExcelTemplate(notes, pec);
     }
 
@@ -121,7 +124,8 @@ public class NoteExcelParserService {
         String carName = "";
         String carClass = rally != null ? rally.getCarClass() : "";
         if (rally != null && rally.getCarId() != null) {
-            carName = teamCarRepository.findById(rally.getCarId())
+            carName = teamCarRepository.findByIdAndTeamProfileId(
+                            rally.getCarId(), tenantContext.requireTeamProfileId())
                     .map(car -> car.getName())
                     .orElse("");
         }
@@ -374,6 +378,7 @@ public class NoteExcelParserService {
     }
 
     public List<NoteEntity> getNotesByPecId(String pecId) {
+        requirePec(pecId);
         return noteRepository.findByPecIdOrderByIdAsc(pecId);
     }
 
@@ -437,7 +442,12 @@ public class NoteExcelParserService {
 
     public void deleteNote(String pecId, Long noteId) {
         ensurePecCanBeEdited(pecId);
-        noteRepository.deleteById(noteId);
+        NoteEntity note = noteRepository.findById(noteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Nota nao encontrada com ID: " + noteId));
+        if (!pecId.equals(note.getPecId())) {
+            throw new ResourceNotFoundException("Nota nao encontrada com ID: " + noteId);
+        }
+        noteRepository.delete(note);
     }
 
     @Transactional
@@ -551,12 +561,16 @@ public class NoteExcelParserService {
     }
 
     private void ensurePecCanBeEdited(String pecId) {
-        boolean completed = pecRepository.findById(pecId)
-                .map(pec -> "COMPLETED".equalsIgnoreCase(pec.getStatus())
-                        || (pec.getRally() != null && "COMPLETED".equalsIgnoreCase(pec.getRally().getStatus())))
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+        PecEntity pec = requirePec(pecId);
+        boolean completed = "COMPLETED".equalsIgnoreCase(pec.getStatus())
+                || (pec.getRally() != null && "COMPLETED".equalsIgnoreCase(pec.getRally().getStatus()));
         if (completed) {
             throw new IllegalStateException("PEC ou rali concluido. Volte a colocar em rascunho para alterar.");
         }
+    }
+
+    private PecEntity requirePec(String pecId) {
+        return pecRepository.findByIdAndRallyTeamProfileId(pecId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("PEC nao encontrada com ID: " + pecId));
     }
 }

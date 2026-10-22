@@ -4,15 +4,18 @@ import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import javax.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "offline_recce_syncs")
+@Table(name = "offline_recce_syncs", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_offline_session_team", columnNames = {"offline_session_id", "team_profile_id"})
+})
 public class OfflineRecceSyncEntity {
     @Id
     private String id;
 
-    @Column(name = "offline_session_id", nullable = false, unique = true)
+    @Column(name = "offline_session_id", nullable = false)
     private String offlineSessionId;
 
     @Column(name = "device_id")
@@ -50,6 +53,9 @@ public class OfflineRecceSyncEntity {
 
     @Column(name = "synced_at", nullable = false)
     private LocalDateTime syncedAt;
+
+    @Column(name = "team_profile_id")
+    private String teamProfileId;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -92,4 +98,7 @@ public class OfflineRecceSyncEntity {
 
     public LocalDateTime getSyncedAt() { return syncedAt; }
     public void setSyncedAt(LocalDateTime syncedAt) { this.syncedAt = syncedAt; }
+
+    public String getTeamProfileId() { return teamProfileId; }
+    public void setTeamProfileId(String teamProfileId) { this.teamProfileId = teamProfileId; }
 }

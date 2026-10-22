@@ -8,6 +8,9 @@ import java.util.Optional;
 
 public interface OfflineRecceSyncRepository extends JpaRepository<OfflineRecceSyncEntity, String> {
     Optional<OfflineRecceSyncEntity> findByOfflineSessionId(String offlineSessionId);
+    Optional<OfflineRecceSyncEntity> findByOfflineSessionIdAndTeamProfileId(String offlineSessionId, String teamProfileId);
     Optional<OfflineRecceSyncEntity> findTopByPecIdOrderBySyncedAtDesc(String pecId);
     List<OfflineRecceSyncEntity> findByPecIdOrderBySyncedAtDesc(String pecId);
+    List<OfflineRecceSyncEntity> findByPecIdAndTeamProfileIdOrderBySyncedAtDesc(String pecId, String teamProfileId);
+    List<OfflineRecceSyncEntity> findByTeamProfileIdIsNull();
 }

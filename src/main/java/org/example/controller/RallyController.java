@@ -32,10 +32,14 @@ public class RallyController {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private TenantContext tenantContext;
+
     // 1. GET ALL
     @GetMapping
     public ResponseEntity<List<RallyEntity>> getAllRallies() {
-        List<RallyEntity> rallies = rallyRepository.findAllByOrderByYearDescNameAsc();
+        List<RallyEntity> rallies = rallyRepository.findAllByTeamProfileIdOrderByYearDescNameAsc(
+                tenantContext.requireTeamProfileId());
         rallies.forEach(this::attachPecsCount);
         return ResponseEntity.ok(rallies);
     }
@@ -43,7 +47,7 @@ public class RallyController {
     // 2. GET BY ID
     @GetMapping("/{id}")
     public ResponseEntity<RallyEntity> getRallyById(@PathVariable String id) {
-        return rallyRepository.findById(id)
+        return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId())
                 .map(this::attachPecsCount)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
@@ -52,11 +56,13 @@ public class RallyController {
     // 3. POST (Criar Rali)
     @PostMapping
     public ResponseEntity<RallyEntity> createRally(@RequestBody RallyEntity rally) {
+        String teamProfileId = tenantContext.requireTeamProfileId();
         if (rally.getStatus() == null || rally.getStatus().trim().isEmpty()) {
             rally.setStatus("DRAFT");
         }
+        rally.setTeamProfileId(teamProfileId);
+        syncSelectedCar(rally);
         RallyEntity savedRally = rallyRepository.save(rally);
-        syncSelectedCar(savedRally);
         attachPecsCount(savedRally);
         return ResponseEntity.ok(savedRally);
     }
@@ -67,7 +73,7 @@ public class RallyController {
             @PathVariable String id,
             @RequestBody RallyEntity updatedData) {
 
-        return rallyRepository.findById(id).map(existingRally -> {
+        return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(existingRally -> {
             if ("COMPLETED".equalsIgnoreCase(existingRally.getStatus()) && hasNonStatusChanges(updatedData)) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar.");
             }
@@ -85,8 +91,8 @@ public class RallyController {
                 existingRally.setStatus(updatedData.getStatus());
             }
 
+            syncSelectedCar(existingRally);
             RallyEntity saved = rallyRepository.save(existingRally);
-            syncSelectedCar(saved);
             attachPecsCount(saved);
             return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
@@ -125,7 +131,7 @@ public class RallyController {
 
     @PostMapping("/{id}/logo")
     public ResponseEntity<RallyEntity> uploadLogo(@PathVariable String id, @RequestParam("file") MultipartFile file) {
-        return rallyRepository.findById(id).map(rally -> {
+        return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(rally -> {
             if ("COMPLETED".equalsIgnoreCase(rally.getStatus())) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar.");
             }
@@ -151,7 +157,7 @@ public class RallyController {
 
     @GetMapping("/{id}/logo")
     public ResponseEntity<byte[]> getLogo(@PathVariable String id) {
-        return rallyRepository.findById(id).map(rally -> {
+        return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(rally -> {
             if (rally.getLogoStoragePath() == null) {
                 return ResponseEntity.notFound().<byte[]>build();
             }
@@ -169,7 +175,7 @@ public class RallyController {
     // 5. DELETE
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteRally(@PathVariable String id) {
-        return rallyRepository.findById(id).map(rally -> {
+        return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(rally -> {
             if ("COMPLETED".equalsIgnoreCase(rally.getStatus())) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para eliminar.");
             }

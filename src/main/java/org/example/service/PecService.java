@@ -9,6 +9,7 @@ import org.example.entity.RallyEntity;
 import org.example.repository.NoteRepository;
 import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
+import org.example.controller.TenantContext;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -22,29 +23,31 @@ public class PecService {
     private final PecRepository pecRepository;
     private final RallyRepository rallyRepository;
     private final NoteRepository noteRepository;
+    private final TenantContext tenantContext;
 
-    public PecService(PecRepository pecRepository, RallyRepository rallyRepository, NoteRepository noteRepository) {
+    public PecService(PecRepository pecRepository, RallyRepository rallyRepository, NoteRepository noteRepository,
+                      TenantContext tenantContext) {
         this.pecRepository = pecRepository;
         this.rallyRepository = rallyRepository;
         this.noteRepository = noteRepository;
+        this.tenantContext = tenantContext;
     }
 
     public List<PecDTO> getPecsByRally(String rallyId) {
-        return pecRepository.findByRallyId(rallyId)
+        return pecRepository.findByRallyIdAndRallyTeamProfileId(rallyId, tenantContext.requireTeamProfileId())
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
     public PecDTO getPecById(String id) {
-        PecEntity entity = pecRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
+        PecEntity entity = requirePec(id);
         return toDTO(entity);
     }
 
     public PecDTO createPec(String rallyId, NewPecDTO newPecDTO) {
-        RallyEntity rally = rallyRepository.findById(rallyId)
-                .orElseThrow(() -> new RuntimeException("Rally nao encontrado com ID: " + rallyId));
+        RallyEntity rally = rallyRepository.findByIdAndTeamProfileId(rallyId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("Rally nao encontrado com ID: " + rallyId));
         ensureRallyCanBeEdited(rally);
 
         PecEntity entity = new PecEntity();
@@ -61,8 +64,7 @@ public class PecService {
     }
 
     public PecDTO patchPec(String id, PecPatchDTO patchDTO) {
-        PecEntity entity = pecRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
+        PecEntity entity = requirePec(id);
         ensureRallyCanBeEdited(entity.getRally());
 
         if ("COMPLETED".equalsIgnoreCase(entity.getStatus()) && hasNonStatusChanges(patchDTO)) {
@@ -97,8 +99,7 @@ public class PecService {
     }
 
     public void deletePec(String id) {
-        PecEntity entity = pecRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + id));
+        PecEntity entity = requirePec(id);
         ensureRallyCanBeEdited(entity.getRally());
         if ("COMPLETED".equalsIgnoreCase(entity.getStatus())) {
             throw new IllegalStateException("PEC concluida. Volte a colocar em rascunho para eliminar.");
@@ -107,8 +108,7 @@ public class PecService {
     }
 
     public PecOverviewDTO getPecOverview(String pecId) {
-        PecEntity pec = pecRepository.findById(pecId)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+        PecEntity pec = requirePec(pecId);
 
         long count = noteRepository.countByPecId(pecId);
 
@@ -147,5 +147,10 @@ public class PecService {
         if (rally != null && "COMPLETED".equalsIgnoreCase(rally.getStatus())) {
             throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar PECs.");
         }
+    }
+
+    private PecEntity requirePec(String id) {
+        return pecRepository.findByIdAndRallyTeamProfileId(id, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("PEC nao encontrada com ID: " + id));
     }
 }

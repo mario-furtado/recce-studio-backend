@@ -1,5 +1,6 @@
 package org.example.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
 
@@ -46,6 +47,10 @@ public class RallyEntity {
     private String carClass;
 
     private String status;
+
+    @Column(name = "team_profile_id")
+    @JsonIgnore
+    private String teamProfileId;
 
     @Transient
     private long pecsCount;

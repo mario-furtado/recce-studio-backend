@@ -10,6 +10,7 @@ import org.example.entity.OfflineRecceSyncEntity;
 import org.example.entity.PecEntity;
 import org.example.repository.OfflineRecceSyncRepository;
 import org.example.repository.PecRepository;
+import org.example.controller.TenantContext;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,21 +31,24 @@ public class PecAssetService {
     private final OfflineRecceSyncRepository offlineRecceSyncRepository;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
+    private final TenantContext tenantContext;
 
     public PecAssetService(
             PecRepository pecRepository,
             OfflineRecceSyncRepository offlineRecceSyncRepository,
             ObjectMapper objectMapper,
-            FileStorageService fileStorageService) {
+            FileStorageService fileStorageService,
+            TenantContext tenantContext) {
         this.pecRepository = pecRepository;
         this.offlineRecceSyncRepository = offlineRecceSyncRepository;
         this.objectMapper = objectMapper;
         this.fileStorageService = fileStorageService;
+        this.tenantContext = tenantContext;
     }
 
     @Transactional
     public PecAssetDTO saveVideo(String pecId, MultipartFile file) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         String path = fileStorageService.store(file, "pecs/" + pecId, "video");
         fileStorageService.delete(pec.getVideoStoragePath());
@@ -57,7 +61,7 @@ public class PecAssetService {
 
     @Transactional
     public PecAssetDTO deleteVideo(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         fileStorageService.delete(pec.getVideoStoragePath());
         pec.setVideoFileName(null);
@@ -69,7 +73,7 @@ public class PecAssetService {
 
     @Transactional
     public PecAssetDTO saveAudio(String pecId, MultipartFile file) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         validateAudio(file);
         String path = fileStorageService.store(file, "pecs/" + pecId, "audio");
@@ -83,7 +87,7 @@ public class PecAssetService {
 
     @Transactional
     public PecAssetDTO deleteAudio(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         fileStorageService.delete(pec.getAudioStoragePath());
         pec.setAudioFileName(null);
@@ -95,7 +99,7 @@ public class PecAssetService {
 
     @Transactional
     public PecAssetDTO saveGps(String pecId, MultipartFile file) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         String path = fileStorageService.store(file, "pecs/" + pecId, "gps");
         fileStorageService.delete(pec.getGpsStoragePath());
@@ -108,7 +112,7 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public PecAssetDTO getAssets(String pecId) {
-        return toAssetDTO(getPec(pecId));
+        return toAssetDTO(getOwnedPec(pecId));
     }
 
     @Transactional(readOnly = true)
@@ -152,7 +156,7 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public List<GpsPointDTO> getGpsTrack(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         if (pec.getGpsStoragePath() == null) {
             return getOfflineGpsTrack(pecId);
         }
@@ -174,8 +178,9 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public List<ClickMarkerDto> getRecceMarkers(String pecId) {
-        getPec(pecId);
-        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+        getOwnedPec(pecId);
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository
+                .findByPecIdAndTeamProfileIdOrderBySyncedAtDesc(pecId, tenantContext.requireTeamProfileId())) {
             List<ClickMarkerDto> markers = safeParseMarkerJson(sync.getMarkersJson());
             if (!markers.isEmpty()) {
                 return markers;
@@ -187,6 +192,11 @@ public class PecAssetService {
     private PecEntity getPec(String pecId) {
         return pecRepository.findById(pecId)
                 .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
+    }
+
+    private PecEntity getOwnedPec(String pecId) {
+        return pecRepository.findByIdAndRallyTeamProfileId(pecId, tenantContext.requireTeamProfileId())
+                .orElseThrow(() -> new ResourceNotFoundException("PEC nao encontrada com ID: " + pecId));
     }
 
     private void ensureCanEdit(PecEntity pec) {
@@ -292,7 +302,8 @@ public class PecAssetService {
     }
 
     private List<GpsPointDTO> getOfflineGpsTrack(String pecId) {
-        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository
+                .findByPecIdAndTeamProfileIdOrderBySyncedAtDesc(pecId, tenantContext.requireTeamProfileId())) {
             List<GpsPointDTO> track = safeParseGpsTrackJson(sync.getGpsTrackJson());
             if (!track.isEmpty()) {
                 return track;
@@ -302,7 +313,8 @@ public class PecAssetService {
     }
 
     private boolean hasSyncedGps(String pecId) {
-        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository.findByPecIdOrderBySyncedAtDesc(pecId)) {
+        for (OfflineRecceSyncEntity sync : offlineRecceSyncRepository
+                .findByPecIdAndTeamProfileIdOrderBySyncedAtDesc(pecId, tenantContext.requireTeamProfileId())) {
             if (!safeParseGpsTrackJson(sync.getGpsTrackJson()).isEmpty()) {
                 return true;
             }
