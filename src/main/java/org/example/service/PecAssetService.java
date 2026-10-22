@@ -117,7 +117,7 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public Resource getVideoResource(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         if (pec.getVideoStoragePath() == null) {
             throw new RuntimeException("Video nao encontrado para a PEC: " + pecId);
         }
@@ -126,13 +126,13 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public String getVideoContentType(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         return pec.getVideoContentType() != null ? pec.getVideoContentType() : "application/octet-stream";
     }
 
     @Transactional(readOnly = true)
     public Resource getAudioResource(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         if (pec.getAudioStoragePath() == null) {
             throw new RuntimeException("Audio nao encontrado para a PEC: " + pecId);
         }
@@ -141,7 +141,7 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public byte[] getAudioBytes(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         if (pec.getAudioStoragePath() == null) {
             throw new RuntimeException("Audio nao encontrado para a PEC: " + pecId);
         }
@@ -150,7 +150,7 @@ public class PecAssetService {
 
     @Transactional(readOnly = true)
     public String getAudioContentType(String pecId) {
-        PecEntity pec = getPec(pecId);
+        PecEntity pec = getOwnedPec(pecId);
         return pec.getAudioContentType() != null ? pec.getAudioContentType() : "application/octet-stream";
     }
 
@@ -189,10 +189,6 @@ public class PecAssetService {
         return new ArrayList<>();
     }
 
-    private PecEntity getPec(String pecId) {
-        return pecRepository.findById(pecId)
-                .orElseThrow(() -> new RuntimeException("PEC nao encontrada com ID: " + pecId));
-    }
 
     private PecEntity getOwnedPec(String pecId) {
         return pecRepository.findByIdAndRallyTeamProfileId(pecId, tenantContext.requireTeamProfileId())

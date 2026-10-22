@@ -17,6 +17,8 @@ Current verified passes: Factory configuration, clean backend compilation, front
 
 Areas not verified: browser E2E journeys, real assistive-technology behavior, production data migration, production object storage, multi-process concurrency, and deployment configuration.
 
+Focused update, 2026-10-22 (`AUD-SEC-001`): `FACTORY_TICKET_ID=AUD-SEC-001`, `FACTORY_MAVEN_TESTS=TenantIsolationAuditTest,ApiAuthInterceptorAuditTest`, `QUALITY_TARGET_SPECS=src/app/modules/features/pecs/pecs-editor/pecs-editor.component.spec.ts`; `node tools/run-quality-gate.mjs ticket AUTO` selected STANDARD and passed. Contrary to the earlier zero-test observation above, this checkout contains Java regressions: the selected clean backend run passed 9 tests; targeted browser tests passed 4/4 and component integration passed 9/9. Production build passed with a 610.25 kB initial bundle warning. E2E remained a conditional skip. These are focused ticket observations, not a new full release baseline; global failure signatures above remain historical and were not re-executed. Detailed evidence: `.factory-results/latest-ticket.json` and `AUD-SEC-001-ticket.log`. `TICKET_GATE: PASS`; `RELEASE_GATE: NOT_RUN`.
+
 The following block is consumed by `node tools/compare-quality-baseline.mjs`. Signatures classify an observed failure as previously known; they do not prove that no additional symptom exists and do not alter the release command's exit status.
 
 <!-- QUALITY_BASELINE_JSON

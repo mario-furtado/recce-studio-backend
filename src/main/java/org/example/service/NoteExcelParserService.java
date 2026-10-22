@@ -384,6 +384,7 @@ public class NoteExcelParserService {
 
     public NoteEntity saveNote(String pecId, NoteEntity note) {
         ensurePecCanBeEdited(pecId);
+        note.setId(null);
         note.setPecId(pecId);
         return noteRepository.save(note);
     }

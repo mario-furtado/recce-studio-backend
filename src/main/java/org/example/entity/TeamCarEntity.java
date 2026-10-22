@@ -1,6 +1,7 @@
 package org.example.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
@@ -25,6 +26,7 @@ public class TeamCarEntity {
 
     private String photoFileName;
     private String photoContentType;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String photoStoragePath;
 
     @Column(name = "team_profile_id")

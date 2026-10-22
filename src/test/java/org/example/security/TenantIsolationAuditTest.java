@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -29,8 +30,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -77,6 +80,9 @@ class TenantIsolationAuditTest {
     @Autowired
     private OwnershipMigration ownershipMigration;
 
+    @Autowired
+    private org.example.service.FileStorageService fileStorageService;
+
     @BeforeEach
     void setUp() {
         noteRepository.deleteAll();
@@ -89,6 +95,133 @@ class TenantIsolationAuditTest {
         authUserRepository.save(user("user-a", "a@example.test", "token-a", "team-a"));
         authUserRepository.save(user("user-b", "b@example.test", "token-b", "team-b"));
         authUserRepository.save(user("user-no-team", "orphan@example.test", "token-no-team", null));
+    }
+
+    @Test
+    void auditSec001StorageReferencesCannotBeSuppliedByClients() throws Exception {
+        String rally = createRally("token-a", "Owned rally");
+        mockMvc.perform(put("/api/rallies/{id}", rally)
+                        .header("Authorization", bearer("token-a"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logoStoragePath\":\"foreign/logo.png\"}"))
+                .andExpect(status().isOk());
+        assertEquals(null, rallyRepository.findById(rally).orElseThrow(AssertionError::new).getLogoStoragePath());
+        MvcResult created = mockMvc.perform(post("/api/rallies")
+                        .header("Authorization", bearer("token-a"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Injected\",\"year\":2026,\"surface\":\"TERRA\",\"location\":\"Test\","
+                                + "\"logoStoragePath\":\"foreign/logo.png\"}"))
+                .andExpect(status().isOk()).andReturn();
+        assertEquals(null, rallyRepository.findById(jsonId(created)).orElseThrow(AssertionError::new).getLogoStoragePath());
+        MvcResult car = mockMvc.perform(post("/api/team-profile/cars")
+                        .header("Authorization", bearer("token-a"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Injected car\",\"carClass\":\"Rally2\",\"photoStoragePath\":\"foreign/car.png\"}"))
+                .andExpect(status().isOk()).andReturn();
+        assertEquals(null, teamCarRepository.findById(jsonId(car)).orElseThrow(AssertionError::new).getPhotoStoragePath());
+    }
+
+    @Test
+    void auditSec001RejectsCrossTeamMediaReads() throws Exception {
+        String rally = createRally("token-a", "Media rally");
+        String pec = createPec("token-a", rally, "Media PEC");
+        for (String kind : new String[]{"audio", "video"}) {
+            byte[] bytes = ("private-" + kind).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            String path = fileStorageService.store(
+                    new MockMultipartFile("file", kind + ".webm", kind + "/webm", bytes), "test-media", kind);
+            org.example.entity.PecEntity entity = pecRepository.findById(pec).orElseThrow(AssertionError::new);
+            if ("audio".equals(kind)) {
+                entity.setAudioStoragePath(path);
+                entity.setAudioContentType("audio/webm");
+            } else {
+                entity.setVideoStoragePath(path);
+                entity.setVideoContentType("video/webm");
+            }
+            pecRepository.save(entity);
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-a")))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Cache-Control", "no-store"))
+                    .andExpect(content().bytes(bytes));
+            mockMvc.perform(multipart("/api/pecs/{id}/" + kind, pec)
+                            .file(new MockMultipartFile("file", kind + ".webm", kind + "/webm", bytes))
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(delete("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(multipart("/api/pecs/{id}/" + kind, pec)
+                            .file(new MockMultipartFile("file", kind + ".webm", kind + "/webm", bytes))
+                            .header("Authorization", bearer("token-a")))
+                    .andExpect(status().isOk());
+            mockMvc.perform(delete("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-a")))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void auditSec001SyncRetriesAndProfilesStayWithinAuthenticatedTeam() throws Exception {
+        for (String team : new String[]{"a", "b"}) {
+            String rally = createRally("token-" + team, "Rally " + team);
+            String pec = createPec("token-" + team, rally, "PEC " + team);
+            String syncId = null;
+            for (int attempt = 0; attempt < 2; attempt++) {
+                MvcResult result = mockMvc.perform(post("/api/offline-recces/sync")
+                                .header("Authorization", bearer("token-" + team))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"sessionId\":\"same-session\",\"pecId\":\"" + pec + "\",\"markers\":[],\"gpsTrack\":[]}"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.pecId").value(pec)).andReturn();
+                String returnedId = objectMapper.readTree(result.getResponse().getContentAsString()).get("syncId").asText();
+                if (attempt == 0) syncId = returnedId;
+                else assertEquals(syncId, returnedId);
+            }
+            mockMvc.perform(patch("/api/team-profile")
+                            .header("Authorization", bearer("token-" + team))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"id\":\"team-foreign\",\"name\":\"Profile " + team + "\"}"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.id").value("team-" + team));
+        }
+        assertEquals(2, syncRepository.count());
+        assertEquals("Profile a", teamProfileRepository.findById("team-a").orElseThrow(AssertionError::new).getName());
+        assertEquals("Profile b", teamProfileRepository.findById("team-b").orElseThrow(AssertionError::new).getName());
+    }
+
+    @Test
+    void auditSec001CreateCannotOverwriteForeignRally() throws Exception {
+        String rallyA = createRally("token-a", "Original A");
+        mockMvc.perform(post("/api/rallies")
+                        .header("Authorization", bearer("token-b"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"id\":\"" + rallyA + "\",\"name\":\"Overwrite\",\"year\":2026,"
+                                + "\"surface\":\"TERRA\",\"location\":\"Test\"}"))
+                .andExpect(status().isOk());
+        assertEquals("team-a", rallyRepository.findById(rallyA).orElseThrow(AssertionError::new).getTeamProfileId());
+        assertEquals("Original A", rallyRepository.findById(rallyA).orElseThrow(AssertionError::new).getName());
+    }
+
+    @Test
+    void auditSec001CreateCannotOverwriteForeignNote() throws Exception {
+        String rallyA = createRally("token-a", "Original A");
+        String pecA = createPec("token-a", rallyA, "PEC A");
+        String rallyB = createRally("token-b", "Original B");
+        String pecB = createPec("token-b", rallyB, "PEC B");
+        MvcResult note = mockMvc.perform(post("/api/pecs/{id}/notes", pecA)
+                        .header("Authorization", bearer("token-a"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"Private note\"}"))
+                .andExpect(status().isOk()).andReturn();
+        long noteId = objectMapper.readTree(note.getResponse().getContentAsString()).get("id").asLong();
+        mockMvc.perform(post("/api/pecs/{id}/notes", pecB)
+                        .header("Authorization", bearer("token-b"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"id\":" + noteId + ",\"text\":\"Overwrite\"}"))
+                .andExpect(status().isOk());
+        assertEquals(pecA, noteRepository.findById(noteId).orElseThrow(AssertionError::new).getPecId());
     }
 
     @Test

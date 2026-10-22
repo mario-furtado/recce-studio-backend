@@ -57,6 +57,7 @@ public class RallyController {
     @PostMapping
     public ResponseEntity<RallyEntity> createRally(@RequestBody RallyEntity rally) {
         String teamProfileId = tenantContext.requireTeamProfileId();
+        rally.setId(null);
         if (rally.getStatus() == null || rally.getStatus().trim().isEmpty()) {
             rally.setStatus("DRAFT");
         }

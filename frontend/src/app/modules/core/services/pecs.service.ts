@@ -195,6 +195,10 @@ export class PecService {
     return this.http.get(`${this.apiUrl}/${pecId}/audio`, { responseType: 'blob' });
   }
 
+  getVideoBlob(pecId: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/${pecId}/video`, { responseType: 'blob' });
+  }
+
   uploadGps(pecId: string, file: File): Observable<PecAssets> {
     const formData = new FormData();
     formData.append('file', file);

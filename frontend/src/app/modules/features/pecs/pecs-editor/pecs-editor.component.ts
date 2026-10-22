@@ -9,7 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { Note } from '../../../core/models/rally';
 import { ClickMarker, GpsTrackPoint } from '../../../core/services/tracking.service';
 import {
@@ -19,7 +19,6 @@ import {
 } from '../../../core/services/pecs.service';
 import { OfflineRecceStoreService } from '../../../core/services/offline-recce-store.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
-import { apiUrl } from '../../../core/services/api.config';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 
 interface GpsSketchPoint {
@@ -62,6 +61,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   activeNoteId: string | null = null;
   currentTime: number = 0;
   videoSrc: string = '';
+  private videoRequest?: Subscription;
   audioSrc: string = '';
 
   isAddingNote: boolean = false;
@@ -190,9 +190,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.videoFileName = assets.videoFileName || '';
     this.audioFileName = assets.audioFileName || '';
     this.gpsFileName = assets.gpsFileName || '';
-    this.videoSrc = assets.videoUrl
-      ? apiUrl(assets.videoUrl)
-      : '';
+    this.loadVideoSource(assets);
     this.loadAudioSource(assets);
 
     this.loadGpsTrack();
@@ -619,6 +617,8 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.videoRequest?.unsubscribe();
+    this.revokeVideoSource();
     this.revokeAudioSource();
   }
 
@@ -684,6 +684,26 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       return this.audioPlayer.nativeElement;
     }
     return null;
+  }
+
+  private loadVideoSource(assets: PecAssets): void {
+    this.videoRequest?.unsubscribe();
+    this.revokeVideoSource();
+    if (!assets.hasVideo) return;
+
+    this.videoRequest = this.pecService.getVideoBlob(this.pecId).subscribe({
+      next: (blob) => {
+        this.videoSrc = URL.createObjectURL(blob);
+      },
+      error: (err) => console.error('Erro ao carregar video da PEC:', err),
+    });
+  }
+
+  private revokeVideoSource(): void {
+    if (this.videoSrc) {
+      URL.revokeObjectURL(this.videoSrc);
+      this.videoSrc = '';
+    }
   }
 
   private loadAudioSource(assets: PecAssets): void {

@@ -5,6 +5,7 @@ import org.example.dto.GpsPointDTO;
 import org.example.dto.PecAssetDTO;
 import org.example.service.PecAssetService;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +43,7 @@ public class PecAssetController {
     public ResponseEntity<Resource> getVideo(@PathVariable String pecId) {
         Resource resource = pecAssetService.getVideoResource(pecId);
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(pecAssetService.getVideoContentType(pecId)))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(resource);
@@ -61,6 +63,7 @@ public class PecAssetController {
     public ResponseEntity<byte[]> getAudio(@PathVariable String pecId) {
         byte[] audio = pecAssetService.getAudioBytes(pecId);
         return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(pecAssetService.getAudioContentType(pecId)))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .contentLength(audio.length)

@@ -1,6 +1,7 @@
 package org.example.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
 
@@ -40,6 +41,7 @@ public class RallyEntity {
 
     private String logoContentType;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String logoStoragePath;
 
     private String carId;
