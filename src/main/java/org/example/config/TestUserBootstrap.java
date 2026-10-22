@@ -9,22 +9,22 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Component;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
 @Order(0)
 public class TestUserBootstrap implements CommandLineRunner {
-    private static final Logger log = LoggerFactory.getLogger(TestUserBootstrap.class);
-
     private final AuthUserRepository authUserRepository;
     private final TeamProfileService teamProfileService;
     private final String environment;
     private final String railwayEnvironment;
-    private final String enabledOverride;
+    private final String bindAddress;
+    private final Environment springEnvironment;
     private final boolean enabled;
     private final String email;
     private final String password;
@@ -34,15 +34,17 @@ public class TestUserBootstrap implements CommandLineRunner {
             TeamProfileService teamProfileService,
             @Value("${recce.environment:dev}") String environment,
             @Value("${RAILWAY_ENVIRONMENT_NAME:}") String railwayEnvironment,
-            @Value("${RECCE_TEST_USER_ENABLED:}") String enabledOverride,
+            @Value("${server.address:}") String bindAddress,
             @Value("${recce.test-user.enabled:false}") boolean enabled,
-            @Value("${recce.test-user.email:test@reccestudio.local}") String email,
-            @Value("${recce.test-user.password:}") String password) {
+            @Value("${recce.test-user.email:}") String email,
+            @Value("${recce.test-user.password:}") String password,
+            Environment springEnvironment) {
         this.authUserRepository = authUserRepository;
         this.teamProfileService = teamProfileService;
         this.environment = environment;
         this.railwayEnvironment = railwayEnvironment;
-        this.enabledOverride = enabledOverride;
+        this.bindAddress = bindAddress;
+        this.springEnvironment = springEnvironment;
         this.enabled = enabled;
         this.email = email;
         this.password = password;
@@ -54,12 +56,8 @@ public class TestUserBootstrap implements CommandLineRunner {
             return;
         }
 
-        if (isProductionEnvironment()) {
-            if (!StringUtils.hasText(enabledOverride)) {
-                log.warn("Test user disabled automatically in production environment.");
-                return;
-            }
-            throw new IllegalStateException("RECCE_TEST_USER_ENABLED nao pode estar ativo em PROD.");
+        if (!isSafeLocalEnvironment()) {
+            throw new IllegalStateException("O user de teste exige ambiente local de desenvolvimento/teste e bind de loopback, sem Railway.");
         }
 
         if (!StringUtils.hasText(email) || !StringUtils.hasText(password)) {
@@ -71,7 +69,7 @@ public class TestUserBootstrap implements CommandLineRunner {
         }
 
         TeamProfileDTO profile = teamProfileService.getProfile("default");
-        String normalizedEmail = email.trim().toLowerCase();
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         AuthUserEntity user = authUserRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> {
                     AuthUserEntity created = new AuthUserEntity();
@@ -90,13 +88,24 @@ public class TestUserBootstrap implements CommandLineRunner {
         authUserRepository.save(user);
     }
 
-    private boolean isProductionEnvironment() {
-        return isProductionValue(environment) || isProductionValue(railwayEnvironment);
+    private boolean isSafeLocalEnvironment() {
+        if (StringUtils.hasText(railwayEnvironment) || !isLocalValue(environment)) {
+            return false;
+        }
+        String[] profiles = springEnvironment.getActiveProfiles();
+        if (profiles.length == 0) {
+            profiles = springEnvironment.getDefaultProfiles();
+        }
+        if (!Arrays.stream(profiles).allMatch(profile -> "default".equals(profile) || isLocalValue(profile))) {
+            return false;
+        }
+        return Arrays.asList("127.0.0.1", "::1", "0:0:0:0:0:0:0:1", "localhost")
+                .contains(bindAddress == null ? "" : bindAddress.trim().toLowerCase(Locale.ROOT));
     }
 
-    private boolean isProductionValue(String value) {
-        String normalized = value == null ? "" : value.trim().toLowerCase();
-        return "prod".equals(normalized) || "production".equals(normalized);
+    private boolean isLocalValue(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return Arrays.asList("local", "dev", "development", "test").contains(normalized);
     }
 
     private String newToken() {
