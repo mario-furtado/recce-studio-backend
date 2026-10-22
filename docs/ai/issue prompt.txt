@@ -1,0 +1,1 @@
+Usa factory-ticket para resolver X. Seleciona o perfil adequado ao risco. Implementa, testa e revê apenas o âmbito necessário. Compara os resultados com a baseline e apresenta TICKET_GATE e RELEASE_GATE separadamente. Não faças merge nem deploy.
