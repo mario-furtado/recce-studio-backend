@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -148,6 +149,35 @@ class TenantIsolationAuditTest {
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
                     .andExpect(content().bytes(bytes));
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("invalid-token")))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec)
+                            .param("token", "token-a").param("access_token", "token-a"))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(head("/api/pecs/{id}/" + kind, pec))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(head("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            mockMvc.perform(head("/api/pecs/{id}/" + kind, pec)
+                            .header("Authorization", bearer("token-a")))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Content-Length", String.valueOf(bytes.length)))
+                    .andExpect(header().string("Cache-Control", "no-store"));
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec).header("Range", "bytes=0-6"))
+                    .andExpect(status().isUnauthorized());
+            mockMvc.perform(get("/api/pecs/{id}/" + kind, pec).header("Range", "bytes=0-6")
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            if ("video".equals(kind)) {
+                mockMvc.perform(get("/api/pecs/{id}/video", pec).header("Range", "bytes=0-6")
+                                .header("Authorization", bearer("token-a")))
+                        .andExpect(status().isPartialContent())
+                        .andExpect(header().string("Content-Range", "bytes 0-6/" + bytes.length))
+                        .andExpect(header().string("Cache-Control", "no-store"))
+                        .andExpect(content().bytes(java.util.Arrays.copyOfRange(bytes, 0, 7)));
+            }
             mockMvc.perform(multipart("/api/pecs/{id}/" + kind, pec)
                             .file(new MockMultipartFile("file", kind + ".webm", kind + "/webm", bytes))
                             .header("Authorization", bearer("token-b")))

@@ -33,12 +33,12 @@ Lifecycle: `OPEN → IN_PROGRESS → IN_REVIEW → RESOLVED`. Use `BLOCKED` when
 
 - **Severity:** High
 - **Description:** Audio and video endpoints bypass authentication, exposing private recordings to anyone who knows an ID.
-- **Evidence:** Public media bypass in `ApiAuthInterceptor` and exclusions in `WebConfig`; anonymous regression receives access.
-- **Acceptance criteria:** [ ] Anonymous requests receive 401. [ ] Authenticated non-owner receives 403/404. [ ] Owner can still stream supported media.
-- **State:** OPEN
+- **Evidence:** Historical cause: public media bypass in `ApiAuthInterceptor`, route exclusions in `WebConfig` and unscoped media lookups. The issue is no longer reproducible at current HEAD `d19e70c` (AUD-SEC-001 correction): recordings require authentication and inherited rally ownership, use no-store, and the Angular player fetches authenticated Blobs. Prior session evidence is retained in `.factory-results/AUD-SEC-001-before.log`, `AUD-SEC-001-qa-review.md` and `AUD-SEC-001-gate.json`; fresh AUD-SEC-002 regressions verify the current behavior without reverting the correction.
+- **Acceptance criteria:** [x] Anonymous requests receive 401. [x] Authenticated non-owner receives 403/404. [x] Owner can still stream supported media.
+- **State:** RESOLVED
 - **Verification:** VERIFIED
-- **Tests:** `mvn "-Dtest=ApiAuthInterceptorAuditTest" test` — latest result: FAIL, anonymous request allowed.
-- **Delivery record:** None.
+- **Tests:** `mvn.cmd compiler:compile compiler:testCompile "-Dtest=TenantIsolationAuditTest,ApiAuthInterceptorAuditTest" surefire:test`: PASS, 12 tests (4 interceptor cases and 8 integration tests). `FACTORY_TICKET_ID=AUD-SEC-002`, `FACTORY_MAVEN_TESTS=TenantIsolationAuditTest,ApiAuthInterceptorAuditTest`, `node tools/run-quality-gate.mjs ticket AUTO`: PASS, automatically selected STANDARD, backend + Factory scope; clean backend 12/12 and Factory configuration passed. HTTP matrix covers anonymous/invalid/query-only credentials (401), foreign team (404), owner exact audio/video bytes and HEAD metadata (200), denied anonymous/foreign Range requests, owner video Range (206, exact Content-Range and bytes), no-store and existing owner upload/delete. Frontend 4/4 focused, 9/9 component integration, lint/typecheck/build evidence from AUD-SEC-001 is reused because its code and environment are unchanged; those checks were not re-executed for this ticket. `git diff --check`: PASS.
+- **Delivery record:** 2026-10-22 — No additional production correction was necessary; the fix is already in `d19e70c`. Extended `ApiAuthInterceptorAuditTest` from audio GET to audio/video GET/HEAD and strengthened the existing media matrix in `TenantIsolationAuditTest` for invalid credentials, query-token spoofing, HEAD and Range authorization/compatibility. QA: PASS; focused review: APPROVE, no blocking findings or weakened assertions. **TICKET_GATE: PASS. RELEASE_GATE: NOT_RUN.** Logs: `.factory-results/AUD-SEC-002-focused.log`, `AUD-SEC-002-ticket.log`, `AUD-SEC-002-qa-review.md`, and `.factory-results/latest-ticket.json`. Local H2/local storage transport and video partial responses were verified; S3, actual media codecs/large-file playback and browser E2E were not. Existing full-Blob video memory/latency tradeoff remains. No global release run or baseline failure re-investigation; no push, merge or deploy.
 
 ## AUD-SEC-003 — GPX parser accepts external XML entities
 

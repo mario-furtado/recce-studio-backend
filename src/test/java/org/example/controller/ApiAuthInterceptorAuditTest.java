@@ -1,7 +1,8 @@
 package org.example.controller;
 
 import org.example.service.AuthService;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -13,13 +14,14 @@ import static org.mockito.Mockito.when;
 
 class ApiAuthInterceptorAuditTest {
 
-    @Test
-    void auditSec002RequiresAuthenticationForRecceAudio() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"GET,audio", "GET,video", "HEAD,audio", "HEAD,video"})
+    void auditSec002RequiresAuthenticationForRecceMedia(String method, String media) throws Exception {
         AuthService authService = mock(AuthService.class);
         HttpServletRequest request = mock(HttpServletRequest.class);
         HttpServletResponse response = mock(HttpServletResponse.class);
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getRequestURI()).thenReturn("/api/pecs/pec-audit/audio");
+        when(request.getMethod()).thenReturn(method);
+        when(request.getRequestURI()).thenReturn("/api/pecs/pec-audit/" + media);
         when(request.getContextPath()).thenReturn("");
 
         boolean allowed = new ApiAuthInterceptor(authService)
