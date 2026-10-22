@@ -17,8 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+import org.xml.sax.helpers.DefaultHandler;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -27,6 +34,8 @@ import java.util.List;
 
 @Service
 public class PecAssetService {
+    private static final int MAX_GPX_BYTES = 10 * 1024 * 1024;
+    private static final int MAX_GPX_DEPTH = 64;
     private final PecRepository pecRepository;
     private final OfflineRecceSyncRepository offlineRecceSyncRepository;
     private final ObjectMapper objectMapper;
@@ -171,6 +180,8 @@ public class PecAssetService {
             try (InputStream inputStream = fileStorageService.open(pec.getGpsStoragePath())) {
                 return parseJson(inputStream);
             }
+        } catch (SAXException | NumberFormatException e) {
+            throw new IllegalArgumentException("Ficheiro GPX invalido ou nao permitido.", e);
         } catch (Exception e) {
             throw new RuntimeException("Erro ao ler GPS da PEC: " + e.getMessage());
         }
@@ -263,11 +274,50 @@ public class PecAssetService {
     }
 
     private List<GpsPointDTO> parseGpx(InputStream inputStream) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        factory.setAttribute("http://www.oracle.com/xml/jaxp/properties/maxElementDepth", String.valueOf(MAX_GPX_DEPTH));
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        builder.setEntityResolver((publicId, systemId) -> {
+            throw new SAXException("Referencias XML externas nao permitidas.");
+        });
+        builder.setErrorHandler(new DefaultHandler() {
+            @Override
+            public void error(SAXParseException exception) throws SAXException {
+                throw exception;
+            }
+
+            @Override
+            public void fatalError(SAXParseException exception) throws SAXException {
+                throw exception;
+            }
+        });
+
+        ByteArrayOutputStream boundedInput = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = inputStream.read(buffer)) != -1) {
+            if (bytesRead > MAX_GPX_BYTES - boundedInput.size()) {
+                throw new SAXException("O ficheiro GPX excede o limite permitido.");
+            }
+            boundedInput.write(buffer, 0, bytesRead);
+        }
         List<GpsPointDTO> points = new ArrayList<>();
-        Document document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(inputStream);
+        Document document = builder.parse(new ByteArrayInputStream(boundedInput.toByteArray()));
         NodeList nodes = document.getElementsByTagName("trkpt");
         for (int i = 0; i < nodes.getLength(); i++) {
             org.w3c.dom.Node node = nodes.item(i);
+            if (node.getAttributes().getNamedItem("lat") == null || node.getAttributes().getNamedItem("lon") == null) {
+                throw new SAXException("Coordenadas GPX em falta.");
+            }
             double lat = Double.parseDouble(node.getAttributes().getNamedItem("lat").getNodeValue());
             double lng = Double.parseDouble(node.getAttributes().getNamedItem("lon").getNodeValue());
             points.add(new GpsPointDTO(lat, lng, null, (double) i));

@@ -99,6 +99,60 @@ class TenantIsolationAuditTest {
     }
 
     @Test
+    void auditSec003GpxFailuresAreStableAndValidReplacementRecovers() throws Exception {
+        String rally = createRally("token-a", "GPX rally");
+        String pec = createPec("token-a", rally, "GPX PEC");
+        String[] invalid = {
+                "<!DOCTYPE gpx SYSTEM 'file:///audit-secret-do-not-expose'><gpx/>",
+                "<gpx><trkpt lat='38.7' lon='-9.1'></gpx>",
+                "<gpx><trkpt lat='not-a-number' lon='-9.1'/></gpx>",
+                "<gpx><trkpt lon='-9.1'/></gpx>"
+        };
+        for (String xml : invalid) {
+            mockMvc.perform(multipart("/api/pecs/{id}/gps", pec)
+                            .file(new MockMultipartFile("file", "track.gpx", "application/gpx+xml",
+                                    xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .header("Authorization", bearer("token-a")))
+                    .andExpect(status().isOk());
+            String storedPath = pecRepository.findById(pec).orElseThrow(AssertionError::new).getGpsStoragePath();
+            mockMvc.perform(get("/api/pecs/{id}/gps/track", pec)
+                            .header("Authorization", bearer("token-b")))
+                    .andExpect(status().isNotFound());
+            for (int attempt = 0; attempt < 2; attempt++) {
+                mockMvc.perform(get("/api/pecs/{id}/gps/track", pec)
+                                .header("Authorization", bearer("token-a")))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(content().json("{\"message\":\"Ficheiro GPX invalido ou nao permitido.\"}", true));
+            }
+            assertEquals(storedPath, pecRepository.findById(pec).orElseThrow(AssertionError::new).getGpsStoragePath());
+        }
+        mockMvc.perform(multipart("/api/pecs/{id}/gps", pec)
+                        .file(new MockMultipartFile("file", "track.gpx", "application/gpx+xml",
+                                "<gpx><trk><trkseg><trkpt lat='38.7' lon='-9.1'/></trkseg></trk></gpx>"
+                                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .header("Authorization", bearer("token-a")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/pecs/{id}/gps/track", pec)
+                        .header("Authorization", bearer("token-a")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].lat").value(38.7))
+                .andExpect(jsonPath("$[0].lng").value(-9.1));
+        mockMvc.perform(multipart("/api/pecs/{id}/gps", pec)
+                        .file(new MockMultipartFile("file", "track.json", "application/json",
+                                "[{\"lat\":38.8,\"lng\":-9.2,\"timestamp\":12,\"accuracy\":3}]"
+                                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .header("Authorization", bearer("token-a")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/pecs/{id}/gps/track", pec)
+                        .header("Authorization", bearer("token-a")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].lat").value(38.8))
+                .andExpect(jsonPath("$[0].timestamp").value(12.0))
+                .andExpect(jsonPath("$[0].accuracy").value(3.0));
+    }
+
+    @Test
     void auditSec001StorageReferencesCannotBeSuppliedByClients() throws Exception {
         String rally = createRally("token-a", "Owned rally");
         mockMvc.perform(put("/api/rallies/{id}", rally)
