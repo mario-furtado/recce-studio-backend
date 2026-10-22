@@ -104,6 +104,16 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
   async toggleRecording(): Promise<void> {
     if (!this.isRecording) {
+      if (this.resumeSession) {
+        const current = await this.offlineStore.getSession(this.resumeSession.id).catch(() => null);
+        if (!current || !this.offlineStore.canAccessSession(current) || current.status !== 'draft') {
+          this.resumeSession = null;
+          this.offlineSessionId = null;
+          this.shared.error('Sessão indisponível', 'Este reconhecimento não está disponível para a conta atual.');
+          return;
+        }
+        this.resumeSession = current;
+      }
       this.isWaitingGps = true;
       this.primeAudioCue();
 
@@ -114,6 +124,15 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       );
       const audioReady = gpsReady ? await this.startAudioCapture() : false;
       this.isWaitingGps = false;
+
+      if (this.resumeSession && !this.offlineStore.canAccessSession(this.resumeSession)) {
+        await this.stopAudioCapture();
+        this.trackingService.stopRecce();
+        this.resumeSession = null;
+        this.offlineSessionId = null;
+        this.shared.error('Sessão indisponível', 'A conta mudou durante o início do reconhecimento.');
+        return;
+      }
 
       if (gpsReady) {
         this.isRecording = true;
@@ -615,6 +634,9 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   private async startOfflineSession(): Promise<void> {
     try {
       if (this.resumeSession?.status === 'draft') {
+        const current = await this.offlineStore.getSession(this.resumeSession.id);
+        if (!current || !this.offlineStore.canAccessSession(current)) throw new Error('Sessão indisponível para esta conta.');
+        this.resumeSession = current;
         this.offlineSessionId = this.resumeSession.id;
         this.shared.info('Reconhecimento offline retomado', 'A sessao local voltou a ficar ativa.');
         return;
@@ -630,6 +652,8 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       console.error('Erro ao criar sessao offline:', error);
+      this.resumeSession = null;
+      this.offlineSessionId = null;
       this.shared.error('Erro no armazenamento offline', 'O reconhecimento continua, mas pode nao ficar guardado no dispositivo.');
     }
   }
@@ -674,6 +698,8 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     }
 
     try {
+      const current = await this.offlineStore.getSession(session.id);
+      if (!current || !this.offlineStore.canAccessSession(current)) return 'offline';
       const response = await firstValueFrom(
         this.pecService.syncOfflineRecce({
           sessionId: session.id,
@@ -792,7 +818,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
     this.offlineStore.getSession(sessionId)
       .then((session) => {
-        if (!session || session.status !== 'draft') {
+        if (!session || !this.offlineStore.canAccessSession(session) || session.status !== 'draft') {
           this.shared.error('Sessao indisponivel', 'So reconhecimentos em rascunho podem ser continuados.');
           return;
         }

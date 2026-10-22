@@ -108,15 +108,20 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     return this.pecStatus === 'COMPLETED';
   }
 
-  syncRecceMarkersToBackend(markers: any[]): void {
-    const gpsTrack = this.localGpsTrack();
-    const sessionId = localStorage.getItem(`recce_session_id_${this.pecId}`)
-      || `online-recce-${this.pecId}-${Date.now()}`;
+  async syncRecceMarkersToBackend(markers: any[]): Promise<void> {
+    const sessionId = localStorage.getItem(`recce_session_id_${this.pecId}`);
+    const session = sessionId ? await this.offlineStore.getSession(sessionId).catch(() => null) : null;
+    if (!sessionId || !session || !this.offlineStore.canAccessSession(session) || session.pecId !== this.pecId) {
+      this.loadNotesFromDatabase();
+      return;
+    }
+    markers = session.markers;
+    const gpsTrack = session.gpsTrack || [];
 
     this.pecService.syncOfflineRecce({
-      sessionId,
+      sessionId: session.id,
       deviceId: localStorage.getItem('recce_device_id') || 'browser',
-      userEmail: localStorage.getItem('recce_auth_email'),
+      userEmail: session.userEmail,
       temporaryName: this.pecName || this.pecTitle,
       pecId: this.pecId,
       createdAt: new Date().toISOString(),
@@ -127,16 +132,20 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       gpsTrack,
     }).subscribe({
       next: async () => {
+        if (!this.offlineStore.canAccessSession(session)) return;
         const audioUploaded = await this.uploadStoredAudioForSession(sessionId);
+        if (!this.offlineStore.canAccessSession(session)) return;
         if (!audioUploaded) {
           this.shared.error(
             'Notas sincronizadas, mas audio falhou',
             'O reconhecimento fica guardado localmente para tentares novamente.',
           );
         } else {
-          localStorage.removeItem(`recce_timestamps_${this.pecId}`);
-          localStorage.removeItem(`recce_gps_track_${this.pecId}`);
-          localStorage.removeItem(`recce_session_id_${this.pecId}`);
+          if (localStorage.getItem(`recce_session_id_${this.pecId}`) === sessionId) {
+            localStorage.removeItem(`recce_timestamps_${this.pecId}`);
+            localStorage.removeItem(`recce_gps_track_${this.pecId}`);
+            localStorage.removeItem(`recce_session_id_${this.pecId}`);
+          }
           await this.offlineStore.deleteSession(sessionId).catch(() => undefined);
         }
         this.loadNotesFromDatabase();
@@ -145,6 +154,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         this.loadRecceMarkers();
       },
       error: (err: any) => {
+        if (!this.offlineStore.canAccessSession(session)) return;
         console.error('Erro ao sincronizar timestamps do recce:', err);
         this.notes = markers.map((m, idx) => ({
           id: `local-${Date.now()}-${idx}`,
@@ -731,10 +741,11 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   private async uploadStoredAudioForSession(sessionId: string): Promise<boolean> {
     const session = await this.offlineStore.getSession(sessionId).catch(() => null);
-    if (!session?.audioBlobId) return true;
+    if (!session || !this.offlineStore.canAccessSession(session)) return false;
+    if (!session.audioBlobId) return true;
 
     const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
-    if (!audioBlob) return true;
+    if (!audioBlob || !this.offlineStore.canAccessSession(session)) return false;
 
     try {
       await firstValueFrom(
@@ -812,13 +823,4 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       && Math.abs(bounds.maxLng - bounds.minLng) < 0.00001;
   }
 
-  private localGpsTrack(): GpsTrackPoint[] {
-    const raw = localStorage.getItem(`recce_gps_track_${this.pecId}`);
-    if (!raw) return [];
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
 }

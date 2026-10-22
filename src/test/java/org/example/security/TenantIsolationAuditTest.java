@@ -99,6 +99,33 @@ class TenantIsolationAuditTest {
     }
 
     @Test
+    void auditOff001ReplayAfterLostResponseDoesNotDuplicatePecOrNotes() throws Exception {
+        String rally = createRally("token-a", "Offline retry rally");
+        String request = "{\"sessionId\":\"interrupted-create-session\",\"rallyId\":\"" + rally + "\","
+                + "\"newPec\":{\"number\":1,\"name\":\"Offline PEC\",\"distanceKm\":2},"
+                + "\"markers\":[{\"index\":1,\"timestamp\":10,\"rawText\":\"D4\"}],\"gpsTrack\":[]}";
+        String pecId = null;
+        String syncId = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            MvcResult result = mockMvc.perform(post("/api/offline-recces/sync")
+                            .header("Authorization", bearer("token-a"))
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.notesCount").value(1)).andReturn();
+            JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+            if (attempt == 0) {
+                pecId = body.get("pecId").asText();
+                syncId = body.get("syncId").asText();
+            } else {
+                assertEquals(pecId, body.get("pecId").asText());
+                assertEquals(syncId, body.get("syncId").asText());
+            }
+            assertEquals(1, pecRepository.count());
+            assertEquals(1, noteRepository.count());
+            assertEquals(1, syncRepository.count());
+        }
+    }
+
+    @Test
     void auditSec003GpxFailuresAreStableAndValidReplacementRecovers() throws Exception {
         String rally = createRally("token-a", "GPX rally");
         String pec = createPec("token-a", rally, "GPX PEC");

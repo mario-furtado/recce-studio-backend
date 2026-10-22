@@ -129,9 +129,15 @@ function createOfflineComponent(options: {
     getEmail: () => 'driver@example.test',
   };
   const offlineStore = {
+    canAccessSession: (session: OfflineRecceSession) => session.userEmail === auth.getEmail(),
     listSessions: jasmine
       .createSpy('listSessions')
-      .and.resolveTo(options.sessions.map((session) => ({ ...session }))),
+      .and.callFake(async () => options.sessions.filter((session) => session.userEmail === auth.getEmail())
+        .map((session) => ({ ...session }))),
+    recoverInterruptedSyncs: jasmine.createSpy('recoverInterruptedSyncs').and.callFake(async () => {
+      options.sessions = options.sessions.map((session) => session.status === 'syncing' && session.userEmail === auth.getEmail()
+        ? { ...session, status: 'ready_to_sync' } : session);
+    }),
     getAudioBlob: jasmine.createSpy('getAudioBlob').and.resolveTo(null),
     markSessionReadyToSync: jasmine.createSpy('markSessionReadyToSync'),
   };

@@ -62,12 +62,12 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   get pendingCount(): number {
-    return this.sessions.filter((session) => session.status === 'ready_to_sync')
+    return this.visibleSessions.filter((session) => session.status === 'ready_to_sync')
       .length;
   }
 
   get draftCount(): number {
-    return this.sessions.filter((session) => session.status === 'draft').length;
+    return this.visibleSessions.filter((session) => session.status === 'draft').length;
   }
 
   get totalNotes(): number {
@@ -78,7 +78,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   get visibleSessions(): OfflineRecceSession[] {
-    return this.sessions.filter((session) => session.status !== 'synced');
+    return this.sessions.filter((session) => session.status !== 'synced' && this.offlineStore.canAccessSession(session));
   }
 
   get isOnlineMode(): boolean {
@@ -92,11 +92,13 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   async loadSessions(): Promise<void> {
     this.isLoading = true;
     try {
+      await this.offlineStore.recoverInterruptedSyncs();
       this.sessions = await this.offlineStore.listSessions();
       this.sessions.forEach((session) => {
         if (session.pecId) this.selectedPecIds[session.id] = session.pecId;
       });
     } catch (error) {
+      this.sessions = [];
       console.error('Erro ao carregar reconhecimentos offline:', error);
       this.shared.error('Erro ao carregar reconhecimentos offline');
     } finally {
@@ -104,7 +106,13 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     }
   }
 
-  continueSession(session: OfflineRecceSession): void {
+  async continueSession(session: OfflineRecceSession): Promise<void> {
+    const current = await this.offlineStore.getSession(session.id).catch(() => null);
+    if (!current || !this.offlineStore.canAccessSession(current)) {
+      this.shared.error('Sessão indisponível', 'Este reconhecimento não está disponível para a conta atual.');
+      return;
+    }
+    session = current;
     if (session.status !== 'draft') {
       this.shared.info(
         'Reconhecimento fechado',
@@ -122,7 +130,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     this.router.navigate(['/recce-mode']);
   }
 
-  syncSession(session: OfflineRecceSession): void {
+  async syncSession(session: OfflineRecceSession): Promise<void> {
     if (!this.isOnlineMode) {
       this.shared.info(
         'Modo offline ativo',
@@ -148,7 +156,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.syncSessionToBackend(session, { pecId });
+    await this.syncSessionToBackend(session, { pecId });
   }
 
   openCreatePec(session: OfflineRecceSession): void {
@@ -178,7 +186,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     draft.number = this.nextPecNumber(draft.rallyId);
   }
 
-  createPecAndSync(session: OfflineRecceSession): void {
+  async createPecAndSync(session: OfflineRecceSession): Promise<void> {
     if (!this.isOnlineMode) {
       this.shared.info(
         'Modo offline ativo',
@@ -212,7 +220,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       status: 'DRAFT',
     };
 
-    this.syncSessionToBackend(session, {
+    await this.syncSessionToBackend(session, {
       rallyId: draft.rallyId,
       newPec,
     });
@@ -325,10 +333,10 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       });
   }
 
-  private syncSessionToBackend(
+  private async syncSessionToBackend(
     session: OfflineRecceSession,
     target: Pick<OfflineRecceSyncRequest, 'pecId' | 'rallyId' | 'newPec'>,
-  ): void {
+  ): Promise<void> {
     if (!this.isOnlineMode) {
       this.shared.info(
         'Modo offline ativo',
@@ -337,82 +345,64 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.syncingSessionId) return;
     this.syncingSessionId = session.id;
-    this.offlineStore
-      .markSessionSyncing(session.id)
-      .then((updated) => this.replaceSession(updated))
-      .then(() => {
-        this.pecService
-          .syncOfflineRecce({
+    try {
+      const started = await this.offlineStore.runSessionSync(session.id, async (current) => {
+        this.replaceSession(current);
+        try {
+          const response = await firstValueFrom(this.pecService.syncOfflineRecce({
             sessionId: session.id,
-            deviceId: session.deviceId,
-            userEmail: session.userEmail,
-            temporaryName: session.temporaryName,
+            deviceId: current.deviceId,
+            userEmail: current.userEmail,
+            temporaryName: current.temporaryName,
             pecId: target.pecId,
             rallyId: target.rallyId,
             newPec: target.newPec,
-            createdAt: session.createdAt,
-            finishedAt: session.finishedAt,
-            notesCount: session.notesCount,
-            durationSeconds: session.durationSeconds,
-            markers: session.markers,
-            gpsTrack: session.gpsTrack || [],
-          })
-          .subscribe({
-            next: async (response) => {
-              const audioUploaded = await this.uploadSessionAudio(
-                session,
-                response.pecId,
-              );
-              if (!audioUploaded) {
-                const updated = await this.offlineStore.markSessionReadyToSync(
-                  session.id,
-                  'Notas sincronizadas, mas falhou o envio do audio.',
-                );
-                this.replaceSession(updated);
-                this.shared.error(
-                  'Audio nao sincronizado',
-                  'As notas foram enviadas, mas o audio ficou guardado localmente para tentares novamente.',
-                );
-                this.syncingSessionId = null;
-                return;
-              }
-              await this.offlineStore.deleteSession(session.id);
-              this.sessions = this.sessions.filter(
-                (item) => item.id !== session.id,
-              );
-              this.expandedCreateSessionId = null;
-              delete this.selectedPecIds[session.id];
-              delete this.newPecDrafts[session.id];
-              this.shared.success(
-                'Reconhecimento sincronizado',
-                `${response.pecName || response.pecId} foi removido do armazenamento local.`,
-              );
-              this.syncingSessionId = null;
-            },
-            error: async (error) => {
-              console.error(
-                'Erro ao sincronizar reconhecimento offline:',
-                error,
-              );
-              const updated = await this.offlineStore.markSessionReadyToSync(
-                session.id,
-                'Falha ao enviar para o backend.',
-              );
-              this.replaceSession(updated);
-              this.shared.error(
-                'Erro ao sincronizar',
-                'Confirma a ligacao ao backend e tenta novamente.',
-              );
-              this.syncingSessionId = null;
-            },
-          });
-      })
-      .catch((error) => {
-        console.error('Erro ao preparar sincronizacao:', error);
-        this.shared.error('Erro ao preparar sincronizacao');
-        this.syncingSessionId = null;
+            createdAt: current.createdAt,
+            finishedAt: current.finishedAt,
+            notesCount: current.notesCount,
+            durationSeconds: current.durationSeconds,
+            markers: current.markers,
+            gpsTrack: current.gpsTrack || [],
+          }));
+          const audioUploaded = await this.uploadSessionAudio(current, response.pecId);
+          if (!audioUploaded) {
+            const updated = await this.offlineStore.markSessionReadyToSync(
+              session.id, 'Notas sincronizadas, mas o áudio está em falta ou não pôde ser enviado.',
+            );
+            this.replaceSession(updated);
+            this.shared.error(
+              'Áudio não sincronizado',
+              'As notas foram enviadas, mas o áudio está em falta ou não pôde ser enviado. A sessão foi mantida. Não apagues a sessão nem os dados deste navegador; confirma que a gravação está disponível antes de tentares novamente.',
+            );
+            return;
+          }
+          await this.offlineStore.deleteSession(session.id);
+          this.sessions = this.sessions.filter((item) => item.id !== session.id);
+          this.expandedCreateSessionId = null;
+          delete this.selectedPecIds[session.id];
+          delete this.newPecDrafts[session.id];
+          this.shared.success(
+            'Reconhecimento sincronizado',
+            `${response.pecName || response.pecId} foi removido do armazenamento local.`,
+          );
+        } catch (error) {
+          console.error('Erro ao sincronizar reconhecimento offline:', error);
+          const updated = await this.offlineStore.markSessionReadyToSync(
+            session.id, 'Falha ao enviar para o backend.',
+          );
+          this.replaceSession(updated);
+          this.shared.error('Erro ao sincronizar', 'Confirma a ligacao ao backend e tenta novamente.');
+        }
       });
+      if (!started) await this.loadSessions();
+    } catch (error) {
+      console.error('Erro ao preparar sincronizacao:', error);
+      this.shared.error('Erro ao preparar sincronizacao');
+    } finally {
+      this.syncingSessionId = null;
+    }
   }
 
   private async uploadSessionAudio(
@@ -421,7 +411,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   ): Promise<boolean> {
     if (!session.audioBlobId) return true;
     const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
-    if (!audioBlob) return true;
+    if (!audioBlob) return false;
 
     try {
       await firstValueFrom(
