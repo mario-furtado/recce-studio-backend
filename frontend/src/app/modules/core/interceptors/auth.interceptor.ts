@@ -1,13 +1,15 @@
 import { HttpInterceptorFn } from '@angular/common/http';
+import { apiRequestPath } from '../services/api.config';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const token = localStorage.getItem('recce_auth_token');
+  const path = apiRequestPath(req.url);
 
   if (
     !token ||
     token === 'offline-session' ||
-    req.url.includes('/api/auth/login') ||
-    req.url.includes('/api/auth/register')
+    path === null ||
+    /^\/api\/auth\/(login|register)\/?$/.test(path)
   ) {
     return next(req);
   }
