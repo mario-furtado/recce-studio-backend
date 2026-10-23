@@ -5,7 +5,7 @@ import { MainLayoutComponent } from './modules/core/shared/components/main-layou
 import { LandingPageComponent } from './modules/core/components/landing-page/landing-page.component';
 import { LoginComponent } from './modules/core/components/login/login.component';
 import { PecsListComponent } from './modules/features/pecs/pecs-list/pecs-list.component';
-import { PecsEditorComponent } from './modules/features/pecs/pecs-editor/pecs-editor.component';
+import { NewRecceComponent } from './modules/features/recce-mode/new-recce.component';
 import { RallyDetailComponent } from './modules/features/pecs/rally-detail/rally-detail.component';
 import { RecceModeComponent } from './modules/features/recce-mode/recce-mode.component';
 import { PecDetailComponent } from './modules/features/pecs/pec-detail/pec-detail.component';
@@ -30,7 +30,7 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
       { path: 'pecs', component: PecsListComponent }, // Lista de PECs/Ralis
-      { path: 'new-recce', component: PecsEditorComponent }, // Form para Criar PEC (trocar pelo teu comp)
+      { path: 'new-recce', component: NewRecceComponent },
       { path: 'recce/:id', component: PecDetailComponent, canDeactivate: [recceExitGuard] }, // Editor com Player + Mapa (trocar pelo teu comp)
       { path: 'rally/:id', component: RallyDetailComponent },
       { path: 'recce-mode', component: RecceModeComponent, canDeactivate: [recceExitGuard] },

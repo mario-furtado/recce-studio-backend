@@ -45,6 +45,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   @Input() pecStatus: string = 'DRAFT';
 
   pecTitle: string = 'PEC Studio';
+  targetMissing = false;
 
   hasVideo: boolean = false;
   hasAudio: boolean = false;
@@ -83,7 +84,11 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.pecId = this.pecId || this.route.snapshot.paramMap.get('id') || 'pec-1';
+    this.pecId = (this.pecId || this.route.snapshot.paramMap.get('id') || '').trim();
+    if (!this.pecId) {
+      this.targetMissing = true;
+      return;
+    }
     this.pecTitle = this.pecName || `PEC ${this.pecId}`;
 
     const localRecceData = localStorage.getItem(
@@ -105,7 +110,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   get isLocked(): boolean {
-    return this.pecStatus === 'COMPLETED';
+    return !this.pecId || this.targetMissing || this.pecStatus === 'COMPLETED';
   }
 
   async syncRecceMarkersToBackend(markers: any[]): Promise<void> {

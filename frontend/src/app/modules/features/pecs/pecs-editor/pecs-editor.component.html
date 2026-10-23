@@ -1,4 +1,9 @@
-<div class="h-[calc(100vh-4rem)] flex flex-col gap-4">
+<section *ngIf="targetMissing" role="alert" class="glass-panel p-6 rounded-2xl space-y-4">
+  <h1 class="text-xl font-bold">Seleciona uma PEC</h1>
+  <p>Escolhe uma PEC antes de abrir o Studio.</p>
+  <a routerLink="/new-recce" class="accent-button inline-block px-4 py-2 rounded-xl">Escolher destino</a>
+</section>
+<div *ngIf="!targetMissing" class="h-[calc(100vh-4rem)] flex flex-col gap-4">
   <div
     class="studio-toolbar glass-panel flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl shadow-lg"
   >

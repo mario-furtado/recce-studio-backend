@@ -1,4 +1,10 @@
-<div class="min-h-screen text-white p-4 md:p-6 flex flex-col gap-6">
+<p *ngIf="isLoadingPec" role="status" class="p-6">A carregar PEC...</p>
+<section *ngIf="pecUnavailable" role="alert" class="glass-panel m-6 p-6 rounded-2xl space-y-4">
+  <h1 class="text-xl font-bold">PEC indisponível</h1>
+  <p>Não foi possível abrir esta PEC. Escolhe outra PEC para continuar.</p>
+  <a routerLink="/new-recce" class="accent-button inline-block px-4 py-2 rounded-xl">Escolher destino</a>
+</section>
+<div *ngIf="!isLoadingPec && !pecUnavailable" class="min-h-screen text-white p-4 md:p-6 flex flex-col gap-6">
   <!-- BARRA DE NAVEGAÇÃO E BOTOES DE TOGGLE DE MODO -->
   <header
     class="pec-mode-header glass-panel rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl"
