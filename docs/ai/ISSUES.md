@@ -150,12 +150,12 @@ Lifecycle: `OPEN → IN_PROGRESS → IN_REVIEW → RESOLVED`. Use `BLOCKED` when
 
 - **Severity:** Medium
 - **Description:** Settings expose blue and green accents, but validation accepts only red while still reporting success.
-- **Evidence:** `AUD-UI-001` selects `midnight-blue` and observes `racing-red` in state/storage.
-- **Acceptance criteria:** [ ] Every displayed accent persists and applies. [ ] Invalid stored values fall back safely. [ ] Success feedback matches the applied theme.
-- **State:** OPEN
+- **Evidence:** Reproduced on 2026-10-23 in Chrome Headless using actual Settings buttons/global CSS: blue and green reverted to racing-red in observable state, both storage keys and computed accent color despite success feedback. Before: 5 FAIL / 3 PASS across 8 tests. Red and invalid-value fallback already passed. Log: `.factory-results/AUD-UI-001-before.log`. After: all three accents persist and apply in both shell modes, including new service/settings initialization.
+- **Acceptance criteria:** [x] Every displayed accent persists and applies. [x] Invalid stored values fall back safely. [x] Success feedback matches the applied theme.
+- **State:** RESOLVED
 - **Verification:** VERIFIED
-- **Tests:** Frontend audit regression `AUD-UI-001` — latest result: FAIL.
-- **Delivery record:** None.
+- **Tests:** From `frontend/`: `node node_modules/@angular/cli/bin/ng.js test --watch=false --browsers=ChromeHeadless --include=src/app/modules/features/settings/settings.component.spec.ts`: before 5 FAIL / 3 PASS; after PASS 8/8. Final `FACTORY_TICKET_ID=AUD-UI-001`, `QUALITY_TARGET_SPECS=src/app/modules/features/settings/settings.component.spec.ts`, `node tools/run-quality-gate.mjs ticket AUTO`: PASS, automatically selected STANDARD (medium severity, frontend + Factory). Targeted 8/8; component integration 66/66; Factory config, lint, typecheck and production build passed. E2E conditional SKIP (no harness); bundle warning 620.70 kB versus 500 kB warning budget. Tests assert all three buttons in dark/light shells, selected indicator, both storage keys, legacy/current DOM attributes, actual computed CSS accent, success toast, reload via new service/component instances, missing/invalid stored values and legacy setter/observable compatibility. Backend, combined audit suite/global release and manual visual/E2E testing not executed. Logs: `.factory-results/AUD-UI-001-before.log`, `AUD-UI-001-focused.log`, `AUD-UI-001-ticket.log`, `AUD-UI-001-qa-review.md`, `latest-ticket.json`.
+- **Delivery record:** 2026-10-23 — One production line in `SharedProperties.isAccentTheme()` now accepts racing-red, midnight-blue and forest-green, matching the existing type, Settings options and CSS selectors. Existing invalid-value fallback remains racing-red. No palette, template, dependency, backend or unrelated preference changes. Added `settings.component.spec.ts`; test storage and root DOM attributes are restored. QA: PASS; review: APPROVE, no blocking findings. **TICKET_GATE: PASS. RELEASE_GATE: NOT_RUN.** Persistence/reinitialization and computed CSS were verified in Chrome Headless, not a real browser refresh or manual cross-browser visual/accessibility review. No global baseline rewrite, push, merge or deploy.
 
 ## AUD-ROUTE-001 — New-recce route implicitly edits `pec-1`
 

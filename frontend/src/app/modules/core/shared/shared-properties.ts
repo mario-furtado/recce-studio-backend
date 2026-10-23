@@ -187,7 +187,7 @@ export class SharedProperties {
   }
 
   private isAccentTheme(theme: string | null): theme is AppAccentTheme {
-    return theme === 'racing-red';
+    return theme === 'racing-red' || theme === 'midnight-blue' || theme === 'forest-green';
   }
 
   private isVoiceCaptureMode(mode: string | null): mode is VoiceCaptureMode {
