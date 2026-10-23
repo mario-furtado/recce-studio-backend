@@ -1,6 +1,8 @@
 # RecceStudio
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.3.7.
+Angular 20.3 frontend. Use Node.js 22 (see `.nvmrc`); the minimum supported Node 20 version is 20.19.0. Run `npm ci` from this directory before development or QA.
+
+Dependency security triage and remaining development-tool advisories: [AUD-DEP-001](../docs/ai/AUD-DEP-001.md).
 
 ## Development server
 

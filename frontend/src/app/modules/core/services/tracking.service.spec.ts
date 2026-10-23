@@ -33,8 +33,11 @@ describe('AUD-REC-001 GPS startup recovery', () => {
   afterEach(() => service.stopRecce());
 
   function position(latitude = 38.7): GeolocationPosition {
-    return { timestamp: Date.now(), coords: { latitude, longitude: -9.1, accuracy: 5,
-      altitude: null, altitudeAccuracy: null, heading: null, speed: 2 } };
+    const coordinates = { latitude, longitude: -9.1, accuracy: 5,
+      altitude: null, altitudeAccuracy: null, heading: null, speed: 2 };
+    const timestamp = Date.now();
+    return { timestamp, coords: { ...coordinates, toJSON: () => coordinates },
+      toJSON: () => ({ timestamp, coords: coordinates }) };
   }
 
   it('returns false on permission denial and refuses markers with no active watch', async () => {

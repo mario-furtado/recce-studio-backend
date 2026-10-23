@@ -1,6 +1,6 @@
 # Quality Gates
 
-The repository contains Spring Boot 2.7/Java 8 at the root and Angular 17/TypeScript 5.4 under `frontend/`. The gates use Maven, Karma/Jasmine, Chrome Headless, npm and the existing service-worker configuration without adding dependencies.
+The repository contains Spring Boot 2.7/Java 8 at the root and Angular 20.3/TypeScript 5.8 under `frontend/`. Frontend development and CI use Node.js 22 (`frontend/.nvmrc`; compatible alternatives are in `frontend/package.json` engines). The gates use Maven, Karma/Jasmine, Chrome Headless, npm and the existing service-worker configuration without adding dependencies.
 
 ## Execution profiles
 
