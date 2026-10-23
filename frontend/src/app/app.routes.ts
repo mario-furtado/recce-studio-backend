@@ -12,6 +12,7 @@ import { PecDetailComponent } from './modules/features/pecs/pec-detail/pec-detai
 import { TeamProfileComponent } from './modules/features/team-profile/team-profile.component';
 import { SettingsComponent } from './modules/features/settings/settings.component';
 import { authGuard } from './modules/core/guards/auth.guard';
+import { recceExitGuard } from './modules/core/guards/recce-exit.guard';
 import { TutorialComponent } from './modules/features/tutorial/tutorial.component';
 import { OfflineReccesComponent } from './modules/features/offline-recces/offline-recces.component';
 import { NotesComponent } from './modules/features/notes/notes.component';
@@ -30,9 +31,9 @@ export const routes: Routes = [
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
       { path: 'pecs', component: PecsListComponent }, // Lista de PECs/Ralis
       { path: 'new-recce', component: PecsEditorComponent }, // Form para Criar PEC (trocar pelo teu comp)
-      { path: 'recce/:id', component: PecDetailComponent }, // Editor com Player + Mapa (trocar pelo teu comp)
+      { path: 'recce/:id', component: PecDetailComponent, canDeactivate: [recceExitGuard] }, // Editor com Player + Mapa (trocar pelo teu comp)
       { path: 'rally/:id', component: RallyDetailComponent },
-      { path: 'recce-mode', component: RecceModeComponent },
+      { path: 'recce-mode', component: RecceModeComponent, canDeactivate: [recceExitGuard] },
       { path: 'offline-recces', component: OfflineReccesComponent },
       { path: 'notes', component: NotesComponent },
       { path: 'team-profile', component: TeamProfileComponent },

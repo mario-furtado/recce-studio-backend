@@ -115,14 +115,15 @@
 
     <button
       (click)="toggleRecording()"
-      [disabled]="isWaitingGps"
-      [class.is-warning]="isRecording"
-      [class.is-success]="!isRecording"
+      [disabled]="isWaitingGps || isSaving"
+      [class.is-warning]="isRecording || hasPendingSave"
+      [class.is-success]="!isRecording && !hasPendingSave"
       class="recce-record-button w-full text-center font-extrabold rounded-xl transition disabled:opacity-50 active:scale-[0.98]"
     >
       <span *ngIf="isWaitingGps">A AGUARDAR GPS...</span>
-      <span *ngIf="!isWaitingGps">{{
-        isRecording ? "FINALIZAR E GUARDAR" : "INICIAR RECONHECIMENTO"
+      <span *ngIf="isSaving">A GUARDAR...</span>
+      <span *ngIf="!isWaitingGps && !isSaving">{{
+        hasPendingSave ? "TENTAR GUARDAR NOVAMENTE" : isRecording ? "FINALIZAR E GUARDAR" : "INICIAR RECONHECIMENTO"
       }}</span>
     </button>
   </div>

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -17,6 +17,11 @@ export type ViewMode = 'OVERVIEW' | 'RECONNAISSANCE' | 'STUDIO';
   styleUrls: ['./pec-detail.component.css'],
 })
 export class PecDetailComponent implements OnInit {
+  @ViewChild(RecceModeComponent) recce?: RecceModeComponent;
+
+  canDeactivate(): boolean {
+    return this.recce?.canDeactivate() ?? true;
+  }
   pecId: string = '';
   currentMode: ViewMode = 'OVERVIEW';
 
@@ -54,7 +59,7 @@ export class PecDetailComponent implements OnInit {
 
         // Se a PEC for DRAFT, podes sugerir que comece no OVERVIEW ou RECONNAISSANCE
         if (this.pec.status === 'DRAFT') {
-          this.currentMode = 'OVERVIEW';
+          this.setMode('OVERVIEW');
         }
       },
       error: (err) => console.error('Erro ao carregar detalhes da PEC:', err),
@@ -62,6 +67,7 @@ export class PecDetailComponent implements OnInit {
   }
 
   setMode(mode: ViewMode): void {
+    if (mode !== this.currentMode && !this.canDeactivate()) return;
     if (this.pec.status === 'COMPLETED' && mode === 'RECONNAISSANCE') {
       return;
     }

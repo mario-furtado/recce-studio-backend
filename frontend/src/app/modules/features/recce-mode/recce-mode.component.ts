@@ -5,6 +5,7 @@ import {
   Output,
   EventEmitter,
   OnInit,
+  HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -23,6 +24,12 @@ import {
 } from '../../core/services/offline-recce-store.service';
 import { PecService } from '../../core/services/pecs.service';
 import { firstValueFrom } from 'rxjs';
+
+interface RecceCompletion {
+  markers: ClickMarker[];
+  gpsTrack: ReturnType<TrackingService['getGpsTrack']>;
+  audioBlob: Blob | null;
+}
 
 interface PendingVoiceNote {
   parsed: ParsedRecceNote;
@@ -46,6 +53,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
   isRecording = false;
   isWaitingGps = false;
+  isSaving = false;
   lastMarker: ClickMarker | null = null;
   totalClicks = 0;
   elapsedTimeString = '00:00.0';
@@ -74,6 +82,31 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   private resumeSession: OfflineRecceSession | null = null;
   private offlineSaveQueue: Promise<unknown> = Promise.resolve();
   private readonly voiceAttachWindowMs = 8500;
+  private destroyed = false;
+  private audioStopPromise: Promise<Blob | null> | null = null;
+  private pendingCompletion: RecceCompletion | null = null;
+  private completionPromise: Promise<(RecceCompletion & { session: OfflineRecceSession }) | null> | null = null;
+
+  get hasUnsavedRecording(): boolean {
+    return this.isRecording || this.isWaitingGps || this.isSaving || !!this.pendingCompletion || !!this.mediaRecorder;
+  }
+
+  get hasPendingSave(): boolean {
+    return !this.isRecording && (!!this.pendingCompletion || !!this.mediaRecorder);
+  }
+
+  canDeactivate(): boolean {
+    if (!this.hasUnsavedRecording) return true;
+    this.shared.info('Reconhecimento por guardar', 'Finaliza e guarda o reconhecimento antes de sair. Se a gravação falhar, mantém esta página e tenta novamente.');
+    return false;
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent): void {
+    if (!this.hasUnsavedRecording) return;
+    event.preventDefault();
+    event.returnValue = '';
+  }
 
   constructor(
     public trackingService: TrackingService,
@@ -103,7 +136,8 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   }
 
   async toggleRecording(): Promise<void> {
-    if (!this.isRecording) {
+    if (this.destroyed || this.isSaving || this.isWaitingGps) return;
+    if (!this.isRecording && !this.pendingCompletion && !this.mediaRecorder) {
       if (this.resumeSession) {
         const current = await this.offlineStore.getSession(this.resumeSession.id).catch(() => null);
         if (!current || !this.offlineStore.canAccessSession(current) || current.status !== 'draft') {
@@ -124,6 +158,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       );
       const audioReady = gpsReady ? await this.startAudioCapture() : false;
       this.isWaitingGps = false;
+      if (this.destroyed) return;
 
       if (this.resumeSession && !this.offlineStore.canAccessSession(this.resumeSession)) {
         await this.stopAudioCapture();
@@ -137,7 +172,9 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       if (gpsReady) {
         this.isRecording = true;
         this.resetVoiceBuffers();
-        await this.startOfflineSession();
+        this.offlineSaveQueue = this.startOfflineSession();
+        await this.offlineSaveQueue;
+        if (this.destroyed) return;
         this.restoreResumeCounters();
         this.startTimer(this.resumeSession?.durationSeconds || 0);
         if (audioReady) {
@@ -151,32 +188,36 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       }
     } else {
       // FINALIZAR PEC
-      this.isRecording = false;
-      this.stopTimer();
-      this.stopSpeechRecognition();
-      this.resetVoiceBuffers();
-      const audioBlob = await this.stopAudioCapture();
+      this.isSaving = true;
+      try {
+        const completed = await this.finishLocalRecording();
+        if (!completed || this.destroyed) return;
+        const { markers: finalMarkers, gpsTrack: finalGpsTrack, audioBlob, session: completedSession } = completed;
+        const syncStatus = await this.syncCompletedSessionIfOnline(
+          completedSession,
+          finalMarkers,
+          finalGpsTrack,
+          audioBlob,
+        );
 
-      const finalMarkers = this.trackingService.stopRecce();
-      const finalGpsTrack = this.trackingService.getGpsTrack();
-      const completedSession = await this.completeOfflineSession(finalMarkers, audioBlob);
-      const syncStatus = await this.syncCompletedSessionIfOnline(
-        completedSession,
-        finalMarkers,
-        finalGpsTrack,
-        audioBlob,
-      );
+        if (syncStatus === 'offline') {
+          this.storeLocalCompletion(finalMarkers, finalGpsTrack, completedSession.id);
+        }
 
-      if (syncStatus === 'offline') {
-        this.storeLocalCompletion(finalMarkers, finalGpsTrack, completedSession?.id || null);
+        this.isSaving = false;
+
+        if (syncStatus === 'offline' && this.shouldNavigateToOfflineQueue()) {
+          this.router.navigate(['/offline-recces']);
+          return;
+        }
+
+        this.navigateToStudio.emit();
+      } catch (error) {
+        console.error('Erro ao finalizar áudio:', error);
+        this.shared.error('Erro ao guardar áudio', 'Mantém esta página aberta e tenta finalizar novamente.');
+      } finally {
+        this.isSaving = false;
       }
-
-      if (syncStatus === 'offline' && this.shouldNavigateToOfflineQueue()) {
-        this.router.navigate(['/offline-recces']);
-        return;
-      }
-
-      this.navigateToStudio.emit();
     }
   }
 
@@ -296,7 +337,9 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
     try {
       this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (this.destroyed) { this.stopAudioTracks(); return false; }
       this.audioChunks = [];
+      this.audioStopPromise = null;
       const mimeType = this.preferredAudioMimeType();
       this.mediaRecorder = mimeType
         ? new MediaRecorder(this.audioStream, { mimeType })
@@ -310,6 +353,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       return true;
     } catch (error) {
       console.error('Erro ao aceder ao microfone:', error);
+      this.stopAudioTracks();
       this.audioStatus = 'Microfone bloqueado';
       this.shared.error('Microfone indisponivel', 'Autorize o microfone para gravar audio do reconhecimento.');
       return false;
@@ -317,7 +361,8 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   }
 
   private stopAudioCapture(): Promise<Blob | null> {
-    return new Promise((resolve) => {
+    if (this.audioStopPromise) return this.audioStopPromise;
+    this.audioStopPromise = new Promise<Blob | null>((resolve) => {
       const recorder = this.mediaRecorder;
       if (!recorder) {
         this.stopAudioTracks();
@@ -331,7 +376,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         this.audioChunks = [];
         this.mediaRecorder = null;
         this.stopAudioTracks();
-        this.audioStatus = blob ? 'Audio guardado' : 'Sem audio gravado';
+        this.audioStatus = blob ? 'Áudio captado; a guardar' : 'Sem audio gravado';
         resolve(blob);
       };
 
@@ -340,7 +385,8 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       } else {
         recorder.onstop(new Event('stop'));
       }
-    });
+    }).catch((error) => { this.audioStopPromise = null; throw error; });
+    return this.audioStopPromise;
   }
 
   private stopAudioTracks(): void {
@@ -671,19 +717,42 @@ export class RecceModeComponent implements OnInit, OnDestroy {
     });
   }
 
-  private async completeOfflineSession(markers: ClickMarker[], audioBlob: Blob | null): Promise<OfflineRecceSession | null> {
-    if (!this.offlineSessionId) return null;
-
+  private async completeOfflineSession(markers: ClickMarker[], audioBlob: Blob | null,
+    gpsTrack = this.trackingService.getGpsTrack()): Promise<OfflineRecceSession | null> {
     try {
       await this.offlineSaveQueue;
-      return await this.offlineStore.completeSession(this.offlineSessionId, markers, audioBlob, this.trackingService.getGpsTrack());
+      if (!this.offlineSessionId) throw new Error('Sessão local indisponível.');
+      const session = await this.offlineStore.completeSession(this.offlineSessionId, markers, audioBlob, gpsTrack);
+      if (!session) throw new Error('Sessão local indisponível para esta conta.');
+      this.offlineSessionId = null;
+      return session;
     } catch (error) {
       console.error('Erro ao fechar sessao offline:', error);
-      this.shared.error('Erro ao guardar offline', 'O JSON de backup foi descarregado como alternativa.');
+      this.shared.error('Erro ao guardar offline', 'O reconhecimento não foi guardado. Mantém esta página aberta e a conta original iniciada; verifica o armazenamento e tenta guardar novamente.');
       return null;
-    } finally {
-      this.offlineSessionId = null;
     }
+  }
+
+  private finishLocalRecording(): Promise<(RecceCompletion & { session: OfflineRecceSession }) | null> {
+    if (this.completionPromise) return this.completionPromise;
+    this.isRecording = false;
+    this.stopTimer();
+    this.stopSpeechRecognition();
+    this.resetVoiceBuffers();
+    const markers = [...this.trackingService.stopRecce()];
+    const gpsTrack = this.trackingService.getGpsTrack();
+    this.completionPromise = (async () => {
+      if (!this.pendingCompletion) {
+        this.pendingCompletion = { markers, gpsTrack, audioBlob: await this.stopAudioCapture() };
+      }
+      const payload = this.pendingCompletion;
+      const session = await this.completeOfflineSession(payload.markers, payload.audioBlob, payload.gpsTrack);
+      if (!session) { this.audioStatus = 'Áudio por guardar'; return null; }
+      this.pendingCompletion = null;
+      this.audioStatus = payload.audioBlob ? 'Áudio guardado localmente' : 'Sem audio gravado';
+      return { ...payload, session };
+    })().finally(() => { this.completionPromise = null; });
+    return this.completionPromise;
   }
 
   private async syncCompletedSessionIfOnline(
@@ -871,9 +940,14 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.stopTimer();
     this.stopSpeechRecognition();
-    this.stopAudioCapture();
+    if (this.isRecording || this.pendingCompletion || this.mediaRecorder || this.completionPromise) {
+      void this.finishLocalRecording().catch(() => this.shared.error('Erro ao guardar áudio', 'A saída interrompeu a gravação local.'));
+    } else {
+      void this.stopAudioCapture();
+    }
     this.resetVoiceBuffers();
     this.cueAudioContext?.close();
     this.trackingService.stopRecce();
