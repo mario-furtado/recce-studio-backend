@@ -73,10 +73,10 @@
         (ngSubmit)="submit()"
       >
         <div>
-          <label class="text-xs font-bold text-slate-400 uppercase"
+          <label for="login-email" class="text-xs font-bold text-slate-400 uppercase"
             >Email</label
           >
-          <input
+          <input id="login-email"
             type="email"
             name="email"
             [(ngModel)]="form.email"
@@ -86,10 +86,10 @@
         </div>
 
         <div>
-          <label class="text-xs font-bold text-slate-400 uppercase"
+          <label for="login-password" class="text-xs font-bold text-slate-400 uppercase"
             >Password</label
           >
-          <input
+          <input id="login-password"
             type="password"
             name="password"
             [(ngModel)]="form.password"

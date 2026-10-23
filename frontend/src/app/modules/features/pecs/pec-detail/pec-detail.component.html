@@ -76,19 +76,19 @@
       class="note-edit-panel w-full sm:w-auto grid grid-cols-1 sm:grid-cols-5 gap-2 p-3"
       (click)="$event.stopPropagation()"
     >
-      <input
+      <input aria-label="Número da PEC"
         type="number"
         [(ngModel)]="pecDraft.number"
         class="themed-input rounded-lg px-3 py-2 text-sm"
         placeholder="N."
       />
-      <input
+      <input aria-label="Nome da PEC"
         type="text"
         [(ngModel)]="pecDraft.name"
         class="themed-input sm:col-span-2 rounded-lg px-3 py-2 text-sm"
         placeholder="Nome da PEC"
       />
-      <input
+      <input aria-label="Distância da PEC (km)"
         type="number"
         step="0.1"
         [(ngModel)]="pecDraft.distanceKm"

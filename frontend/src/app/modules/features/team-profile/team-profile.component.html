@@ -29,19 +29,19 @@
 
         <ng-template #profileEdit>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
+            <input aria-label="Nome da equipa"
               type="text"
               [(ngModel)]="draft.name"
               placeholder="Nome da equipa"
               class="themed-input md:col-span-2 rounded-lg px-3 py-2"
             />
-            <input
+            <input aria-label="Piloto"
               type="text"
               [(ngModel)]="draft.driverName"
               placeholder="Piloto"
               class="themed-input rounded-lg px-3 py-2"
             />
-            <input
+            <input aria-label="Navegador"
               type="text"
               [(ngModel)]="draft.coDriverName"
               placeholder="Navegador"
@@ -170,20 +170,20 @@
           <h3 class="text-sm font-bold text-slate-200">
             {{ editingCarId ? "Editar Carro" : "Adicionar Carro" }}
           </h3>
-          <input
+          <input aria-label="Nome do carro"
             type="text"
             [(ngModel)]="carDraft.name"
             placeholder="Ex: Skoda Fabia RS"
             class="themed-input w-full rounded-lg px-3 py-2"
           />
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <select
+            <select aria-label="Classe do carro"
               [(ngModel)]="selectedClassOption"
               class="themed-input rounded-lg px-3 py-2"
             >
               <option *ngFor="let option of classOptions" [value]="option">{{ option }}</option>
             </select>
-            <input
+            <input aria-label="Classe personalizada"
               *ngIf="selectedClassOption === 'Outro'"
               type="text"
               [(ngModel)]="customClass"
@@ -191,7 +191,7 @@
               class="themed-input rounded-lg px-3 py-2"
             />
           </div>
-          <input
+          <input aria-label="Notas do carro"
             type="text"
             [(ngModel)]="carDraft.notes"
             placeholder="Notas do carro"
@@ -231,18 +231,18 @@
         <h2 class="text-xl font-bold text-white mb-4">Sistema e Notas</h2>
         <div class="space-y-4">
           <div class="surface-card p-4 rounded-xl">
-            <label class="text-xs text-slate-500 font-semibold uppercase block mb-1">Sistema de Notas Base</label>
+            <label for="team-note-system" class="text-xs text-slate-500 font-semibold uppercase block mb-1">Sistema de Notas Base</label>
             <div *ngIf="!isEditing; else noteSystemEdit" class="text-sm font-bold text-slate-200">
               {{ team.noteSystem }}
             </div>
             <ng-template #noteSystemEdit>
-              <select
+              <select id="team-note-system"
                 [(ngModel)]="selectedNoteSystemOption"
                 class="themed-input w-full rounded-lg px-3 py-2"
               >
                 <option *ngFor="let option of noteSystemOptions" [value]="option">{{ option }}</option>
               </select>
-              <input
+              <input aria-label="Sistema de notas personalizado"
                 *ngIf="selectedNoteSystemOption === 'Outro'"
                 type="text"
                 [(ngModel)]="customNoteSystem"
@@ -253,12 +253,12 @@
           </div>
 
           <div class="surface-card p-4 rounded-xl">
-            <label class="text-xs text-slate-500 font-semibold uppercase block mb-1">Unidade de Medida</label>
+            <label for="team-distance-unit" class="text-xs text-slate-500 font-semibold uppercase block mb-1">Unidade de Medida</label>
             <div *ngIf="!isEditing; else distanceUnitEdit" class="text-sm font-bold text-slate-200">
               {{ team.distanceUnit }}
             </div>
             <ng-template #distanceUnitEdit>
-              <select
+              <select id="team-distance-unit"
                 [(ngModel)]="draft.distanceUnit"
                 class="themed-input w-full rounded-lg px-3 py-2"
               >

@@ -234,11 +234,11 @@
         >
           <div class="grid grid-cols-1 md:grid-cols-5 gap-3 md:items-end">
             <div>
-              <label
+              <label [id]="'offline-rally-label-' + session.id" [attr.for]="'offline-rally-' + session.id"
                 class="block text-[10px] uppercase font-black text-slate-500 mb-1"
                 >Rali</label
               >
-              <select
+              <select [id]="'offline-rally-' + session.id" [attr.aria-labelledby]="'offline-rally-label-' + session.id"
                 class="themed-input w-full rounded-xl px-3 py-2 text-sm"
                 [(ngModel)]="draft.rallyId"
                 (ngModelChange)="onCreatePecRallyChange(session)"
@@ -252,11 +252,11 @@
             </div>
 
             <div>
-              <label
+              <label [id]="'offline-pec-number-label-' + session.id" [attr.for]="'offline-pec-number-' + session.id"
                 class="block text-[10px] uppercase font-black text-slate-500 mb-1"
                 >Numero</label
               >
-              <input
+              <input [id]="'offline-pec-number-' + session.id" [attr.aria-labelledby]="'offline-pec-number-label-' + session.id"
                 type="number"
                 class="themed-input w-full rounded-xl px-3 py-2 text-sm"
                 [(ngModel)]="draft.number"
@@ -265,11 +265,11 @@
             </div>
 
             <div class="md:col-span-2">
-              <label
+              <label [id]="'offline-pec-name-label-' + session.id" [attr.for]="'offline-pec-name-' + session.id"
                 class="block text-[10px] uppercase font-black text-slate-500 mb-1"
                 >Nome da PEC</label
               >
-              <input
+              <input [id]="'offline-pec-name-' + session.id" [attr.aria-labelledby]="'offline-pec-name-label-' + session.id"
                 type="text"
                 class="themed-input w-full rounded-xl px-3 py-2 text-sm"
                 [(ngModel)]="draft.name"
@@ -279,11 +279,11 @@
             </div>
 
             <div>
-              <label
+              <label [id]="'offline-pec-distance-label-' + session.id" [attr.for]="'offline-pec-distance-' + session.id"
                 class="block text-[10px] uppercase font-black text-slate-500 mb-1"
                 >Distancia km</label
               >
-              <input
+              <input [id]="'offline-pec-distance-' + session.id" [attr.aria-labelledby]="'offline-pec-distance-label-' + session.id"
                 type="number"
                 step="0.1"
                 class="themed-input w-full rounded-xl px-3 py-2 text-sm"

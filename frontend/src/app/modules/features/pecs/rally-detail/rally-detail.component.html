@@ -124,7 +124,7 @@
     >
       <h2 class="text-lg font-bold text-white">Troços do Rali (PECs)</h2>
 
-      <input
+      <input aria-label="Pesquisar PECs"
         type="text"
         [(ngModel)]="searchTerm"
         placeholder="Pesquisar PEC 1, Lameirinha..."
@@ -252,20 +252,20 @@
 
           <div class="space-y-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1"
+              <label for="new-pec-number" class="block text-xs font-semibold text-slate-400 mb-1"
                 >Numero</label
               >
-              <input
+              <input id="new-pec-number"
                 type="number"
                 [(ngModel)]="newPec.number"
                 class="themed-input w-full rounded-xl px-3 py-2 text-white"
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1"
+              <label for="new-pec-name" class="block text-xs font-semibold text-slate-400 mb-1"
                 >Nome da PEC</label
               >
-              <input
+              <input id="new-pec-name"
                 type="text"
                 [(ngModel)]="newPec.name"
                 placeholder="Ex: Lameirinha 1"
@@ -273,10 +273,10 @@
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-400 mb-1"
+              <label for="new-pec-distance" class="block text-xs font-semibold text-slate-400 mb-1"
                 >Distancia (Km)</label
               >
-              <input
+              <input id="new-pec-distance"
                 type="number"
                 step="0.1"
                 [(ngModel)]="newPec.distanceKm"

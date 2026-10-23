@@ -300,7 +300,7 @@
           </button>
         </div>
 
-        <input
+        <input aria-label="Texto da nova nota"
           type="text"
           [(ngModel)]="newNoteText"
           (keyup.enter)="saveNewNote()"
@@ -308,7 +308,7 @@
           autofocus
           class="themed-input w-full text-xs rounded-lg px-3 py-2"
         />
-        <input
+        <input aria-label="Observações da nova nota"
           type="text"
           [(ngModel)]="newNoteObservation"
           (keyup.enter)="saveNewNote()"
@@ -377,19 +377,19 @@
                 <div class="text-[10px] font-black text-slate-500 uppercase">
                   Editar Nota
                 </div>
-                <input
+                <input aria-label="Texto da nota"
                   type="text"
                   [(ngModel)]="editingNoteText"
                   class="themed-input w-full text-white text-xs rounded px-2 py-1"
                 />
-                <input
+                <input aria-label="Observações da nota"
                   type="text"
                   [(ngModel)]="editingNoteObservation"
                   class="themed-input w-full text-slate-300 text-[11px] rounded px-2 py-1"
                   placeholder="Observações / mudança..."
                 />
                 <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
-                  <input
+                  <input aria-label="Tempo da nota no vídeo (segundos)"
                     type="number"
                     min="0"
                     step="0.1"
