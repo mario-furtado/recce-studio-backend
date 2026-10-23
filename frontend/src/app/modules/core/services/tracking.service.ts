@@ -38,6 +38,7 @@ export class TrackingService {
   private isRecording = false;
   private startTime = 0;
   private watchId: number | null = null;
+  private cancelGps: (() => void) | null = null;
 
   public currentCoords$ = new BehaviorSubject<{
     lat: number;
@@ -67,8 +68,9 @@ export class TrackingService {
     initialElapsedSeconds = 0,
     initialGpsTrack: GpsTrackPoint[] = [],
   ): Promise<boolean> {
+    this.stopRecce();
     return new Promise((resolve) => {
-      if (!('geolocation' in navigator)) {
+      if (!navigator.geolocation) {
         this.gpsStatus$.next({
           state: 'error',
           label: 'GPS indisponivel',
@@ -83,6 +85,7 @@ export class TrackingService {
       }
 
       let resolvedStart = false;
+      let active = true;
       this.initializeRecording(initialMarkers, initialElapsedSeconds, initialGpsTrack);
       this.gpsStatus$.next({
         state: 'searching',
@@ -92,14 +95,24 @@ export class TrackingService {
       });
 
       const resolveStart = () => {
-        if (resolvedStart) return;
+        if (!active || resolvedStart) return;
         resolvedStart = true;
+        window.clearTimeout(startFallback);
         resolve(true);
       };
 
       const startFallback = window.setTimeout(resolveStart, 6000);
+      this.cancelGps = () => {
+        active = false;
+        window.clearTimeout(startFallback);
+        if (!resolvedStart) {
+          resolvedStart = true;
+          resolve(false);
+        }
+      };
 
       const handlePosition = (position: GeolocationPosition) => {
+          if (!active) return;
           window.clearTimeout(startFallback);
           this.currentLat = position.coords.latitude;
           this.currentLng = position.coords.longitude;
@@ -122,9 +135,12 @@ export class TrackingService {
       };
 
       const handleError = (error: GeolocationPositionError) => {
+          if (!active) return;
           console.error('Erro ao aceder ao GPS:', error);
           window.clearTimeout(startFallback);
           if (error.code === error.PERMISSION_DENIED) {
+            this.stopRecce();
+            this.clearPosition();
             this.gpsStatus$.next({
               state: 'error',
               label: 'GPS bloqueado',
@@ -135,7 +151,6 @@ export class TrackingService {
               'Permissão de GPS necessaria',
               'Autorize o GPS para gravar o traçado do reconhecimento.',
             );
-            resolve(false);
             return;
           }
 
@@ -143,25 +158,35 @@ export class TrackingService {
           resolveStart();
       };
 
-      navigator.geolocation.getCurrentPosition(
-        handlePosition,
-        handleError,
-        {
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 15000,
-        },
-      );
+      try {
+        navigator.geolocation.getCurrentPosition(
+          handlePosition,
+          handleError,
+          {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 15000,
+          },
+        );
 
-      this.watchId = navigator.geolocation.watchPosition(
-        handlePosition,
-        handleError,
-        {
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 30000,
-        },
-      );
+        if (!active) return;
+        const watchId = navigator.geolocation.watchPosition(
+          handlePosition,
+          handleError,
+          {
+            enableHighAccuracy: true,
+            maximumAge: 1000,
+            timeout: 30000,
+          },
+        );
+        if (active) this.watchId = watchId;
+        else navigator.geolocation.clearWatch(watchId);
+      } catch {
+        this.stopRecce();
+        this.clearPosition();
+        this.gpsStatus$.next({ state: 'error', label: 'GPS indisponivel', points: this.gpsTrack.length, accuracy: null });
+        this.shared.error('GPS indisponível', 'Não foi possível iniciar a geolocalização. Verifica as permissões e tenta novamente.');
+      }
     });
   }
 
@@ -210,8 +235,10 @@ export class TrackingService {
 
   stopRecce(): ClickMarker[] {
     this.isRecording = false;
+    this.cancelGps?.();
+    this.cancelGps = null;
     if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
+      navigator.geolocation?.clearWatch(this.watchId);
       this.watchId = null;
     }
     this.gpsStatus$.next({
@@ -260,6 +287,10 @@ export class TrackingService {
     this.startTime = Date.now() - Math.max(0, initialElapsedSeconds) * 1000;
     this.markers = initialMarkers.map((marker) => ({ ...marker }));
     this.gpsTrack = initialGpsTrack.map((point) => ({ ...point }));
+    this.clearPosition();
+  }
+
+  private clearPosition(): void {
     this.currentLat = null;
     this.currentLng = null;
     this.currentAlt = null;
