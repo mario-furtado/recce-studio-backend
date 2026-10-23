@@ -1,6 +1,6 @@
 # Quality Gates
 
-The repository contains Spring Boot 2.7/Java 8 at the root and Angular 20.3/TypeScript 5.8 under `frontend/`. Frontend development and CI use Node.js 22 (`frontend/.nvmrc`; compatible alternatives are in `frontend/package.json` engines). The gates use Maven, Karma/Jasmine, Chrome Headless, npm and the existing service-worker configuration without adding dependencies.
+The repository contains Spring Boot 2.7/Java 8 at the root and Angular 20.3/TypeScript 5.8 under `frontend/`. Frontend development and CI use Node.js 22 (`frontend/.nvmrc`; compatible alternatives are in `frontend/package.json` engines). The gates use Maven, Karma/Jasmine, Playwright, Chrome Headless, npm and the existing service-worker configuration.
 
 ## Execution profiles
 
@@ -48,12 +48,12 @@ The frontend retains `quality:fast`, `quality:standard` and `quality:deep` for f
 ## Check contracts
 
 - `factory:config` validates the root policy, canonical docs, workflow, package JSON, baseline payload and all five Skills.
-- `backend:test` compiles main/test Java and runs Surefire; `FACTORY_MAVEN_TESTS` narrows it to affected tests when available.
+- `backend:test` compiles main/test Java and runs Surefire; `FACTORY_MAVEN_TESTS` narrows it to affected tests when available. Zero discovered/selected tests fail the check (`failIfNoTests` and `failIfNoSpecifiedTests`).
 - `frontend:lint` rejects merge markers, TypeScript suppressions, focused/skipped Jasmine tests, invalid JSON and missing frontend configuration.
 - `frontend:typecheck` compiles application and specs with `--noEmit`.
 - `frontend:test:targeted` derives sibling specs from `frontend/` changes. `QUALITY_TARGET_SPECS` can explicitly select specs relative to `frontend/`; otherwise the parser suite is a mandatory sentinel.
 - `npm run test:integration` executes the existing Angular component/TestBed specs.
-- `npm run test:e2e` runs an existing `e2e:ci` script, Angular `e2e` target, Playwright configuration, or Cypress configuration. There is currently no E2E runner or configuration, so the command reports an explicit conditional skip. If configuration appears without its runner, the gate fails.
+- `npm run test:e2e` runs the E2E-wrapper regression checks and the mandatory Playwright harness (`e2e:ci`). It starts an isolated H2 backend and the compiled Angular frontend, uses real HTTP requests and fails for a missing runner/configuration, zero tests or a failed scenario. See [E2E setup and scope](e2e.md). No conditional skip is allowed.
 - `npm run build` is the production Angular build. Existing warning and error budgets remain authoritative.
 - `npm run audit:security` uses the lockfile-backed npm advisory audit and explicitly verifies its JSON severity totals, because older npm clients do not consistently return a failing exit code. High or critical vulnerabilities block the gate. Registry, malformed-report, or audit-service failures also fail because a clean result cannot be established.
 - `npm run audit:accessibility` statically checks templates for image alternatives, accessible names, form labels, positive tab order, duplicate static IDs, and document language. It complements, but does not claim to replace, browser/assistive-technology testing.
@@ -63,11 +63,11 @@ The frontend retains `quality:fast`, `quality:standard` and `quality:deep` for f
 
 `.github/workflows/quality-gates.yml` runs blocking `RELEASE_GATE: STANDARD` for every pull request. Adding the `quality-deep` label selects blocking `DEEP`. Manual dispatch supports all profiles.
 
-E2E is conditional only while the repository has no configured runner. `DEEP` is conditional by cost, not advisory: when selected, any regression, security, accessibility, resilience, build, or test failure fails the workflow.
+CI installs Playwright Chromium and its system dependencies, then STANDARD/DEEP execute both Java tests and E2E. Logs, reports and failure traces under `.factory-results/` are uploaded even on failure. `DEEP` is conditional by cost, not advisory: when selected, any regression, security, accessibility, resilience, build, or test failure fails the workflow.
 
 ## Limitations
 
 - Automatic local selection is most precise with `FACTORY_TICKET_ID`; an unrelated dirty working tree can make path fallback conservatively choose `STANDARD` or include both application areas.
 - Baseline comparison is signature-based and intentionally conservative. It classifies known output but cannot prove the absence of an additional symptom inside the same failing check.
-- No browser E2E runner is configured.
-- There are currently no Java tests in `src/test`, so backend Surefire can only confirm compilation and execute zero tests until regressions are added.
+- The selected E2E journeys use Chromium, real HTTP/JPA/H2 and local storage. Service-worker caching, hardware recording, S3/Postgres, concurrency and cross-browser journeys are outside this harness.
+- Java regressions cover auth/token lifecycle, tenant/media isolation, GPX, offline replay and note persistence/Excel workflows. They are meaningful tests, not exhaustive coverage of every backend branch.

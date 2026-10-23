@@ -58,4 +58,5 @@ if (hasCypressConfig) {
   run('npx', ['--no-install', 'cypress', 'run']);
 }
 
-console.log('[quality:e2e] SKIP (conditional): no e2e:ci script, Angular e2e target, Playwright config, or Cypress config is present.');
+console.error('[quality:e2e] FAIL: an E2E runner and configuration are required.');
+process.exit(1);

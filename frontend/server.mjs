@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = join(__dirname, 'dist', 'recce-studio', 'browser');
 const port = Number(process.env.PORT || 4200);
+const host = process.env.FRONTEND_HOST || '0.0.0.0';
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -59,6 +60,6 @@ createServer(async (request, response) => {
     response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
     response.end('Recce Studio frontend is not available.');
   }
-}).listen(port, '0.0.0.0', () => {
+}).listen(port, host, () => {
   console.log(`Recce Studio frontend listening on ${port}`);
 });
