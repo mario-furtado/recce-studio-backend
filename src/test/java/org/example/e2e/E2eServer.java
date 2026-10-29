@@ -7,6 +7,11 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.context.TypeExcludeFilter;
+import org.springframework.core.type.classreading.MetadataReader;
+import org.springframework.core.type.classreading.MetadataReaderFactory;
+import org.springframework.context.ApplicationContext;
+import org.example.repository.AuthUserRepository;
 
 /** Test-classpath only: never included in the production jar or component scan. */
 public final class E2eServer {
@@ -17,7 +22,17 @@ public final class E2eServer {
         }
         String uploads = System.getProperty("recce.e2e.uploads");
         if (uploads == null) throw new IllegalArgumentException("An isolated upload directory is required.");
-        new SpringApplication(Main.class, Seed.class).run(
+        SpringApplication application = new SpringApplication(Main.class, Seed.class);
+        // Main's component scan also sees target/test-classes in this harness. Exclude
+        // auxiliary test configurations so every request uses the actual JPA services.
+        application.addInitializers(context -> context.getBeanFactory().registerSingleton("e2eTestConfigurationFilter",
+                new TypeExcludeFilter() {
+                    @Override
+                    public boolean match(MetadataReader reader, MetadataReaderFactory factory) {
+                        return reader.getAnnotationMetadata().hasAnnotation(TestConfiguration.class.getName());
+                    }
+                }));
+        application.run(
                 "--server.address=127.0.0.1", "--server.port=18765",
                 "--spring.datasource.url=jdbc:h2:mem:recce-e2e;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
                 "--spring.datasource.username=sa", "--spring.datasource.password=",
@@ -30,8 +45,12 @@ public final class E2eServer {
     @TestConfiguration
     static class Seed {
         @Bean
-        InitializingBean e2eAccounts(AuthService auth) {
+        InitializingBean e2eAccounts(AuthService auth, ApplicationContext context) {
             return () -> {
+                java.util.Map<String, AuthUserRepository> repositories = context.getBeansOfType(AuthUserRepository.class);
+                if (repositories.size() != 1 || repositories.values().stream().anyMatch(repo -> org.mockito.Mockito.mockingDetails(repo).isMock())) {
+                    throw new IllegalStateException("E2E requires exactly one real AuthUserRepository; test mocks must not be scanned.");
+                }
                 for (String account : new String[]{"owner", "other"}) {
                     AuthRequestDTO request = new AuthRequestDTO();
                     request.setEmail(account + "@e2e.invalid");

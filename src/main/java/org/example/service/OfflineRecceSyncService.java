@@ -119,6 +119,16 @@ public class OfflineRecceSyncService {
         if (!hasText(request.getSessionId())) {
             throw new IllegalArgumentException("A sessao offline precisa de identificador.");
         }
+        if (request.getGpsTrack() != null) {
+            for (org.example.dto.GpsPointDTO point : request.getGpsTrack()) {
+                if (point == null || point.getLat() == null || point.getLng() == null
+                        || !Double.isFinite(point.getLat()) || !Double.isFinite(point.getLng())
+                        || Math.abs(point.getLat()) > 90 || Math.abs(point.getLng()) > 180
+                        || (point.getTimestamp() != null && (!Double.isFinite(point.getTimestamp()) || point.getTimestamp() < 0))) {
+                    throw new IllegalArgumentException("Amostra GPS invalida.");
+                }
+            }
+        }
     }
 
     private String toJson(Object value) {

@@ -384,6 +384,8 @@ public class NoteExcelParserService {
 
     public NoteEntity saveNote(String pecId, NoteEntity note) {
         ensurePecCanBeEdited(pecId);
+        validateCoordinates(note.getLatitude(), note.getLongitude());
+        note.setPresentationJson(NotePresentationValidator.validate(note.getPresentationJson(), note.getText()));
         note.setId(null);
         note.setPecId(pecId);
         return noteRepository.save(note);
@@ -396,6 +398,8 @@ public class NoteExcelParserService {
         if (!pecId.equals(existing.getPecId())) {
             throw new RuntimeException("Nota nao pertence a esta PEC");
         }
+        String presentation = NotePresentationValidator.validate(note.getPresentationJson(), note.getText());
+        existing.setPresentationJson(presentation);
         existing.setText(note.getText());
         existing.setSpeedRating(note.getSpeedRating());
         existing.setOriginalTimestamp(note.getOriginalTimestamp());
@@ -411,6 +415,12 @@ public class NoteExcelParserService {
             throw new RuntimeException("Nota nao pertence a esta PEC");
         }
 
+        String presentation = target.getPresentationJson();
+        if (alignment != null) {
+            if (alignment.hasPresentationJson()) presentation = NotePresentationValidator.validate(alignment.getPresentationJson(), alignment.getText());
+            else if (!java.util.Objects.equals(target.getText(), alignment.getText())) presentation = null;
+        }
+
         double oldTimestamp = timestampOrZero(target.getOriginalTimestamp());
         Double targetTimestamp = alignment != null ? alignment.getTargetTimestamp() : null;
         Double normalizedTimestamp = targetTimestamp != null
@@ -424,6 +434,7 @@ public class NoteExcelParserService {
         for (NoteEntity note : notes) {
             if (note.getId().equals(noteId)) {
                 if (alignment != null) {
+                    note.setPresentationJson(presentation);
                     note.setText(alignment.getText());
                     note.setSpeedRating(alignment.getSpeedRating());
                 }
@@ -478,6 +489,9 @@ public class NoteExcelParserService {
         List<NoteEntity> notesToSave = new ArrayList<>();
         for (int index = 0; index < markers.size(); index++) {
             ClickMarkerDto marker = markers.get(index);
+            Double latitude = marker.getLatitude();
+            Double longitude = marker.getLongitude();
+            validateCoordinates(latitude, longitude);
             String noteText = hasText(marker.getText())
                     ? marker.getText().trim()
                     : "Nota Marcada " + (index + 1);
@@ -488,6 +502,8 @@ public class NoteExcelParserService {
             notesToSave.add(NoteEntity.builder()
                     .pecId(pecId)
                     .originalTimestamp(marker.getTimestamp())
+                    .latitude(latitude)
+                    .longitude(longitude)
                     .text(noteText)
                     .speedRating(observation)
                     .build());
@@ -495,6 +511,14 @@ public class NoteExcelParserService {
 
         noteRepository.deleteByPecId(pecId);
         return noteRepository.saveAll(notesToSave);
+    }
+
+    private void validateCoordinates(Double latitude, Double longitude) {
+        if ((latitude == null) != (longitude == null)
+                || (latitude != null && (!Double.isFinite(latitude) || Math.abs(latitude) > 90
+                || !Double.isFinite(longitude) || Math.abs(longitude) > 180))) {
+            throw new IllegalArgumentException("Coordenadas da nota invalidas.");
+        }
     }
 
     private String cellText(Cell cell, DataFormatter formatter) {

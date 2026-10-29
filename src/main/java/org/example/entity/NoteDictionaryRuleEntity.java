@@ -27,6 +27,9 @@ public class NoteDictionaryRuleEntity {
     @Column(length = 120)
     private String category;
 
+    @Column(length = 200)
+    private String meaning;
+
     @Column(nullable = false)
     private boolean enabled = true;
 
@@ -53,6 +56,9 @@ public class NoteDictionaryRuleEntity {
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+
+    public String getMeaning() { return meaning; }
+    public void setMeaning(String meaning) { this.meaning = meaning; }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }

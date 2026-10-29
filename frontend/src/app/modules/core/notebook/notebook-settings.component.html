@@ -1,0 +1,74 @@
+<section class="glass-panel p-4 rounded-2xl" aria-labelledby="notebook-settings-title">
+  <div class="settings-heading">
+    <h2 id="notebook-settings-title" class="text-xl font-bold">{{ area === 'presentation' ? 'Apresentação' : 'Caderno e exportação' }}</h2>
+    <span class="scope-label">Pessoal</span>
+    <details class="context-help">
+      <summary>{{ area === 'presentation' ? 'Ajuda da apresentação' : 'Ajuda do caderno' }}</summary>
+      <div *ngIf="area === 'presentation'; else notebookHelp">
+        <p>Os símbolos e significados vêm do Dicionário. Aqui ajustas o papel, a associação e o estilo.</p>
+        <p>Várias frases com o mesmo símbolo partilham a apresentação. A correspondência é literal e distingue maiúsculas; a mais longa tem prioridade.</p>
+      </div>
+      <ng-template #notebookHelp><p>Escolhe página, margens e linhas. A pré-visualização mostra o resultado; se algo não couber, ajusta as opções antes de exportar.</p></ng-template>
+      <p>O modelo é pessoal e não altera o texto das notas ou as regras do Dicionário.</p>
+    </details>
+  </div>
+  <p *ngIf="!dictionaryReady" role="status">Carrega o Dicionário com sucesso antes de configurar ou guardar o modelo.</p>
+  <p *ngIf="error" role="alert" class="error">{{ error }}</p>
+  <p *ngIf="message" role="status">{{ message }}</p>
+  <button *ngIf="!loaded" type="button" class="soft-button px-3 py-2 rounded" (click)="load()" [disabled]="saving">Carregar modelo pessoal</button>
+  <fieldset [disabled]="!loaded || !dictionaryReady || saving" (change)="refresh()" (input)="refresh()">
+    <legend class="sr-only">Modelo pessoal</legend>
+    <div data-tour="notebook-page" class="fields" [hidden]="area !== 'notebook'">
+      <label>Formato<select aria-label="Formato" [(ngModel)]="settings.page.format"><option>A4</option><option>A5</option></select></label>
+      <label>Orientação<select aria-label="Orientação" [(ngModel)]="settings.page.orientation"><option value="portrait">Vertical</option><option value="landscape">Horizontal</option></select></label>
+      <label>Margens (mm)<input type="number" min="5" max="30" step="1" [(ngModel)]="settings.page.marginMm"></label>
+      <label>Linhas por página<input type="number" min="1" max="24" step="1" [(ngModel)]="settings.page.rowsPerPage"></label>
+      <label>Letra (pt)<input type="number" min="12" max="48" step="1" [(ngModel)]="settings.page.fontPt"></label>
+      <label>Alinhamento das notas<select aria-label="Alinhamento das notas" [(ngModel)]="settings.page.alignment"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
+      <label class="check"><input type="checkbox" [(ngModel)]="settings.page.separators">Separadores horizontais</label>
+    </div>
+    <div [hidden]="area !== 'presentation'">
+    <div class="symbol-toolbar">
+    <label>Símbolo do Dicionário<select aria-label="Símbolo do Dicionário" [ngModel]="selectedSymbol" (ngModelChange)="selectSymbol($event)">
+      <option value="" disabled>Seleciona um símbolo para configurar</option>
+      <option *ngFor="let definition of dictionarySymbols" [value]="definition.symbol">{{ definition.symbol }} — {{ definition.meaning || definition.phrase }}</option>
+    </select></label>
+    <button type="button" class="soft-button px-3 py-2 rounded" (click)="configureDictionary.emit()">Ir ao Dicionário</button>
+    </div>
+    <p *ngIf="dictionaryReady && !dictionarySymbols.length">Ainda não existem símbolos configuráveis. Define um símbolo no Dicionário com até 40 caracteres e sem quebras de linha.</p>
+    <p *ngIf="dictionaryReady && dictionarySymbols.length && !selectedSymbol" class="selection-hint">Seleciona um símbolo para ajustar o estilo.</p>
+    <div class="dictionary">
+      <details class="rule" *ngFor="let rule of visiblePresentationRules; trackBy: trackRule" [open]="!!selectedSymbol && selectedSymbol === rule.match">
+        <summary>{{ rule.match || 'Novo elemento' }} → {{ rule.display }} · {{ rule.meaning || 'Significado por definir' }}</summary>
+        <div class="fields mt-3">
+          <label>Correspondência<input [value]="rule.match" readonly></label>
+          <label>Símbolo apresentado<input [value]="rule.display" readonly></label>
+          <label>Significado<input [value]="rule.meaning" readonly></label>
+          <label>Papel<select aria-label="Papel" [(ngModel)]="rule.role"><option value="main">Nota principal / novo bloco</option><option value="modifier">Modificador / aviso</option><option value="standalone">Elemento independente</option></select></label>
+          <label>Associar a<select aria-label="Associar a" [(ngModel)]="rule.attach"><option value="previous">Bloco principal anterior</option><option value="next">Bloco principal seguinte</option><option value="standalone">Independente</option></select></label>
+          <label>Posição<select aria-label="Posição" [(ngModel)]="rule.position"><option *ngFor="let position of positions; let at = index" [value]="position">{{ positionNames[at] }}</option></select></label>
+          <label>Tamanho relativo (%)<input type="number" min="50" max="150" step="1" [(ngModel)]="rule.size"></label>
+          <label class="check"><input type="checkbox" [(ngModel)]="rule.bold">Negrito</label>
+          <label class="check"><input type="checkbox" [(ngModel)]="rule.underline">Sublinhado</label>
+          <label class="check"><input type="checkbox" [(ngModel)]="rule.highlight">Destaque com moldura</label>
+        </div>
+      </details>
+    </div>
+    </div>
+    <div class="settings-actions">
+    <button type="button" class="accent-button px-3 py-2 rounded" (click)="save()">{{ saving ? 'A guardar…' : 'Guardar modelo pessoal' }}</button>
+    <details *ngIf="loaded" class="secondary-options">
+      <summary>Mais opções</summary>
+      <button type="button" class="soft-button px-3 py-2 rounded" (click)="load()" [disabled]="saving">Carregar modelo pessoal</button>
+      <button type="button" class="soft-button px-3 py-2 rounded" (click)="reset()">Repor modelo inicial</button>
+    <details *ngIf="area === 'presentation' && dictionaryReady && unlinkedRules.length" class="rule">
+      <summary>Apresentações anteriores sem ligação ao Dicionário ({{ unlinkedRules.length }})</summary>
+      <p>Continuam guardadas para preservar as notas existentes. Para configurar uma delas, define o respetivo símbolo no Dicionário.</p>
+      <p *ngFor="let rule of unlinkedRules">{{ rule.match }} → {{ rule.display }}</p>
+    </details>
+    </details>
+    </div>
+  </fieldset>
+  <label>Texto para pré-visualização<textarea rows="3" [(ngModel)]="sample"></textarea></label>
+  <app-notebook *ngIf="loaded && active" [settings]="settings" [notes]="[{text: sample}]" />
+</section>

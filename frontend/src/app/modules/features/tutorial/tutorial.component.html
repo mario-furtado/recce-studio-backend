@@ -2,15 +2,29 @@
   <section class="glass-panel rounded-2xl p-6 md:p-8">
     <h1 class="text-2xl md:text-3xl font-black text-white">Tutorial</h1>
     <p class="text-sm text-slate-400 mt-2">
-      Fluxo rapido para usar o Recce Studio no carro, no reconhecimento e no Studio.
+      Escolhe um percurso. Aprende com exemplos temporários, ao teu ritmo.
     </p>
   </section>
 
-  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <article *ngFor="let step of steps" class="interactive-card glass-panel rounded-2xl p-5">
-      <h2 class="text-lg font-black text-white">{{ step.title }}</h2>
-      <p class="text-sm text-slate-400 mt-2">{{ step.text }}</p>
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Tutoriais dos percursos">
+    <article *ngFor="let workflow of workflows" class="glass-panel rounded-2xl p-5 space-y-3">
+      <h2 class="text-lg font-black">{{ workflow.name }}</h2>
+      <p class="text-sm text-slate-400">{{ workflow.steps }} passos · Demonstração sem alterar os teus dados</p>
+      <a [routerLink]="['/tutorial/learn', workflow.key]" class="accent-button inline-block px-4 py-3 rounded" [attr.aria-label]="'Iniciar tutorial: ' + workflow.name">Iniciar tutorial</a>
     </article>
+  </section>
+
+  <section class="glass-panel rounded-2xl p-5 space-y-3" aria-labelledby="notes-learning-title">
+    <h2 id="notes-learning-title" class="text-lg font-black">Aprender o sistema de notas</h2>
+    <p>Uma demonstração passo a passo com exemplos temporários. Nada é guardado na tua conta ou na equipa.</p>
+    <div *ngIf="shared.connectionMode$.value === 'online'; else offlineNotesHelp" class="flex flex-wrap gap-3">
+      <a routerLink="/tutorial/notes" class="accent-button px-4 py-3 rounded">Aprender a configurar notas</a>
+      <a routerLink="/notes/learn" [queryParams]="{part: 'dictionary'}" class="soft-button px-4 py-3 rounded">Rever dicionário</a>
+      <a routerLink="/notes/learn" [queryParams]="{part: 'presentation'}" class="soft-button px-4 py-3 rounded">Rever apresentação</a>
+      <a routerLink="/notes/learn" [queryParams]="{part: 'notebook'}" class="soft-button px-4 py-3 rounded">Rever caderno</a>
+      <a routerLink="/notes/learn" [queryParams]="{part: 'studio'}" class="soft-button px-4 py-3 rounded">Rever Studio e PDF</a>
+    </div>
+    <ng-template #offlineNotesHelp><p>A configuração de notas requer uma sessão online. O tutorial geral continua disponível em modo offline.</p></ng-template>
   </section>
 
   <section class="glass-panel rounded-2xl p-5">

@@ -1,11 +1,15 @@
 package org.example.dto;
 
 public class GpsPointDTO {
-    private double lat;
-    private double lng;
+    private Double lat;
+    private Double lng;
     private Double speedKmh;
     private Double timestamp;
     private Double accuracy;
+    private Integer segment;
+
+    public Integer getSegment() { return segment; }
+    public void setSegment(Integer segment) { this.segment = segment; }
 
     public GpsPointDTO() {}
 
@@ -16,11 +20,11 @@ public class GpsPointDTO {
         this.timestamp = timestamp;
     }
 
-    public double getLat() { return lat; }
-    public void setLat(double lat) { this.lat = lat; }
+    public Double getLat() { return lat; }
+    public void setLat(Double lat) { this.lat = lat; }
 
-    public double getLng() { return lng; }
-    public void setLng(double lng) { this.lng = lng; }
+    public Double getLng() { return lng; }
+    public void setLng(Double lng) { this.lng = lng; }
 
     public Double getSpeedKmh() { return speedKmh; }
     public void setSpeedKmh(Double speedKmh) { this.speedKmh = speedKmh; }

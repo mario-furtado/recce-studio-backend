@@ -83,7 +83,8 @@ class PecAssetServiceXmlSecurityAuditTest {
     @Test
     void auditSec003PreservesValidGpxCoordinatesAndOrder() throws Exception {
         List<?> points = parse(("<?xml version='1.0'?><gpx xmlns='http://www.topografix.com/GPX/1/1'>"
-                + "<trk><trkseg><trkpt lat='38.72' lon='-9.14'/><trkpt lat='39.1' lon='-8.2'/>"
+                + "<trk><trkseg><trkpt lat='38.72' lon='-9.14'><time>2026-10-23T10:00:00Z</time></trkpt>"
+                + "<trkpt lat='39.1' lon='-8.2'><time>2026-10-23T10:00:01Z</time></trkpt>"
                 + "</trkseg></trk></gpx>").getBytes(StandardCharsets.UTF_8));
         assertEquals(2, points.size());
         GpsPointDTO first = (GpsPointDTO) points.get(0);

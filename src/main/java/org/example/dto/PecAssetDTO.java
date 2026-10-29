@@ -10,6 +10,10 @@ public class PecAssetDTO {
     private boolean hasGps;
     private String gpsFileName;
     private String gpsUrl;
+    private double recceVideoOffsetSeconds;
+
+    public double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds; }
+    public void setRecceVideoOffsetSeconds(double value) { recceVideoOffsetSeconds = value; }
 
     public boolean isHasVideo() { return hasVideo; }
     public void setHasVideo(boolean hasVideo) { this.hasVideo = hasVideo; }

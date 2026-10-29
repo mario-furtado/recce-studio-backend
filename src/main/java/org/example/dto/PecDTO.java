@@ -11,6 +11,10 @@ public class PecDTO {
     private String status;
     private String updatedAt;
     private String rallyId;
+    private double recceVideoOffsetSeconds;
+
+    public double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds; }
+    public void setRecceVideoOffsetSeconds(double value) { recceVideoOffsetSeconds = value; }
 
     public PecDTO() {}
 

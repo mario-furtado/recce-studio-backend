@@ -8,6 +8,7 @@ export interface CustomNoteDictionaryRule {
   phrase: string;
   symbol: string;
   category?: string;
+  meaning?: string;
   enabled: boolean;
   localOnly?: boolean;
   base?: boolean;
@@ -146,6 +147,7 @@ export class NoteDictionaryService {
       phrase: (rule.phrase || '').trim(),
       symbol: (rule.symbol || '').trim(),
       category: (rule.category || '').trim(),
+      meaning: (rule.meaning || '').trim(),
       enabled: rule.enabled !== false,
       localOnly: rule.localOnly,
     };

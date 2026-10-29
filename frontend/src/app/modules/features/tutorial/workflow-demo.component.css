@@ -1,0 +1,16 @@
+.workflow-demo { padding-bottom: 65vh; }
+.workflow-demo .example-label { padding: 12px; border: 1px solid #38bdf8; border-radius: 8px; margin-bottom: 16px; }
+.workflow-demo .demo-panel { padding: 20px; border-radius: 16px; }
+.workflow-demo .demo-panel h1 { font-size: 1.6rem; font-weight: 900; margin-bottom: 16px; }
+.workflow-demo .demo-box { padding: 16px; border: 1px solid #697586; border-radius: 12px; margin: 12px 0; }
+.workflow-demo .demo-status { display: flex; gap: 16px; flex-wrap: wrap; }
+.workflow-demo .demo-marker { width: 100%; min-height: 180px; padding: 24px; border-radius: 16px; font-size: 1.5rem; font-weight: 900; }
+.workflow-demo .demo-control { padding: 12px; border-radius: 8px; margin: 8px; }
+.workflow-demo .demo-media { min-height: 130px; display: grid; place-items: center; background: #080c12; color: #e2e8f0; }
+.workflow-demo input[type=range] { width: 100%; }
+.workflow-demo svg { width: 100%; max-width: 540px; }
+.workflow-demo .demo-note { padding: 8px; display: flex; gap: 12px; align-items: center; border: 2px solid transparent; }
+.workflow-demo .demo-active-note { border-color: #fbbf24; border-radius: 8px; }
+/* Keep the real PEC form in the demo flow; never override its production modal. */
+.workflow-demo app-rally-detail div.fixed.inset-0 { position: static; padding: 0; background: transparent; backdrop-filter: none; display: block; }
+.workflow-demo app-rally-detail div.fixed.inset-0 > div { max-width: none; }

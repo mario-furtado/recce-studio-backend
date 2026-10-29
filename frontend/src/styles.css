@@ -1,6 +1,10 @@
+@import 'leaflet/dist/leaflet.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.recce-map-note { padding: 3px 7px; color: #111827; background: #fbbf24; border: 2px solid white; border-radius: 6px; white-space: nowrap; font-weight: 700; font-size: 12px; }
+.recce-map-note:focus-visible, .recce-map-note.is-active { outline: 3px solid #06b6d4; outline-offset: 2px; }
 
 :root {
   color-scheme: light;

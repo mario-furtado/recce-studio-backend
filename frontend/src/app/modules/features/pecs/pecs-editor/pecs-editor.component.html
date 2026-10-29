@@ -3,14 +3,21 @@
   <p>Escolhe uma PEC antes de abrir o Studio.</p>
   <a routerLink="/new-recce" class="accent-button inline-block px-4 py-2 rounded-xl">Escolher destino</a>
 </section>
-<div *ngIf="!targetMissing" class="h-[calc(100vh-4rem)] flex flex-col gap-4">
+<div *ngIf="!targetMissing" class="min-h-[calc(100vh-4rem)] flex flex-col gap-4">
+  <section class="glass-panel p-3 rounded-xl">
+    <button type="button" class="soft-button px-3 py-2 rounded" (click)="showNotebook = !showNotebook">{{ showNotebook ? 'Fechar caderno' : 'Caderno / PDF' }}</button>
+    <a routerLink="/notes" class="soft-button px-3 py-2 rounded">Configurar notas</a>
+    <p *ngIf="notebookError" role="alert">{{ notebookError }}</p>
+    <button *ngIf="notebookError" type="button" class="soft-button px-3 py-2 rounded" (click)="loadNotebook()">Recarregar modelo pessoal</button>
+    <app-notebook *ngIf="showNotebook && notebookLoaded" [settings]="notebookSettings" [notes]="notes" />
+  </section>
   <div
     class="studio-toolbar glass-panel flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl shadow-lg"
   >
     <div>
       <!-- <h1 class="text-lg font-extrabold text-white">{{ pecTitle }}</h1> -->
       <p class="text-xs text-slate-400">
-        Offset: {{ timeOffset >= 0 ? "+" : "" }}{{ timeOffset.toFixed(1) }}s
+        Offset: {{ timeOffset + captureOffset >= 0 ? "+" : "" }}{{ (timeOffset + captureOffset).toFixed(1) }}s
       </p>
       <p *ngIf="isLocked" class="text-xs text-amber-400 font-semibold mt-1">
         PEC concluida: volte a rascunho para editar.
@@ -145,16 +152,17 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
-    <div class="lg:col-span-8 flex flex-col gap-4 overflow-hidden">
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-start">
+    <div class="lg:col-span-8 flex flex-col gap-4 min-w-0">
       <div
-        class="rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex-1 flex items-center justify-center relative bg-black/80"
+        class="rounded-2xl overflow-hidden border border-slate-800 shadow-2xl aspect-video min-h-48 flex items-center justify-center relative bg-black/80"
       >
         <video
           *ngIf="videoSrc; else noVideo"
           #videoPlayer
           [src]="videoSrc"
           (timeupdate)="onTimeUpdate()"
+          (seeked)="onTimeUpdate()"
           controls
           class="w-full h-full object-contain"
         ></video>
@@ -177,88 +185,27 @@
           #audioPlayer
           [src]="audioSrc"
           (timeupdate)="onTimeUpdate()"
+          (seeked)="onTimeUpdate()"
           controls
           class="w-full"
         ></audio>
       </div>
 
-      <div
-        class="surface-card h-56 rounded-2xl p-4 flex flex-col justify-between relative overflow-hidden"
-      >
-        <div class="flex justify-between items-center z-10">
-          <span class="text-xs font-bold text-slate-400"
-            >Tracado GPS da PEC</span
-          >
-          <span class="themed-chip text-xs px-2 py-0.5 rounded">
-            {{ gpsTrack.length }} GPS · {{ gpsNotePoints.length }} notas
-          </span>
-        </div>
-
-        <svg
-          *ngIf="hasGpsSketch"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          class="absolute inset-x-4 top-12 bottom-8 w-[calc(100%-2rem)] h-[calc(100%-5rem)]"
-          aria-label="Desenho do tracado GPS"
-        >
-          <rect
-            x="0"
-            y="0"
-            width="100"
-            height="100"
-            rx="3"
-            fill="rgba(15, 23, 42, 0.6)"
-          ></rect>
-          <polyline
-            *ngIf="gpsTrack.length > 1"
-            [attr.points]="gpsPolylinePoints"
-            fill="none"
-            stroke="var(--accent)"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            vector-effect="non-scaling-stroke"
-          ></polyline>
-          <circle
-            *ngFor="let point of gpsNotePoints"
-            [attr.cx]="point.x"
-            [attr.cy]="point.y"
-            r="3.4"
-            fill="#f59e0b"
-            stroke="#111827"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          >
-            <title>
-              {{ point.label }} · {{ point.timestamp.toFixed(1) }}s ·
-              {{ point.text }}
-            </title>
-          </circle>
-          <text
-            *ngFor="let point of gpsNotePoints"
-            [attr.x]="point.x"
-            [attr.y]="point.y + 1.2"
-            text-anchor="middle"
-            font-size="3"
-            font-weight="800"
-            fill="#111827"
-            pointer-events="none"
-          >
-            {{ point.label }}
-          </text>
-        </svg>
-
-        <div class="text-xs text-slate-500 z-10">
-          Coordenadas:
-          <ng-container *ngIf="gpsReferencePoint as gps; else noGpsTrack">
-            {{ gps.lat | number: "1.4-4" }},
-            {{ gps.lng | number: "1.4-4" }}
-            <span *ngIf="isGpsFlatSketch" class="ml-2 text-amber-400">
-              GPS parado, notas distribuidas por ordem
-            </span>
-          </ng-container>
-          <ng-template #noGpsTrack>sem GPS carregado</ng-template>
-        </div>
+      <app-recce-map [track]="gpsTrack" [notes]="mapNotes"
+        [playbackTime]="currentTime - captureOffset" [activeNoteId]="activeNoteId"
+        (noteSelected)="selectMapNote($event)"></app-recce-map>
+      <p *ngIf="notes.length > mapNotes.length" class="text-xs text-amber-400">
+        {{ notes.length - mapNotes.length }} notas sem posição GPS identificável.
+      </p>
+      <div class="surface-card rounded-xl p-3 flex flex-wrap gap-3 items-end">
+        <label class="text-xs" for="capture-offset">Desfasamento vídeo/reconhecimento (s)
+          <input id="capture-offset" type="number" step="0.1" min="-86400" max="86400"
+            [(ngModel)]="captureOffsetDraft" [disabled]="isLocked || isSavingOffset"
+            class="themed-input block p-2 rounded-lg" />
+        </label>
+        <button type="button" class="soft-button px-3 py-2" (click)="saveCaptureOffset()"
+          [disabled]="isLocked || isSavingOffset">Guardar sincronização</button>
+        <span class="text-xs text-slate-400">Tempo no vídeo = tempo do reconhecimento + desfasamento.</span>
       </div>
     </div>
 
@@ -308,6 +255,7 @@
           autofocus
           class="themed-input w-full text-xs rounded-lg px-3 py-2"
         />
+        <app-note-display *ngIf="notebookLoaded" [text]="newNoteText" [rules]="notebookSettings.rules" />
         <input aria-label="Observações da nova nota"
           type="text"
           [(ngModel)]="newNoteObservation"
@@ -341,7 +289,7 @@
           [class.text-slate-300]="activeNoteId !== note.id"
           class="note-row p-3 rounded-xl border border-slate-800/80 transition-all duration-200 cursor-pointer flex items-center justify-between group"
         >
-          <div class="flex items-center gap-3 overflow-hidden flex-1">
+          <div class="flex items-center gap-3 overflow-hidden flex-1" [class.flex-wrap]="editingNoteId === note.id">
             <span
               [class.bg-white]="activeNoteId === note.id"
               [class.note-index-active]="activeNoteId === note.id"
@@ -360,7 +308,9 @@
               class="min-w-0 flex-1"
               (dblclick)="startEditNote(note, $event)"
             >
-              <div class="font-semibold text-xs truncate">{{ note.text }}</div>
+              <app-note-display *ngIf="notebookLoaded; else plainNote" [text]="note.text" [rules]="notebookSettings.rules" [presentationJson]="note.presentationJson" />
+              <span *ngIf="note.presentationJson" class="text-[10px] text-slate-400">Apresentação personalizada</span>
+              <ng-template #plainNote><div class="font-semibold text-xs">{{ note.text }}</div></ng-template>
               <div
                 *ngIf="note.speedRating"
                 class="note-observation text-[11px] truncate mt-0.5"
@@ -370,8 +320,8 @@
             </div>
 
             <ng-template #editNoteForm>
-              <div
-                class="note-edit-panel min-w-0 flex-1 space-y-2"
+              <fieldset [disabled]="isSavingNote"
+                class="note-edit-panel min-w-0 basis-full space-y-2"
                 (click)="$event.stopPropagation()"
               >
                 <div class="text-[10px] font-black text-slate-500 uppercase">
@@ -380,8 +330,12 @@
                 <input aria-label="Texto da nota"
                   type="text"
                   [(ngModel)]="editingNoteText"
+                  (ngModelChange)="editingPresentationJson = null"
                   class="themed-input w-full text-white text-xs rounded px-2 py-1"
                 />
+                <p class="text-[11px] text-slate-400">Alterar o texto repõe a apresentação desta nota.</p>
+                <app-note-display *ngIf="notebookLoaded" [text]="editingNoteText" [rules]="notebookSettings.rules" [presentationJson]="editingPresentationJson" />
+                <app-note-presentation-editor *ngIf="notebookLoaded" [text]="editingNoteText" [rules]="notebookSettings.rules" [(value)]="editingPresentationJson" />
                 <input aria-label="Observações da nota"
                   type="text"
                   [(ngModel)]="editingNoteObservation"
@@ -427,10 +381,10 @@
                     (click)="saveEditedNote(note, $event)"
                     class="accent-button px-2 py-0.5 rounded text-white text-[11px] font-bold"
                   >
-                    Guardar
+                    {{ isSavingNote ? 'A guardar…' : 'Guardar' }}
                   </button>
                 </div>
-              </div>
+              </fieldset>
             </ng-template>
           </div>
 
@@ -438,7 +392,7 @@
             *ngIf="!isLocked && editingNoteId !== note.id"
             (click)="startEditNote(note, $event)"
             title="Editar Nota"
-            class="icon-button soft-button opacity-0 group-hover:opacity-100 transition shrink-0"
+            class="icon-button soft-button transition shrink-0"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 20h4l11-11-4-4L4 16z" />
@@ -449,6 +403,7 @@
           <button
             *ngIf="!isLocked"
             (click)="deleteNote(note.id, $event)"
+            [disabled]="isSavingNote"
             title="Eliminar Nota"
             class="icon-button danger-button opacity-0 group-hover:opacity-100 transition shrink-0"
           >

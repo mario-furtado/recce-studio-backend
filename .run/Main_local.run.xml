@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Main local" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="recce-studio-backend" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="org.example.Main" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="PROGRAM_PARAMETERS" value="--server.port=8080 --server.address=127.0.0.1 --spring.profiles.active=local --recce.environment=local --recce.test-user.enabled=false --spring.datasource.url=jdbc:h2:file:./.factory-results/local-beta/data/beta;DB_CLOSE_ON_EXIT=FALSE --spring.datasource.username=sa --spring.datasource.password= --spring.jpa.hibernate.ddl-auto=update --spring.jpa.show-sql=false --spring.h2.console.enabled=false --recce.storage.type=local --recce.storage.s3.bucket= --recce.upload-dir=./.factory-results/local-beta/uploads" />
+    <method v="2">
+      <option name="Make" enabled="false" />
+      <option name="Maven.BeforeRunTask" enabled="true" file="$PROJECT_DIR$/pom.xml" goal="resources:resources compiler:compile" />
+    </method>
+  </configuration>
+</component>

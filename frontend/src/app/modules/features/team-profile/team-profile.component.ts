@@ -26,14 +26,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
   private carPhotoUrls = new Map<string, string>();
 
   readonly distanceUnitOptions = ['Quilometros (km)', 'Milhas (mi)'];
-  readonly noteSystemOptions = [
-    '1-6 (1 Lento, 6 Rapido)',
-    '1-6 (1 Rapido, 6 Lento)',
-    '1-9 (1 Lento, 9 Rapido)',
-    '1-9 (1 Rapido, 9 Lento)',
-    'Descritivo',
-    'Outro',
-  ];
   readonly classOptions = [
     'Rally1',
     'Rally2',
@@ -57,8 +49,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
     activeEvents: 0,
   };
 
-  selectedNoteSystemOption = this.noteSystemOptions[0];
-  customNoteSystem = '';
   selectedClassOption = 'Rally2';
   customClass = '';
 
@@ -84,7 +74,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
       next: (profile) => {
         this.team = profile;
         this.draft = { ...profile };
-        this.syncSelectStateFromDraft();
         this.loadLogoImage(profile);
       },
       error: () => this.shared.error('Erro ao carregar perfil da equipa'),
@@ -121,7 +110,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
 
   startEdit(): void {
     this.draft = { ...this.team };
-    this.syncSelectStateFromDraft();
     this.isEditing = true;
   }
 
@@ -133,13 +121,13 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
   }
 
   saveProfile(): void {
-    this.applySelectValuesToDraft();
+    const profileChanges: Partial<TeamProfile> = { ...this.draft };
+    delete profileChanges.noteSystem;
     this.isSaving = true;
-    this.teamProfileService.updateProfile(this.draft).subscribe({
+    this.teamProfileService.updateProfile(profileChanges).subscribe({
       next: (profile) => {
         this.team = profile;
         this.draft = { ...profile };
-        this.syncSelectStateFromDraft();
         this.loadLogoImage(profile);
         this.isEditing = false;
         this.isSaving = false;
@@ -163,7 +151,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
       next: (profile) => {
         this.team = profile;
         this.draft = { ...profile };
-        this.syncSelectStateFromDraft();
         this.logoVersion = Date.now();
         this.loadLogoImage(profile);
         this.isSaving = false;
@@ -295,16 +282,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
     }
   }
 
-  private syncSelectStateFromDraft(): void {
-    if (this.noteSystemOptions.includes(this.draft.noteSystem)) {
-      this.selectedNoteSystemOption = this.draft.noteSystem;
-      this.customNoteSystem = '';
-    } else {
-      this.selectedNoteSystemOption = 'Outro';
-      this.customNoteSystem = this.draft.noteSystem || '';
-    }
-  }
-
   private syncClassSelectFromCarDraft(): void {
     if (this.classOptions.includes(this.carDraft.carClass)) {
       this.selectedClassOption = this.carDraft.carClass;
@@ -313,12 +290,6 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
       this.selectedClassOption = 'Outro';
       this.customClass = this.carDraft.carClass || '';
     }
-  }
-
-  private applySelectValuesToDraft(): void {
-    this.draft.noteSystem = this.selectedNoteSystemOption === 'Outro'
-      ? this.customNoteSystem.trim()
-      : this.selectedNoteSystemOption;
   }
 
   private backendMessage(err: unknown): string | undefined {
@@ -392,7 +363,7 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
       name: '',
       driverName: '',
       coDriverName: '',
-      noteSystem: this.noteSystemOptions[0],
+      noteSystem: '1-6 (1 Lento, 6 Rapido)',
       distanceUnit: this.distanceUnitOptions[0],
     };
   }

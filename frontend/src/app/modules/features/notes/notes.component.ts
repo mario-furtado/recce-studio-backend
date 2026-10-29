@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import {
@@ -8,6 +9,8 @@ import {
 } from '../../core/services/note-dictionary.service';
 import { ConfirmDialogService } from '../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../core/shared/shared-properties';
+import { NotebookSettingsComponent } from '../../core/notebook/notebook-settings.component';
+import { TeamProfileService } from '../../core/services/team-profile.service';
 
 interface NoteRuleRow {
   id: string;
@@ -34,15 +37,25 @@ interface NoteRuleGroup {
 @Component({
   selector: 'app-notes',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, NotebookSettingsComponent, RouterLink],
+  styles: ['[hidden]{display:none!important}'],
+  styleUrl: './notes.component.css',
   templateUrl: './notes.component.html',
 })
 export class NotesComponent implements OnInit, OnDestroy {
+  @Input() demonstration = false;
+  @ViewChild(NotebookSettingsComponent) personalSettings?: NotebookSettingsComponent;
+  area: 'dictionary' | 'presentation' | 'notebook' = 'dictionary';
+  noteSystem = '';
+  systemLoaded = false;
+  systemSaving = false;
+  systemError = '';
   rules: CustomNoteDictionaryRule[] = [];
   groups: NoteRuleGroup[] = [];
   form: CustomNoteDictionaryRule = this.emptyForm();
   editingRuleId: string | null = null;
   isLoading = false;
+  dictionaryLoaded = false;
   isSaving = false;
   searchTerm = '';
   expandedGroups: Record<string, boolean> = {};
@@ -65,6 +78,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     public shared: SharedProperties,
     private noteDictionary: NoteDictionaryService,
     private confirmDialog: ConfirmDialogService,
+    private profiles: TeamProfileService,
   ) {}
 
   ngOnInit(): void {
@@ -77,11 +91,36 @@ export class NotesComponent implements OnInit, OnDestroy {
 
     if (this.shared.connectionMode$.value === 'online') {
       this.loadRules();
+      this.loadNoteSystem();
     }
   }
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+  }
+
+  loadNoteSystem(): void {
+    this.systemLoaded = false;
+    this.systemError = '';
+    this.subscriptions.add(this.profiles.getProfile().subscribe({
+      next: profile => { this.noteSystem = profile.noteSystem; this.systemLoaded = true; },
+      error: () => { this.systemError = 'Não foi possível carregar o sistema base da equipa. Tenta novamente.'; },
+    }));
+  }
+
+  saveNoteSystem(): void {
+    if (!this.systemLoaded || this.systemSaving) return;
+    if (!this.noteSystem.trim()) { this.systemError = 'Preenche o sistema de notas base.'; return; }
+    this.systemSaving = true;
+    this.systemError = '';
+    this.subscriptions.add(this.profiles.updateProfile({ noteSystem: this.noteSystem.trim() }).subscribe({
+      next: profile => { this.noteSystem = profile.noteSystem; this.systemSaving = false; this.shared.success('Sistema base da equipa guardado'); },
+      error: () => { this.systemSaving = false; this.systemError = 'Não foi possível guardar. O texto em edição foi mantido.'; },
+    }));
+  }
+
+  configureSymbol(row: NoteRuleRow): void {
+    if (this.personalSettings?.selectSymbol(row.symbol)) this.area = 'presentation';
   }
 
   loadRules(): void {
@@ -94,9 +133,11 @@ export class NotesComponent implements OnInit, OnDestroy {
     }
 
     this.isLoading = true;
+    this.dictionaryLoaded = false;
     this.noteDictionary.loadRules().subscribe({
       next: () => {
         this.isLoading = false;
+        this.dictionaryLoaded = true;
       },
       error: () => {
         this.isLoading = false;
@@ -157,6 +198,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       phrase: rule.phrase,
       symbol: rule.symbol,
       category: rule.category || '',
+      meaning: rule.meaning || '',
       enabled: rule.enabled,
       localOnly: rule.localOnly,
       base: rule.base,
@@ -304,6 +346,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       phrase,
       symbol,
       category: this.form.category?.trim() || '',
+      meaning: this.form.meaning?.trim() || '',
       enabled: this.form.enabled !== false,
     };
   }
@@ -313,7 +356,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     const rows = this.buildRows(this.rules)
       .filter((row) => {
         if (!query) return true;
-        return this.normalizeSearch(`${row.phraseLabel} ${row.symbol} ${row.category}`).includes(query);
+        return this.normalizeSearch(`${row.phraseLabel} ${row.primaryRule.meaning || ''} ${row.symbol} ${row.category}`).includes(query);
       });
 
     const groupsByCategory = new Map<string, NoteRuleRow[]>();
@@ -346,6 +389,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       const key = [
         rule.category || 'outros',
         rule.symbol,
+        rule.meaning || '',
         this.canonicalPhrase(rule.phrase),
         rule.localOnly ? 'local' : 'shared',
         rule.overridden ? 'custom' : 'base',

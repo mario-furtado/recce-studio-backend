@@ -11,7 +11,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.support.ResourcePropertySource;
 import org.springframework.core.env.StandardEnvironment;
@@ -185,7 +185,7 @@ class TestUserBootstrapAuditTest {
                 });
     }
 
-    @Configuration(proxyBeanMethods = false)
+    @TestConfiguration(proxyBeanMethods = false)
     @Import(TestUserBootstrap.class)
     static class BootstrapConfig {
         @Bean

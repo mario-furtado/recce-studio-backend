@@ -6,6 +6,10 @@ public class PecPatchDTO {
     private Double distanceKm;
     private Integer totalNotes;
     private String status;
+    private Double recceVideoOffsetSeconds;
+
+    public Double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds; }
+    public void setRecceVideoOffsetSeconds(Double value) { recceVideoOffsetSeconds = value; }
 
     public PecPatchDTO() {}
 

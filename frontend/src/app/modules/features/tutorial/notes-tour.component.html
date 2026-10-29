@@ -1,0 +1,26 @@
+<div class="tour-example" inert aria-hidden="true">
+  <p class="example-label">Demonstração temporária — não altera a tua conta nem a equipa. Os dados são descartados ao sair.</p>
+  <app-notes *ngIf="index > 0" [hidden]="step.area === 'studio'" [demonstration]="true" />
+  <section *ngIf="step.area === 'studio'" data-tour="studio-example" class="glass-panel p-5 rounded-2xl">
+    <h1 class="rs-page-title">Studio — exemplo</h1>
+    <p>Na tua PEC: Configurar notas → definições pessoais. Caderno/PDF → pré-visualização e exportação.</p>
+    <app-notebook [settings]="studioSettings" [notes]="studioNotes" />
+  </section>
+</div>
+<dialog #tourDialog class="tour-shell" aria-labelledby="tour-title" aria-describedby="tour-description" (cancel)="cancel($event)" (keydown)="trapFocus($event)">
+  <div *ngIf="spotlight; else dim" class="tour-spotlight" aria-hidden="true"
+    [style.left.px]="spotlight.left" [style.top.px]="spotlight.top" [style.width.px]="spotlight.width" [style.height.px]="spotlight.height"></div>
+  <ng-template #dim><div class="tour-dim" aria-hidden="true"></div></ng-template>
+  <section class="tour-panel">
+    <p class="tour-progress">Exemplo temporário · Passo {{ index - firstIndex + 1 }} de {{ lastIndex - firstIndex + 1 }}</p>
+    <h2 id="tour-title" tabindex="-1">{{ step.title }}</h2>
+    <p id="tour-description">{{ step.text }}</p>
+    <p class="tour-hint" *ngIf="!spotlight">Segue a explicação; o elemento pode estar recolhido neste ecrã.</p>
+    <div class="tour-actions">
+      <button type="button" class="soft-button" (click)="previous()" [disabled]="index === firstIndex">Anterior</button>
+      <button type="button" class="accent-button" (click)="next()" *ngIf="index < lastIndex">Próximo passo</button>
+      <button type="button" class="accent-button" (click)="exit(true)" *ngIf="index === lastIndex">Experimentar com as minhas notas</button>
+      <button type="button" class="soft-button" (click)="exit()">Sair</button>
+    </div>
+  </section>
+</dialog>

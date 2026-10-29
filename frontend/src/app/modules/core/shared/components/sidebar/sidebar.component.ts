@@ -42,7 +42,7 @@ export class SidebarComponent {
 
     if (this.shared.connectionMode$.value === 'online') {
       this.shared.setConnectionMode('offline');
-      this.router.navigate(['/recce-mode']);
+      this.router.navigate(['/offline-recces']);
       return;
     }
 

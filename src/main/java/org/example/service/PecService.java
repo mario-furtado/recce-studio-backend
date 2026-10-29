@@ -74,6 +74,13 @@ public class PecService {
         if (patchDTO.getName() != null) {
             entity.setName(patchDTO.getName());
         }
+        if (patchDTO.getRecceVideoOffsetSeconds() != null) {
+            double offset = patchDTO.getRecceVideoOffsetSeconds();
+            if (!Double.isFinite(offset) || Math.abs(offset) > 86400) {
+                throw new IllegalArgumentException("Desfasamento invalido: use segundos entre -86400 e 86400.");
+            }
+            entity.setRecceVideoOffsetSeconds(offset);
+        }
         if (patchDTO.getNumber() != null) {
             entity.setNumber(patchDTO.getNumber());
         }
@@ -95,7 +102,8 @@ public class PecService {
         return patchDTO.getNumber() != null
                 || patchDTO.getName() != null
                 || patchDTO.getDistanceKm() != null
-                || patchDTO.getTotalNotes() != null;
+                || patchDTO.getTotalNotes() != null
+                || patchDTO.getRecceVideoOffsetSeconds() != null;
     }
 
     public void deletePec(String id) {
@@ -112,7 +120,7 @@ public class PecService {
 
         long count = noteRepository.countByPecId(pecId);
 
-        return new PecOverviewDTO(
+        PecOverviewDTO overview = new PecOverviewDTO(
                 pec.getId(),
                 pec.getNumber(),
                 pec.getName(),
@@ -121,6 +129,8 @@ public class PecService {
                 pec.getRally() != null ? pec.getRally().getSurface() : null,
                 count
         );
+        overview.setRecceVideoOffsetSeconds(pec.getRecceVideoOffsetSeconds());
+        return overview;
     }
 
     private PecDTO toDTO(PecEntity entity) {
@@ -131,6 +141,7 @@ public class PecService {
         dto.setDistanceKm(entity.getDistanceKm());
         dto.setTotalNotes((int) noteRepository.countByPecId(entity.getId()));
         dto.setStatus(entity.getStatus());
+        dto.setRecceVideoOffsetSeconds(entity.getRecceVideoOffsetSeconds());
 
         if (entity.getUpdatedAt() != null) {
             dto.setUpdatedAt(entity.getUpdatedAt().toString());

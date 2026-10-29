@@ -1,6 +1,10 @@
 package org.example.dto;
 
 public class PecOverviewDTO {
+    private double recceVideoOffsetSeconds;
+
+    public double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds; }
+    public void setRecceVideoOffsetSeconds(double value) { recceVideoOffsetSeconds = value; }
     private String id;
     private Integer number;
     private String name;

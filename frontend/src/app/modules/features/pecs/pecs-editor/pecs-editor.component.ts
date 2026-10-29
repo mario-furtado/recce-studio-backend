@@ -5,13 +5,14 @@ import {
   OnInit,
   OnDestroy,
   Input,
+  Optional,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { Note } from '../../../core/models/rally';
-import { ClickMarker, GpsTrackPoint } from '../../../core/services/tracking.service';
+import { ClickMarker } from '../../../core/services/tracking.service';
 import {
   GpsPoint,
   PecAssets,
@@ -20,19 +21,19 @@ import {
 import { OfflineRecceStoreService } from '../../../core/services/offline-recce-store.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
-
-interface GpsSketchPoint {
-  x: number;
-  y: number;
-  label: string;
-  text: string;
-  timestamp: number;
-}
+import { RecceMapComponent } from './recce-map.component';
+import { MapNote, notesOnMap, trackSegments } from './gps-timeline';
+import { NotebookComponent } from '../../../core/notebook/notebook.component';
+import { NoteDisplayComponent } from '../../../core/notebook/note-display.component';
+import { NotebookService } from '../../../core/notebook/notebook.service';
+import { defaultNotebook } from '../../../core/notebook/notebook.model';
+import { NotePresentationEditorComponent } from '../../../core/notebook/note-presentation-editor.component';
+import { presentationError } from '../../../core/notebook/note-presentation';
 
 @Component({
   selector: 'app-pecs-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, RecceMapComponent, NotebookComponent, NoteDisplayComponent, NotePresentationEditorComponent],
   templateUrl: './pecs-editor.component.html',
   styleUrl: './pecs-editor.component.css',
 })
@@ -56,6 +57,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   gpsFileName: string = '';
   gpsTrack: GpsPoint[] = [];
   gpsMarkers: ClickMarker[] = [];
+  mapNotes: MapNote[] = [];
+  captureOffset = 0;
+  captureOffsetDraft: number | null = 0;
+  isSavingOffset = false;
 
   timeOffset: number = 0;
   playbackSpeed: number = 1.0;
@@ -71,9 +76,15 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   notes: Note[] = [];
   editingNoteId: string | null = null;
   editingNoteText: string = '';
+  editingPresentationJson: string | null = null;
+  isSavingNote = false;
   editingNoteObservation: string = '';
   editingNoteTimestamp: number | null = null;
   editingShiftFollowing: boolean = true;
+  notebookSettings = defaultNotebook();
+  notebookLoaded = false;
+  notebookError = '';
+  showNotebook = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -81,6 +92,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     private offlineStore: OfflineRecceStoreService,
     private shared: SharedProperties,
     private confirmDialog: ConfirmDialogService,
+    @Optional() private notebook?: NotebookService,
   ) {}
 
   ngOnInit(): void {
@@ -90,6 +102,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       return;
     }
     this.pecTitle = this.pecName || `PEC ${this.pecId}`;
+    this.loadNotebook();
 
     const localRecceData = localStorage.getItem(
       `recce_timestamps_${this.pecId}`,
@@ -107,6 +120,15 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     }
 
     this.loadAssets();
+  }
+
+  loadNotebook(): void {
+    this.notebookLoaded = false;
+    this.notebookError = '';
+    this.notebook?.load().subscribe({
+      next: settings => { this.notebookSettings = settings; this.notebookLoaded = true; },
+      error: () => { this.notebookError = 'Não foi possível carregar o modelo pessoal. Tenta novamente antes de exportar.'; },
+    });
   }
 
   get isLocked(): boolean {
@@ -186,9 +208,13 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         originalTimestamp: this.normalizeOptionalTimestamp(n.originalTimestamp),
         text: n.text || 'Nota sem descricao',
         speedRating: n.speedRating,
+        presentationJson: n.presentationJson,
+        latitude: n.latitude,
+        longitude: n.longitude,
       })),
     );
     this.hasNotes = this.notes.length > 0;
+    this.refreshMapNotes();
   }
 
   loadAssets(): void {
@@ -199,6 +225,8 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   applyAssets(assets: PecAssets): void {
+    this.captureOffset = assets.recceVideoOffsetSeconds ?? 0;
+    this.captureOffsetDraft = this.captureOffset;
     this.hasVideo = assets.hasVideo;
     this.hasAudio = assets.hasAudio;
     this.hasGpx = assets.hasGps;
@@ -217,6 +245,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       next: (track) => {
         this.gpsTrack = track || [];
         this.hasGpx = this.hasGpx || this.gpsTrack.length > 0;
+        this.refreshMapNotes();
       },
       error: (err) => console.error('Erro ao carregar GPS:', err),
     });
@@ -224,55 +253,41 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   loadRecceMarkers(): void {
     this.pecService.getPecRecceMarkers(this.pecId).subscribe({
-      next: (markers) => (this.gpsMarkers = markers || []),
+      next: (markers) => { this.gpsMarkers = markers || []; this.refreshMapNotes(); },
       error: (err) => console.error('Erro ao carregar pontos das notas:', err),
     });
   }
 
-  get gpsPolylinePoints(): string {
-    return this.gpsTrack
-      .map((point, index) => this.projectGpsPointAt(point.lat, point.lng, index, this.gpsTrack.length))
-      .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
-      .join(' ');
+  refreshMapNotes(): void {
+    this.mapNotes = notesOnMap(this.notes, this.gpsMarkers, trackSegments(this.gpsTrack));
   }
 
-  get gpsNotePoints(): GpsSketchPoint[] {
-    const markersWithGps = this.gpsMarkers
-      .filter((marker) => marker.latitude !== null && marker.longitude !== null)
-      .sort((a, b) => a.index - b.index);
-
-    return markersWithGps
-      .map((marker, index) => {
-        const point = this.projectGpsPointAt(
-          marker.latitude as number,
-          marker.longitude as number,
-          index,
-          markersWithGps.length,
-        );
-        return {
-          ...point,
-          label: String(marker.index),
-          text: marker.text || `Nota ${marker.index}`,
-          timestamp: marker.timestamp,
-        };
-      });
+  selectMapNote(point: MapNote): void {
+    const note = this.notes.find(note => note.id === point.id);
+    if (note) this.jumpToNote(note);
   }
 
-  get hasGpsSketch(): boolean {
-    return this.gpsTrack.length > 0 || this.gpsNotePoints.length > 0;
-  }
-
-  get gpsReferencePoint(): { lat: number; lng: number } | null {
-    if (this.gpsTrack.length > 0) {
-      return { lat: this.gpsTrack[0].lat, lng: this.gpsTrack[0].lng };
+  saveCaptureOffset(): void {
+    if (this.isLocked || this.isSavingOffset) return;
+    const offset = this.captureOffsetDraft;
+    if (typeof offset !== 'number' || !Number.isFinite(offset) || Math.abs(offset) > 86400) {
+      this.shared.error('Desfasamento inválido', 'Usa segundos entre -86400 e 86400.');
+      return;
     }
-
-    const marker = this.gpsMarkers.find((item) => item.latitude !== null && item.longitude !== null);
-    return marker ? { lat: marker.latitude as number, lng: marker.longitude as number } : null;
-  }
-
-  get isGpsFlatSketch(): boolean {
-    return this.hasGpsSketch && this.isGpsFlat(this.gpsBounds());
+    this.isSavingOffset = true;
+    this.pecService.updatePecById(this.pecId, { recceVideoOffsetSeconds: offset }).subscribe({
+      next: updated => {
+        this.captureOffset = updated.recceVideoOffsetSeconds ?? offset;
+        this.captureOffsetDraft = this.captureOffset;
+        this.isSavingOffset = false;
+        this.onTimeUpdate();
+        this.shared.success('Sincronização guardada');
+      },
+      error: () => {
+        this.isSavingOffset = false;
+        this.shared.error('Não foi possível guardar a sincronização');
+      },
+    });
   }
 
   onTimeUpdate(): void {
@@ -287,9 +302,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         return timestamp !== null && timestamp <= this.currentTime;
       });
 
-    if (currentNote) {
-      this.activeNoteId = currentNote.id;
-    }
+    this.activeNoteId = currentNote?.id ?? null;
   }
 
   openAddNoteForm(): void {
@@ -308,7 +321,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     if (!this.newNoteText.trim()) return;
 
     const exactTimestamp = parseFloat(
-      (this.currentTime - this.timeOffset).toFixed(1),
+      (this.currentTime - this.timeOffset - this.captureOffset).toFixed(1),
     );
 
     const newNote = {
@@ -331,6 +344,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         this.newNoteText = '';
         this.isAddingNote = false;
         this.hasNotes = true;
+        this.refreshMapNotes();
         this.shared.success('Nota guardada');
       },
       error: (err) => {
@@ -370,13 +384,15 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   removeNoteFromList(noteId: string): void {
     this.notes = this.notes.filter((n) => n.id !== noteId);
     this.hasNotes = this.notes.length > 0;
+    this.refreshMapNotes();
   }
 
   startEditNote(note: Note, event: Event): void {
     event.stopPropagation();
-    if (this.isLocked) return;
+    if (this.isLocked || this.isSavingNote) return;
     this.editingNoteId = note.id;
     this.editingNoteText = note.text;
+    this.editingPresentationJson = note.presentationJson ?? null;
     this.editingNoteObservation = note.speedRating || '';
     this.editingNoteTimestamp = this.noteVideoTimestamp(note);
     this.editingShiftFollowing = false;
@@ -384,8 +400,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   cancelEditNote(event?: Event): void {
     event?.stopPropagation();
+    if (this.isSavingNote) return;
     this.editingNoteId = null;
     this.editingNoteText = '';
+    this.editingPresentationJson = null;
     this.editingNoteObservation = '';
     this.editingNoteTimestamp = null;
     this.editingShiftFollowing = false;
@@ -393,7 +411,12 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
   saveEditedNote(note: Note, event: Event): void {
     event.stopPropagation();
-    if (!note.id || !this.editingNoteText.trim() || this.isLocked) return;
+    if (!note.id || !this.editingNoteText.trim() || this.isLocked || this.isSavingNote) return;
+    const error = presentationError(this.editingNoteText, this.editingPresentationJson);
+    if (error) { this.shared.error('Apresentação inválida', error); return; }
+    if (this.editingNoteTimestamp !== null && (!Number.isFinite(this.editingNoteTimestamp) || this.editingNoteTimestamp < 0)) {
+      this.shared.error('Tempo inválido', 'Usa um instante positivo ou zero, ou deixa o campo vazio.'); return;
+    }
 
     const targetTimestamp = this.storageTimestampFromVideoTimestamp(
       this.normalizeOptionalTimestamp(this.editingNoteTimestamp),
@@ -403,7 +426,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       originalTimestamp: targetTimestamp,
       text: this.editingNoteText.trim(),
       speedRating: this.editingNoteObservation.trim(),
+      presentationJson: this.editingPresentationJson ? JSON.stringify({ ...JSON.parse(this.editingPresentationJson), text: this.editingNoteText.trim() }) : null,
     };
+    this.isSavingNote = true;
 
     if (this.isPersistedNoteId(note.id)) {
       this.pecService.alignNote(this.pecId, note.id, {
@@ -411,8 +436,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         text: updatedNote.text,
         speedRating: updatedNote.speedRating || '',
         shiftFollowing: this.editingShiftFollowing,
+        presentationJson: updatedNote.presentationJson,
       }).subscribe({
         next: (savedNotes: any[]) => {
+          this.isSavingNote = false;
           this.timeOffset = 0;
           this.setNotes(savedNotes);
           this.cancelEditNote();
@@ -422,6 +449,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
           );
         },
         error: (err) => {
+          this.isSavingNote = false;
           console.error('Erro ao alinhar nota:', err);
           this.shared.error('Erro ao alinhar nota');
         },
@@ -431,6 +459,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
     this.pecService.updateNote(this.pecId, note.id, updatedNote).subscribe({
       next: (saved: any) => {
+        this.isSavingNote = false;
         this.notes = this.notes.map((existing) =>
           existing.id === note.id
             ? {
@@ -438,14 +467,19 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
                 originalTimestamp: this.normalizeOptionalTimestamp(saved.originalTimestamp),
                 text: saved.text,
                 speedRating: saved.speedRating,
+                latitude: saved.latitude ?? note.latitude,
+                longitude: saved.longitude ?? note.longitude,
+                presentationJson: saved.presentationJson,
               }
             : existing,
         );
         this.notes = this.sortNotesForTimeline(this.notes);
         this.cancelEditNote();
+        this.refreshMapNotes();
         this.shared.success('Nota atualizada');
       },
       error: (err) => {
+        this.isSavingNote = false;
         console.error('Erro ao editar nota:', err);
         this.shared.error('Erro ao editar nota');
       },
@@ -474,31 +508,25 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   setAnchorAtCurrentTime(): void {
-    if (this.notes.length === 0 || this.isLocked) return;
-    const firstTimestamp = this.notes[0].originalTimestamp ?? 0;
-    const offsetToApply = parseFloat(
-      (this.currentTime - firstTimestamp).toFixed(1),
-    );
-
-    this.pecService.applyNotesOffset(this.pecId, offsetToApply).subscribe({
-      next: (updatedNotes: any[]) => {
-        this.timeOffset = 0;
-        this.setNotes(updatedNotes);
-        this.onTimeUpdate();
-        this.shared.success('Offset guardado');
-      },
-      error: (err) => {
-        console.error('Erro ao aplicar offset:', err);
-        this.shared.error('Erro ao guardar offset das notas');
-      },
-    });
+    if (this.isLocked) return;
+    const first = this.notes.find(note => note.originalTimestamp !== null);
+    if (!first) return;
+    this.captureOffsetDraft = this.roundTimestamp(this.currentTime - first.originalTimestamp! - this.timeOffset);
+    this.saveCaptureOffset();
   }
 
   jumpToNote(note: Note): void {
     const targetTime = this.noteVideoTimestamp(note);
     const media = this.activeMediaElement();
+    if (media && targetTime !== null && (targetTime < 0
+      || (Number.isFinite(media.duration) && targetTime > media.duration))) {
+      this.shared.error('Nota fora do vídeo/áudio', 'O tempo desta nota não está incluído no ficheiro. Verifica o desfasamento.');
+      return;
+    }
     if (media && targetTime !== null && targetTime >= 0) {
       media.currentTime = targetTime;
+      this.currentTime = targetTime;
+      this.activeNoteId = note.id;
       media.play();
       return;
     }
@@ -641,14 +669,14 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     if (note.originalTimestamp === null || note.originalTimestamp === undefined) {
       return null;
     }
-    return this.roundTimestamp(note.originalTimestamp + this.timeOffset);
+    return this.roundTimestamp(note.originalTimestamp + this.timeOffset + this.captureOffset);
   }
 
   private storageTimestampFromVideoTimestamp(videoTimestamp: number | null): number | null {
     if (videoTimestamp === null) {
       return null;
     }
-    return this.roundTimestamp(Math.max(0, videoTimestamp - this.timeOffset));
+    return this.roundTimestamp(Math.max(0, videoTimestamp - this.timeOffset - this.captureOffset));
   }
 
   private normalizeOptionalTimestamp(value: unknown): number | null {
@@ -774,58 +802,6 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     if (normalized.includes('ogg')) return 'recce-audio.ogg';
     if (normalized.includes('wav')) return 'recce-audio.wav';
     return 'recce-audio.webm';
-  }
-
-  private projectGpsPointAt(lat: number, lng: number, sequenceIndex: number, sequenceTotal: number): { x: number; y: number } {
-    const bounds = this.gpsBounds();
-    const width = 100;
-    const height = 100;
-    const padding = 7;
-    const flatGps = this.isGpsFlat(bounds);
-    if (flatGps) {
-      const ratio = sequenceTotal <= 1 ? 0.5 : sequenceIndex / (sequenceTotal - 1);
-      return {
-        x: padding + ratio * (width - padding * 2),
-        y: height / 2,
-      };
-    }
-
-    const lngSpan = bounds.maxLng - bounds.minLng || 0.000001;
-    const latSpan = bounds.maxLat - bounds.minLat || 0.000001;
-
-    return {
-      x: padding + ((lng - bounds.minLng) / lngSpan) * (width - padding * 2),
-      y: height - padding - ((lat - bounds.minLat) / latSpan) * (height - padding * 2),
-    };
-  }
-
-  private gpsBounds(): { minLat: number; maxLat: number; minLng: number; maxLng: number } {
-    const trackPoints = this.gpsTrack.map((point) => ({ lat: point.lat, lng: point.lng }));
-    const markerPoints = this.gpsMarkers
-      .filter((marker) => marker.latitude !== null && marker.longitude !== null)
-      .map((marker) => ({ lat: marker.latitude as number, lng: marker.longitude as number }));
-    const points = [...trackPoints, ...markerPoints];
-
-    if (points.length === 0) {
-      return { minLat: 0, maxLat: 1, minLng: 0, maxLng: 1 };
-    }
-
-    return points.reduce((bounds, point) => ({
-      minLat: Math.min(bounds.minLat, point.lat),
-      maxLat: Math.max(bounds.maxLat, point.lat),
-      minLng: Math.min(bounds.minLng, point.lng),
-      maxLng: Math.max(bounds.maxLng, point.lng),
-    }), {
-      minLat: points[0].lat,
-      maxLat: points[0].lat,
-      minLng: points[0].lng,
-      maxLng: points[0].lng,
-    });
-  }
-
-  private isGpsFlat(bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }): boolean {
-    return Math.abs(bounds.maxLat - bounds.minLat) < 0.00001
-      && Math.abs(bounds.maxLng - bounds.minLng) < 0.00001;
   }
 
 }

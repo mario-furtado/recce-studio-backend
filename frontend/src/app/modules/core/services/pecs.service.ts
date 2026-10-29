@@ -6,6 +6,7 @@ import { API_BASE_URL } from './api.config';
 import { ClickMarker, GpsTrackPoint } from './tracking.service';
 
 export interface Note {
+  presentationJson?: string | null;
   id?: number | string;
   originalTimestamp: number | null;
   text: string;
@@ -13,6 +14,7 @@ export interface Note {
 }
 
 export interface NoteAlignmentRequest {
+  presentationJson?: string | null;
   targetTimestamp: number | null;
   text: string;
   speedRating?: string;
@@ -20,6 +22,7 @@ export interface NoteAlignmentRequest {
 }
 
 export interface PecAssets {
+  recceVideoOffsetSeconds?: number;
   hasVideo: boolean;
   videoFileName?: string;
   videoUrl?: string;
@@ -32,14 +35,16 @@ export interface PecAssets {
 }
 
 export interface GpsPoint {
+  segment?: number | null;
   lat: number;
   lng: number;
   speedKmh?: number;
-  timestamp?: number;
+  timestamp?: number | null;
   accuracy?: number | null;
 }
 
 export interface PecPatch {
+  recceVideoOffsetSeconds?: number;
   number?: number;
   name?: string;
   distanceKm?: number;

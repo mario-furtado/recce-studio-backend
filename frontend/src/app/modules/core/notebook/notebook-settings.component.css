@@ -1,0 +1,14 @@
+.settings-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.scope-label { padding: 3px 8px; border: 1px solid #697586; border-radius: 999px; font-size: .72rem; font-weight: 700; color: var(--text-secondary, #b7c2d1); }
+.context-help { margin-left: auto; font-size: .8rem; color: var(--text-secondary, #b7c2d1); }
+.context-help[open] { flex-basis: 100%; margin-left: 0; }
+.context-help p { margin-top: 8px; max-width: 70ch; }
+.symbol-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.symbol-toolbar > label { flex: 1; min-width: min(220px, 100%); }
+.symbol-toolbar > button { margin-bottom: 0; }
+.selection-hint { margin-top: 12px; font-size: .85rem; color: var(--text-secondary, #b7c2d1); }
+.settings-actions { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+.secondary-options { padding-top: 16px; font-size: .85rem; }
+.secondary-options[open] { flex: 1; min-width: min(260px, 100%); }
+summary:focus-visible { outline: 2px solid var(--text-primary, #eee); outline-offset: 4px; }
+@media (max-width: 600px) { .symbol-toolbar > label { flex-basis: 100%; } }

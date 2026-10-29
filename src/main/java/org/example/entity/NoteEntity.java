@@ -20,4 +20,8 @@ public class NoteEntity {
     private Double originalTimestamp; // Tempo em segundos
     private String text;              // Ex: "D4 fecha"
     private String speedRating;       // Ex: "3ª velocidade" / Obs
+    @Lob
+    private String presentationJson;  // Versioned occurrence-only visual overrides; null uses the personal model.
+    private Double latitude;
+    private Double longitude;
 }

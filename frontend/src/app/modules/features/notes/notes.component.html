@@ -1,16 +1,16 @@
-<div class="max-w-6xl mx-auto space-y-6">
-  <section class="glass-panel rs-page-header">
-    <div
-      class="flex flex-col md:flex-row md:items-start md:justify-between gap-4"
-    >
-      <div>
-        <div class="rs-eyebrow">Notas</div>
-        <h1 class="rs-page-title">Dicionario de notas</h1>
-        <p class="rs-page-subtitle">
-          Gere as notas base e personalizacoes sem duplicar variantes desnecessarias.
-        </p>
-      </div>
-
+<div class="max-w-6xl mx-auto space-y-4">
+  <section class="glass-panel notes-header">
+      <h1>Configurar notas</h1>
+      <div class="notes-actions">
+        <details *ngIf="!demonstration" class="notes-help">
+          <summary>Ajuda</summary>
+          <div class="notes-help-copy">
+            <p>Cria a regra no Dicionário, ajusta a Apresentação e prepara o Caderno.</p>
+            <p>Regras e modelo são pessoais. Só o sistema base é partilhado com a equipa.</p>
+            <p>O tutorial usa exemplos temporários. Guarda as edições antes de sair desta página.</p>
+            <a routerLink="/tutorial/notes" class="soft-button inline-block px-3 py-2 rounded">Mostrar ajuda guiada</a>
+          </div>
+        </details>
       <button
         type="button"
         (click)="loadRules()"
@@ -20,14 +20,46 @@
       >
         {{ isLoading ? "A carregar..." : "Atualizar" }}
       </button>
-    </div>
+      </div>
   </section>
 
+  <nav data-tour="notes-areas" aria-label="Áreas de configuração de notas" class="flex flex-wrap gap-2">
+    <button type="button" class="px-4 py-2 rounded" [class.accent-button]="area === 'dictionary'" [class.soft-button]="area !== 'dictionary'" [attr.aria-pressed]="area === 'dictionary'" (click)="area = 'dictionary'">Dicionário</button>
+    <button type="button" class="px-4 py-2 rounded" [class.accent-button]="area === 'presentation'" [class.soft-button]="area !== 'presentation'" [attr.aria-pressed]="area === 'presentation'" (click)="area = 'presentation'">Apresentação</button>
+    <button type="button" class="px-4 py-2 rounded" [class.accent-button]="area === 'notebook'" [class.soft-button]="area !== 'notebook'" [attr.aria-pressed]="area === 'notebook'" (click)="area = 'notebook'">Caderno e exportação</button>
+  </nav>
+
+  <div [hidden]="area !== 'dictionary'" class="space-y-6">
+  <details data-tour="note-system" class="glass-panel rounded-2xl p-4 notes-team" [open]="demonstration">
+    <summary><span class="font-bold">Sistema de notas base</span><span class="notes-scope">Partilhado com a equipa</span></summary>
+    <div class="space-y-3 mt-3">
+    <label class="block">Sistema de notas base<input type="text" class="themed-input w-full px-3 py-2" [(ngModel)]="noteSystem" [disabled]="!systemLoaded || systemSaving"></label>
+    <p *ngIf="systemError" role="alert">{{ systemError }}</p>
+    <button *ngIf="!systemLoaded" type="button" class="soft-button px-3 py-2 rounded" (click)="loadNoteSystem()">Carregar sistema base</button>
+    <button type="button" class="soft-button px-3 py-2 rounded" [disabled]="!systemLoaded || systemSaving" (click)="saveNoteSystem()">Guardar sistema base da equipa</button>
+    </div>
+  </details>
+
   <section class="glass-panel rounded-2xl p-6 space-y-5">
+    <div class="notes-section-heading"><h2 class="rs-section-title">Dicionário</h2><span class="notes-scope">Pessoal</span></div>
+    <details class="notes-context-help">
+      <summary>Ajuda do dicionário</summary>
+      <p>Define o que dizes, o significado e o símbolo. As regras são pessoais; as locais ficam neste dispositivo.</p>
+      <p>Números em dígito e por extenso são equivalentes. Variantes aparecem juntas na lista.</p>
+    </details>
+    <p *ngIf="!!(personalSettings && !personalSettings.loaded && personalSettings.error)" role="alert">
+      A apresentação pessoal está indisponível. <button type="button" class="soft-button px-3 py-2 rounded" (click)="area = 'presentation'">Abrir apresentação para tentar novamente</button>
+    </p>
     <form
+      data-tour="note-rule-form"
       class="grid grid-cols-1 md:grid-cols-[1.35fr_0.9fr_0.9fr_auto] gap-3 items-end"
       (ngSubmit)="saveRule()"
     >
+      <label class="block">
+        <span class="text-xs font-bold uppercase text-slate-400">Significado</span>
+        <input type="text" name="meaning" maxlength="200" [(ngModel)]="form.meaning" class="themed-input mt-1 w-full px-4 py-3" placeholder="Descrição opcional do símbolo">
+      </label>
+
       <label class="block">
         <span class="text-xs font-bold uppercase text-slate-400">
           Quando digo
@@ -40,9 +72,6 @@
           placeholder="direita 3"
           title="Palavra ou frase dita no reconhecimento"
         />
-        <span class="mt-1 block text-[11px] text-slate-500">
-          Numeros em digito e por extenso sao tratados como equivalentes.
-        </span>
       </label>
 
       <label class="block">
@@ -106,9 +135,6 @@
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
       <div>
         <h2 class="rs-section-title">Regras existentes</h2>
-        <p class="text-xs text-slate-400">
-          Variantes equivalentes aparecem juntas para manter a lista compacta.
-        </p>
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-2">
         <input
@@ -118,7 +144,7 @@
           (ngModelChange)="onSearchChange()"
           class="themed-input px-3 py-2 text-sm min-w-[220px]"
           placeholder="Pesquisar notas"
-          title="Pesquisar por frase, simbolo ou grupo"
+          title="Pesquisar por frase, significado, símbolo ou grupo"
         />
         <span class="themed-chip text-[11px] px-2 py-1 whitespace-nowrap">
           {{ rules.length }} regras · {{ groups.length }} grupos
@@ -179,6 +205,7 @@
               <span class="themed-chip text-xs px-2 py-0.5">
                 {{ row.symbol }}
               </span>
+              <span *ngIf="row.primaryRule.meaning" class="text-xs text-slate-400">{{ row.primaryRule.meaning }}</span>
               <span
                 *ngIf="row.base && !row.overridden"
                 class="text-[11px] text-slate-400 rounded-full border border-slate-800 px-2 py-0.5"
@@ -201,6 +228,7 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
+            <button data-tour="configure-symbol" type="button" class="soft-button px-3 py-2 rounded-lg text-xs font-bold" [disabled]="!dictionaryLoaded || isLoading || !personalSettings?.loaded || personalSettings?.saving" (click)="configureSymbol(row)" [attr.aria-label]="'Configurar apresentação de ' + row.symbol">Configurar apresentação</button>
             <button
               type="button"
               (click)="toggleRow(row)"
@@ -231,4 +259,6 @@
       </div>
     </div>
   </section>
+  </div>
+  <app-notebook-settings [hidden]="area === 'dictionary'" [active]="area !== 'dictionary'" [area]="area === 'notebook' ? 'notebook' : 'presentation'" [dictionaryRules]="rules" [dictionaryReady]="dictionaryLoaded && !isLoading" (configureDictionary)="area = 'dictionary'" />
 </div>

@@ -5,6 +5,7 @@ public class NoteDictionaryRuleDTO {
     private String phrase;
     private String symbol;
     private String category;
+    private String meaning;
     private boolean enabled = true;
 
     public String getId() { return id; }
@@ -18,6 +19,8 @@ public class NoteDictionaryRuleDTO {
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public String getMeaning() { return meaning; }
+    public void setMeaning(String meaning) { this.meaning = meaning; }
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }

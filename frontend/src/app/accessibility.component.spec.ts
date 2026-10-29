@@ -14,6 +14,7 @@ import { PecDetailComponent } from './modules/features/pecs/pec-detail/pec-detai
 import { PecsEditorComponent } from './modules/features/pecs/pecs-editor/pecs-editor.component';
 import { TeamProfileComponent } from './modules/features/team-profile/team-profile.component';
 import { SharedProperties } from './modules/core/shared/shared-properties';
+import { defaultNotebook } from './modules/core/notebook/notebook.model';
 
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 
@@ -92,20 +93,22 @@ describe('AUD-ACC-001 rendered form names', () => {
   it('distinguishes new-note and existing-note controls, including the timestamp unit', () => {
     const fixture = render(PecsEditorComponent, { pecId: 'fixture', isAddingNote: true, editingNoteId: 'note',
       notes: [{ id: 'note', text: 'D3', speedRating: '', originalTimestamp: 0 }] });
-    const names = assertNamed(fixture.nativeElement, 6).map(name);
-    expect(names).toEqual(['Texto da nova nota', 'Observações da nova nota', 'Texto da nota',
+    const names = assertNamed(fixture.nativeElement, 7).map(name);
+    expect(names).toEqual(['Desfasamento vídeo/reconhecimento (s)', 'Texto da nova nota', 'Observações da nova nota', 'Texto da nota',
       'Observações da nota', 'Tempo da nota no vídeo (segundos)', 'Mover notas seguintes que já têm tempo']);
   });
 
   it('names team/car fields and conditional custom choices after switching to Outro', () => {
     const fixture = render(TeamProfileComponent, { isEditing: true });
-    assertNamed(fixture.nativeElement, 8);
+    const profile = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(':scope > div')!;
+    assertNamed(profile, 7);
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-notebook-settings')).toBeNull();
+    expect(profile.querySelector('#team-note-system')).toBeNull();
     fixture.componentInstance.selectedClassOption = 'Outro';
-    fixture.componentInstance.selectedNoteSystemOption = 'Outro';
     fixture.detectChanges();
-    const names = assertNamed(fixture.nativeElement, 10).map(name);
+    const names = assertNamed(profile, 8).map(name);
     expect(names).toContain('Classe personalizada');
-    expect(names).toContain('Sistema de notas personalizado');
+    expect(names).toContain('Unidade de Medida');
     assertLabelFocus(fixture.nativeElement);
   });
 

@@ -113,6 +113,11 @@ export class TrackingService {
 
       const handlePosition = (position: GeolocationPosition) => {
           if (!active) return;
+          if (!Number.isFinite(position.coords.latitude) || !Number.isFinite(position.coords.longitude)
+            || Math.abs(position.coords.latitude) > 90 || Math.abs(position.coords.longitude) > 180) {
+            this.updateGpsStatus('degraded', null);
+            return;
+          }
           window.clearTimeout(startFallback);
           this.currentLat = position.coords.latitude;
           this.currentLng = position.coords.longitude;
@@ -265,9 +270,6 @@ export class TrackingService {
     const timestamp = parseFloat(
       ((Date.now() - this.startTime) / 1000).toFixed(2),
     );
-    const lastPoint = this.gpsTrack[this.gpsTrack.length - 1];
-    if (lastPoint && Math.abs(lastPoint.timestamp - timestamp) < 1) return;
-
     this.gpsTrack.push({
       lat: this.currentLat,
       lng: this.currentLng,

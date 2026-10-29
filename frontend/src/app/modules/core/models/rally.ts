@@ -1,4 +1,5 @@
 export interface Pec {
+  recceVideoOffsetSeconds?: number;
   id: string;
   number: number;
   name: string;
@@ -36,6 +37,9 @@ export interface Rally {
 }
 
 export interface Note {
+  presentationJson?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   id: string;
   originalTimestamp: number | null; // Tempo em segundos gravado na app móvel
   text: string; // Ex: "D4 c/ salto"

@@ -50,7 +50,7 @@ public class NoteDictionaryRuleService {
     public NoteDictionaryRuleDTO update(String userEmail, String ruleId, NoteDictionaryRuleDTO dto) {
         validate(dto);
         NoteDictionaryRuleEntity entity = noteDictionaryRuleRepository.findByIdAndUserEmailIgnoreCase(ruleId, userEmail)
-                .orElseThrow(() -> new RuntimeException("Regra nao encontrada."));
+                .orElseThrow(() -> new ResourceNotFoundException("Regra nao encontrada."));
 
         apply(dto, entity, normalizePhrase(dto.getPhrase()));
         return toDTO(noteDictionaryRuleRepository.save(entity));
@@ -59,13 +59,16 @@ public class NoteDictionaryRuleService {
     @Transactional
     public void delete(String userEmail, String ruleId) {
         NoteDictionaryRuleEntity entity = noteDictionaryRuleRepository.findByIdAndUserEmailIgnoreCase(ruleId, userEmail)
-                .orElseThrow(() -> new RuntimeException("Regra nao encontrada."));
+                .orElseThrow(() -> new ResourceNotFoundException("Regra nao encontrada."));
         noteDictionaryRuleRepository.delete(entity);
     }
 
     private void validate(NoteDictionaryRuleDTO dto) {
         if (dto == null || !StringUtils.hasText(dto.getPhrase()) || !StringUtils.hasText(dto.getSymbol())) {
             throw new IllegalArgumentException("Frase e simbolo sao obrigatorios.");
+        }
+        if (dto.getMeaning() != null && dto.getMeaning().length() > 200) {
+            throw new IllegalArgumentException("O significado permite até 200 caracteres.");
         }
     }
 
@@ -74,6 +77,7 @@ public class NoteDictionaryRuleService {
         entity.setPhraseKey(phraseKey);
         entity.setSymbol(dto.getSymbol().trim());
         entity.setCategory(StringUtils.hasText(dto.getCategory()) ? dto.getCategory().trim() : "");
+        if (dto.getMeaning() != null) entity.setMeaning(dto.getMeaning().trim());
         entity.setEnabled(dto.isEnabled());
         entity.setUpdatedAt(LocalDateTime.now());
     }
@@ -91,6 +95,7 @@ public class NoteDictionaryRuleService {
         dto.setPhrase(entity.getPhrase());
         dto.setSymbol(entity.getSymbol());
         dto.setCategory(entity.getCategory());
+        dto.setMeaning(entity.getMeaning());
         dto.setEnabled(entity.isEnabled());
         return dto;
     }

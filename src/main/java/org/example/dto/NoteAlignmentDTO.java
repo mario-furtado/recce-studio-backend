@@ -5,6 +5,12 @@ public class NoteAlignmentDTO {
     private String text;
     private String speedRating;
     private Boolean shiftFollowing;
+    private String presentationJson;
+    private boolean presentationProvided;
+
+    public String getPresentationJson() { return presentationJson; }
+    public void setPresentationJson(String value) { presentationJson = value; presentationProvided = true; }
+    public boolean hasPresentationJson() { return presentationProvided; }
 
     public Double getTargetTimestamp() {
         return targetTimestamp;

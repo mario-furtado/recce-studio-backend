@@ -216,6 +216,7 @@ public class PecAssetService {
     private PecAssetDTO toAssetDTO(PecEntity pec) {
         boolean hasSyncedGps = hasSyncedGps(pec.getId());
         PecAssetDTO dto = new PecAssetDTO();
+        dto.setRecceVideoOffsetSeconds(pec.getRecceVideoOffsetSeconds());
         dto.setHasVideo(pec.getVideoStoragePath() != null);
         dto.setVideoFileName(pec.getVideoFileName());
         dto.setVideoUrl(pec.getVideoStoragePath() != null ? "/api/pecs/" + pec.getId() + "/video" : null);
@@ -313,6 +314,9 @@ public class PecAssetService {
         List<GpsPointDTO> points = new ArrayList<>();
         Document document = builder.parse(new ByteArrayInputStream(boundedInput.toByteArray()));
         NodeList nodes = document.getElementsByTagName("trkpt");
+        java.time.Instant origin = null;
+        org.w3c.dom.Node previousSegment = null;
+        int segment = -1;
         for (int i = 0; i < nodes.getLength(); i++) {
             org.w3c.dom.Node node = nodes.item(i);
             if (node.getAttributes().getNamedItem("lat") == null || node.getAttributes().getNamedItem("lon") == null) {
@@ -320,7 +324,29 @@ public class PecAssetService {
             }
             double lat = Double.parseDouble(node.getAttributes().getNamedItem("lat").getNodeValue());
             double lng = Double.parseDouble(node.getAttributes().getNamedItem("lon").getNodeValue());
-            points.add(new GpsPointDTO(lat, lng, null, (double) i));
+            if (!Double.isFinite(lat) || !Double.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+                throw new SAXException("Coordenadas GPX invalidas.");
+            }
+            if (node.getParentNode() != previousSegment) {
+                previousSegment = node.getParentNode();
+                segment++;
+            }
+            Double elapsed = null;
+            for (org.w3c.dom.Node child = node.getFirstChild(); child != null; child = child.getNextSibling()) {
+                if ("time".equals(child.getNodeName())) {
+                    try {
+                        java.time.Instant instant = java.time.Instant.parse(child.getTextContent().trim());
+                        if (origin == null) origin = instant;
+                        elapsed = java.time.Duration.between(origin, instant).toMillis() / 1000.0;
+                        if (elapsed < 0) elapsed = null;
+                    } catch (java.time.format.DateTimeParseException ex) {
+                        throw new SAXException("Tempo GPX invalido.", ex);
+                    }
+                }
+            }
+            GpsPointDTO point = new GpsPointDTO(lat, lng, null, elapsed);
+            point.setSegment(segment);
+            points.add(point);
         }
         return points;
     }

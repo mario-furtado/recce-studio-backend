@@ -1,0 +1,65 @@
+<div class="workflow-demo" inert aria-hidden="true">
+  <p class="example-label">Demonstração temporária — dados de exemplo, sem gravação na conta ou no navegador.</p>
+  <app-pecs-list *ngIf="kind === 'rally'" />
+  <app-rally-detail *ngIf="kind === 'pec'" />
+  <section *ngIf="kind === 'team'" class="glass-panel demo-panel">
+    <h1 data-demo="team-heading">Perfil da Equipa — simulação</h1>
+    <div data-demo="team-identity" class="demo-box">
+      <h2>Equipa de exemplo</h2>
+      <p>Piloto: Ana · Navegador: Rui · Logótipo: RS</p>
+      <button type="button" class="soft-button demo-control">Editar Perfil</button>
+      <span *ngIf="index >= 1">Nome da equipa · Piloto · Navegador · Alterar Imagem</span>
+    </div>
+    <div data-demo="team-garage" class="demo-box">
+      <h2>Garagem</h2><p>Carro de exemplo · Rally2 · ativo</p>
+      <button type="button" class="soft-button demo-control">Novo Carro</button>
+      <p *ngIf="index >= 2">Nome do carro · Classe · Notas · Guardar Carro · Editar · Foto · Eliminar</p>
+    </div>
+    <div data-demo="team-units" class="demo-box"><h2>Unidades</h2><p>Unidade de Medida: km — exemplo</p></div>
+    <div data-demo="team-save" class="demo-box"><button type="button" class="accent-button demo-control">Guardar</button><button type="button" class="soft-button demo-control">Cancelar</button><p>Exemplo: nenhuma alteração enviada.</p></div>
+    <div data-demo="team-notes" class="demo-box"><h2>Notas</h2><p>Dicionário, apresentação e caderno: pessoal. Sistema base: partilhado com a equipa.</p></div>
+  </section>
+  <section *ngIf="kind === 'offline'" class="glass-panel demo-panel">
+    <h1 data-demo="offline-heading">Reconhecimentos offline — simulação</h1>
+    <div data-demo="offline-status" class="demo-box"><h2>Sessões de exemplo</h2><p>Serra de exemplo · Rascunho · 2 notas · 00:30 · Áudio: 1 MB</p><p>Vale de exemplo · Por sincronizar · 3 notas · 01:00 · Áudio: 2 MB</p></div>
+    <div data-demo="offline-continue" class="demo-box"><button type="button" class="soft-button demo-control">Continuar</button><button type="button" class="accent-button demo-control">Novo reconhecimento</button><p>Continuar: apenas rascunhos.</p></div>
+    <div data-demo="offline-destination" class="demo-box"><h2>Destino — disponível online</h2><p>Escolher PEC: Rali de exemplo / PEC1 · ou Criar PEC</p></div>
+    <div data-demo="offline-sync" class="demo-box"><button type="button" class="accent-button demo-control">Sincronizar</button><p>{{ index === 4 ? 'Envio simulado: notas e áudio. Nenhum pedido real.' : 'Finaliza a sessão e confirma o destino antes de enviar.' }}</p></div>
+    <div *ngIf="index >= 5" data-demo="offline-error" class="demo-box"><h2>Exemplo de erro: áudio em falta</h2><p>Sessão mantida. Confirma a ligação e a gravação antes de tentar novamente.</p><button type="button" class="soft-button demo-control">Atualizar</button></div>
+    <div data-demo="offline-delete" class="demo-box"><button type="button" class="danger-button demo-control">Eliminar</button><p *ngIf="index === 6">Eliminar reconhecimento offline? Esta ação não pode ser desfeita. Cancelar / Eliminar — apenas exemplo.</p></div>
+  </section>
+  <section *ngIf="kind === 'recce'" class="glass-panel demo-panel">
+    <h1>Reconhecimento — simulação</h1>
+    <div data-demo="recce-choice" class="demo-box"><strong>PEC de exemplo · Serra de exemplo</strong><p>Com PEC ou Iniciar sem PEC</p></div>
+    <div data-demo="recce-gps" class="demo-box demo-status">
+      <span>Tempo PEC: {{ recording ? '00:12.0' : '00:00.0' }}</span>
+      <span>GPS simulado: {{ index >= 2 ? 'Ativo · 12 pontos' : 'A aguardar sinal' }}</span>
+      <span>Áudio simulado · {{ recording ? 'Em gravação' : 'Parado' }}</span>
+    </div>
+    <button type="button" data-demo="recce-marker" class="accent-button demo-marker">{{ recording ? 'SEGURE PARA DITAR' : 'INICIE A PEC' }}</button>
+    <div class="demo-box"><span>Transcrição de exemplo: {{ index >= 3 ? 'direita seis mais mais → D6++' : 'Sem nota de voz registada' }}</span></div>
+    <button type="button" data-demo="recce-record" class="soft-button demo-control">{{ recording ? 'FINALIZAR E GUARDAR' : 'INICIAR RECONHECIMENTO' }}</button>
+    <p *ngIf="index >= 4" data-demo="recce-save" class="demo-box">Reconhecimento guardado offline — exemplo. Disponível para sincronizar quando estiver online.</p>
+    <div *ngIf="index >= 4" data-demo="recce-sync" class="demo-box"><strong>Sessão de exemplo · pronta a sincronizar</strong><p>Destino: escolher rali e PEC · Nenhum áudio real ou sessão local criada.</p></div>
+  </section>
+  <section *ngIf="kind === 'studio'" class="glass-panel demo-panel">
+    <h1 data-demo="studio-heading">Studio — simulação</h1>
+    <div data-demo="studio-assets" class="demo-status demo-box"><span>+ Add Video</span><span>Áudio</span><span>+ Add GPS</span><span>Adicionar Notas</span></div>
+    <div class="demo-media demo-box">Vídeo de exemplo · sem ficheiro real ou reprodução</div>
+    <div data-demo="studio-timeline" class="demo-box"><label>Tempo de exemplo<input type="range" min="0" max="30" [value]="videoTime"></label><strong>{{ videoTime }}s / 30s</strong></div>
+    <div data-demo="studio-anchor" class="demo-box"><button type="button" class="accent-button demo-control">Fixar Nota 1 Aqui</button><span>Referência de exemplo: Nota 1 aos 12s</span></div>
+    <div data-demo="studio-map" class="demo-box">
+      <h2>Trajeto simulado · sem satélite</h2>
+      <svg viewBox="0 0 320 110" role="img" aria-label="Trajeto de exemplo com posição e duas notas simuladas">
+        <path d="M20 85 L85 60 L150 80 L220 25 L300 40" fill="none" stroke="#38bdf8" stroke-width="5" />
+        <circle [attr.cx]="videoTime >= 24 ? 220 : 85" [attr.cy]="videoTime >= 24 ? 25 : 60" r="9" fill="#fbbf24" />
+        <text x="65" y="40" fill="currentColor">D6++</text><text x="220" y="15" fill="currentColor">E3</text>
+      </svg>
+    </div>
+    <div data-demo="studio-notes" class="demo-box">
+      <h2>Notas de exemplo</h2>
+      <div *ngFor="let note of sampleNotes" class="demo-note" [class.demo-active-note]="note.time === videoTime"><span>{{ note.time }}s</span><app-note-display [text]="note.text" [rules]="settings.rules" /></div>
+    </div>
+    <div *ngIf="index === 6" data-demo="studio-notebook" class="demo-box"><h2>Caderno / PDF — exemplo</h2><app-notebook [settings]="settings" [notes]="sampleNotes" /></div>
+  </section>
+</div>

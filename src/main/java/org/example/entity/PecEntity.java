@@ -54,6 +54,10 @@ public class PecEntity {
 
     @Column(name = "gps_storage_path")
     private String gpsStoragePath;
+    private Double recceVideoOffsetSeconds;
+
+    public double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds == null ? 0 : recceVideoOffsetSeconds; }
+    public void setRecceVideoOffsetSeconds(Double value) { this.recceVideoOffsetSeconds = value; }
 
     // Relacionamento com o Rally
     @ManyToOne(fetch = FetchType.LAZY)

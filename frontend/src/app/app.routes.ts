@@ -2,20 +2,9 @@ import { Routes } from '@angular/router';
 import { MainLayoutComponent } from './modules/core/shared/components/main-layout/main-layout.component';
 
 // Componentes Core / Públicos
-import { LandingPageComponent } from './modules/core/components/landing-page/landing-page.component';
 import { LoginComponent } from './modules/core/components/login/login.component';
-import { PecsListComponent } from './modules/features/pecs/pecs-list/pecs-list.component';
-import { NewRecceComponent } from './modules/features/recce-mode/new-recce.component';
-import { RallyDetailComponent } from './modules/features/pecs/rally-detail/rally-detail.component';
-import { RecceModeComponent } from './modules/features/recce-mode/recce-mode.component';
-import { PecDetailComponent } from './modules/features/pecs/pec-detail/pec-detail.component';
-import { TeamProfileComponent } from './modules/features/team-profile/team-profile.component';
-import { SettingsComponent } from './modules/features/settings/settings.component';
 import { authGuard } from './modules/core/guards/auth.guard';
 import { recceExitGuard } from './modules/core/guards/recce-exit.guard';
-import { TutorialComponent } from './modules/features/tutorial/tutorial.component';
-import { OfflineReccesComponent } from './modules/features/offline-recces/offline-recces.component';
-import { NotesComponent } from './modules/features/notes/notes.component';
 
 export const routes: Routes = [
   // 1. Rota Pública de Login (Sem Sidebar)
@@ -29,16 +18,19 @@ export const routes: Routes = [
     canActivateChild: [authGuard],
     children: [
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
-      { path: 'pecs', component: PecsListComponent }, // Lista de PECs/Ralis
-      { path: 'new-recce', component: NewRecceComponent },
-      { path: 'recce/:id', component: PecDetailComponent, canDeactivate: [recceExitGuard] }, // Editor com Player + Mapa (trocar pelo teu comp)
-      { path: 'rally/:id', component: RallyDetailComponent },
-      { path: 'recce-mode', component: RecceModeComponent, canDeactivate: [recceExitGuard] },
-      { path: 'offline-recces', component: OfflineReccesComponent },
-      { path: 'notes', component: NotesComponent },
-      { path: 'team-profile', component: TeamProfileComponent },
-      { path: 'settings', component: SettingsComponent },
-      { path: 'tutorial', component: TutorialComponent },
+      { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent) }, // Lista de PECs/Ralis
+      { path: 'new-recce', loadComponent: () => import('./modules/features/recce-mode/new-recce.component').then(m => m.NewRecceComponent) },
+      { path: 'recce/:id', loadComponent: () => import('./modules/features/pecs/pec-detail/pec-detail.component').then(m => m.PecDetailComponent), canDeactivate: [recceExitGuard] }, // Editor com Player + Mapa (trocar pelo teu comp)
+      { path: 'rally/:id', loadComponent: () => import('./modules/features/pecs/rally-detail/rally-detail.component').then(m => m.RallyDetailComponent) },
+      { path: 'recce-mode', loadComponent: () => import('./modules/features/recce-mode/recce-mode.component').then(m => m.RecceModeComponent), canDeactivate: [recceExitGuard] },
+      { path: 'offline-recces', loadComponent: () => import('./modules/features/offline-recces/offline-recces.component').then(m => m.OfflineReccesComponent) },
+      { path: 'notes/learn', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
+      { path: 'tutorial/notes', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
+      { path: 'tutorial/learn/:workflow', loadComponent: () => import('./modules/features/tutorial/workflow-tour.component').then(m => m.WorkflowTourComponent) },
+      { path: 'notes', loadComponent: () => import('./modules/features/notes/notes.component').then(m => m.NotesComponent) },
+      { path: 'team-profile', loadComponent: () => import('./modules/features/team-profile/team-profile.component').then(m => m.TeamProfileComponent) },
+      { path: 'settings', loadComponent: () => import('./modules/features/settings/settings.component').then(m => m.SettingsComponent) },
+      { path: 'tutorial', loadComponent: () => import('./modules/features/tutorial/tutorial.component').then(m => m.TutorialComponent) },
     ],
   },
 

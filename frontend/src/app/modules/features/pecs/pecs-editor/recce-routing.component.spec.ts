@@ -11,6 +11,7 @@ import { PecService } from '../../../core/services/pecs.service';
 import { OfflineRecceStoreService } from '../../../core/services/offline-recce-store.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
+import { defaultNotebook } from '../../../core/notebook/notebook.model';
 
 @Component({ standalone: true, template: 'Escolher rali e PEC' })
 class SelectionComponent {}
@@ -156,6 +157,8 @@ describe('AUD-ROUTE-001 explicit recce targets', () => {
       .flush({ id: 'chosen-pec', name: 'Chosen', status: 'DRAFT', number: 1, distanceKm: 1 });
     detail.setMode('STUDIO');
     harness.detectChanges();
+    http.expectOne((request) => request.method === 'GET' && request.url.endsWith('/api/notebook-preferences'))
+      .flush(defaultNotebook());
     const initial = http.match(() => true);
     expect(initial.length).toBeGreaterThan(0);
     expect(initial.every((request) => request.request.url.includes('/api/pecs/chosen-pec/'))).toBeTrue();

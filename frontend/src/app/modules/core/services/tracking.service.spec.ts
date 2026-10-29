@@ -32,6 +32,19 @@ describe('AUD-REC-001 GPS startup recovery', () => {
 
   afterEach(() => service.stopRecce());
 
+  it('FEAT-003 retains valid GPS fixes received less than a second apart', fakeAsync(() => {
+    service.requestGpsAndStart();
+    positions[0](position(38.7));
+    tick(100);
+    watchPositions[0](position(38.7001));
+    tick(100);
+    watchPositions[0](position(38.7002));
+    flushMicrotasks();
+    expect(service.getGpsTrack().map(point => point.lat)).toEqual([38.7, 38.7001, 38.7002]);
+    expect(service.getGpsTrack().map(point => point.timestamp)).toEqual([0, 0.1, 0.2]);
+    expect(service.getGpsTrack().every(point => point.accuracy === 5)).toBeTrue();
+  }));
+
   function position(latitude = 38.7): GeolocationPosition {
     const coordinates = { latitude, longitude: -9.1, accuracy: 5,
       altitude: null, altitudeAccuracy: null, heading: null, speed: 2 };

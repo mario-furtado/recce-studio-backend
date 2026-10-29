@@ -52,6 +52,73 @@ class NoteWorkflowIntegrationTest {
     }
 
     @Test
+    void occurrencePresentationSurvivesReloadAndAlignmentWithoutAffectingOtherNotes() throws Exception {
+        String presentation = "{\"version\":1,\"text\":\"E3 ATT ATT\",\"elements\":[{\"match\":\"ATT\",\"occurrence\":1,\"position\":\"top-right\",\"size\":150,\"bold\":true,\"underline\":true,\"highlight\":true}]}";
+        String payload = json.createObjectNode().put("text", "E3 ATT ATT").put("originalTimestamp", 5)
+                .put("latitude", 40.1).put("longitude", -8.1).put("presentationJson", presentation).toString();
+        JsonNode saved = call(post("/api/pecs/" + pec + "/notes"), payload);
+        assertEquals(presentation, saved.path("presentationJson").asText());
+        note("E3 ATT ATT", "", 9.0);
+        call(patch("/api/pecs/" + pec + "/notes/" + saved.get("id").asLong() + "/align"),
+                "{\"targetTimestamp\":6,\"text\":\"E3 ATT ATT\",\"speedRating\":\"atenção local\",\"shiftFollowing\":false}");
+        JsonNode reloaded = notes();
+        assertEquals(presentation, reloaded.get(0).path("presentationJson").asText());
+        assertEquals(40.1, reloaded.get(0).path("latitude").asDouble());
+        assertEquals(-8.1, reloaded.get(0).path("longitude").asDouble());
+        assertEquals(6, reloaded.get(0).path("originalTimestamp").asDouble());
+        assertTrue(reloaded.get(1).path("presentationJson").isNull());
+        call(patch("/api/pecs/" + pec + "/notes/" + saved.get("id").asLong() + "/align"),
+                "{\"targetTimestamp\":6,\"text\":\"E3 ATT ATT\",\"presentationJson\":null,\"shiftFollowing\":false}");
+        assertTrue(notes().get(0).path("presentationJson").isNull());
+    }
+
+    @Test
+    void invalidPresentationFailsAtomicallyAndLegacyTextEditsClearStaleStyles() throws Exception {
+        JsonNode saved = note("E3", "", 5.0);
+        note("Following", "", 9.0);
+        JsonNode before = notes();
+        String valid = "{\"version\":1,\"text\":\"E3\",\"elements\":[{\"match\":\"E3\",\"occurrence\":0,\"position\":\"center\",\"size\":100,\"bold\":true,\"underline\":false,\"highlight\":false}]}";
+        for (String invalid : new String[]{"{", valid + " {}", valid.replace("100", "151"), valid.replace("center", "url(evil)"),
+                valid.replace("\"text\":\"E3\"", "\"text\":\"D3\""), valid.replace("\"bold\":true", "\"bold\":\"true\""),
+                valid.replace("\"occurrence\":0", "\"occurrence\":-1"), valid.replace("\"version\":1", "\"version\":2"),
+                valid.replace("\"size\":100", "\"size\":100.5"), valid.replace("\"version\":1", "\"css\":\"color:red\",\"version\":1"),
+                new String(new char[30001]).replace('\0', 'x')}) {
+            String body = json.createObjectNode().put("text", "E3").put("targetTimestamp", 99)
+                    .put("shiftFollowing", true).put("presentationJson", invalid).toString();
+            http.perform(patch("/api/pecs/{pec}/notes/{note}/align", pec, saved.get("id").asLong())
+                            .header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+            assertEquals(before, notes(), "Invalid style must not change text, times or following notes");
+        }
+        call(patch("/api/pecs/" + pec + "/notes/" + saved.get("id").asLong()),
+                json.createObjectNode().put("text", "E3").put("presentationJson", valid).put("originalTimestamp", 5).toString());
+        assertEquals(valid, notes().get(0).path("presentationJson").asText());
+        call(patch("/api/pecs/" + pec + "/notes/" + saved.get("id").asLong() + "/align"),
+                "{\"text\":\"D3\",\"targetTimestamp\":5,\"shiftFollowing\":false}");
+        assertTrue(notes().get(0).path("presentationJson").isNull());
+    }
+
+    @Test
+    void foreignAccountAndCompletedPecCannotWritePresentation() throws Exception {
+        JsonNode saved = note("Private", "", 5.0);
+        JsonNode before = notes();
+        AuthRequestDTO account = new AuthRequestDTO();
+        account.setEmail(UUID.randomUUID() + "@other.invalid"); account.setPassword("fixture-only");
+        String foreign = "Bearer " + auth.register(account).getToken();
+        http.perform(get("/api/pecs/{id}/notes", pec).header("Authorization", foreign)).andExpect(status().isNotFound());
+        String body = "{\"text\":\"Spoofed\",\"targetTimestamp\":99,\"presentationJson\":null}";
+        http.perform(patch("/api/pecs/{pec}/notes/{note}/align", pec, saved.get("id").asLong())
+                .header("Authorization", foreign).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
+        http.perform(patch("/api/pecs/{pec}/notes/{note}", pec, saved.get("id").asLong())
+                .header("Authorization", foreign).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNotFound());
+        assertEquals(before, notes());
+        call(patch("/api/pecs/" + pec), "{\"status\":\"COMPLETED\"}");
+        http.perform(patch("/api/pecs/{pec}/notes/{note}/align", pec, saved.get("id").asLong())
+                .header("Authorization", token).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest());
+        assertEquals(before, notes());
+    }
+
+    @Test
     void exportedWorkbookCanBeEditedAndReimportedWithoutDuplicatingNotesOrLosingTimes() throws Exception {
         note("D3", "gravilha", 1.5);
         note("E4", "abre", 3.5);

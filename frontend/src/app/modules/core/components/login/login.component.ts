@@ -95,22 +95,21 @@ export class LoginComponent {
   enterOffline(): void {
     this.shared.setConnectionMode('offline');
     this.auth.enterOffline();
-    this.router.navigate(['/recce-mode']);
+    this.router.navigate(['/offline-recces']);
   }
 
   private async navigateAfterAuth(): Promise<void> {
+    if (this.shared.connectionMode$.value === 'offline') {
+      this.router.navigate(['/offline-recces']);
+      return;
+    }
+
     try {
       const sessions = await this.offlineStore.listSessions();
       const hasOfflineWork = sessions.some((session) => session.status !== 'synced');
-      if (this.shared.connectionMode$.value === 'offline') {
-        this.router.navigate([hasOfflineWork ? '/offline-recces' : '/recce-mode']);
-        return;
-      }
       this.router.navigate([hasOfflineWork ? '/offline-recces' : '/']);
     } catch {
-      this.router.navigate([
-        this.shared.connectionMode$.value === 'offline' ? '/recce-mode' : '/',
-      ]);
+      this.router.navigate(['/']);
     }
   }
 }

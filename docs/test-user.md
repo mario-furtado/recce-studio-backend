@@ -7,8 +7,8 @@ Para a ativar localmente, fornecer todos estes valores pela configuração Sprin
 | Configuração | Valor exigido |
 | --- | --- |
 | `recce.test-user.enabled` / `RECCE_TEST_USER_ENABLED` | `true` explícito |
-| `recce.test-user.email` / `RECCE_TEST_USER_EMAIL` | Email escolhido para o teste |
-| `recce.test-user.password` / `RECCE_TEST_USER_PASSWORD` | Palavra-passe escolhida explicitamente, com pelo menos 6 caracteres |
+| `recce.test-user.email` / `RECCE_TEST_USER_EMAIL` | teste@teste.pt |
+| `recce.test-user.password` / `RECCE_TEST_USER_PASSWORD` | teste123 |
 | `recce.environment` / `RECCE_ENV` | `local`, `dev`, `development` ou `test` |
 | `server.address` / `SERVER_ADDRESS` | `127.0.0.1`, `localhost`, `::1` ou `0:0:0:0:0:0:0:1` |
 
