@@ -24,7 +24,7 @@ ${blockStyles}
       <button type="button" class="soft-button px-3 py-2 rounded" (click)="print()" [disabled]="!!error || pending || !pages.length">Imprimir / Guardar PDF</button>
       <p *ngIf="printError" role="alert">{{ printError }}</p>
     </div>
-    <div class="notebook-scroll">
+    <div class="notebook-scroll" tabindex="0" role="region" aria-label="Pré-visualização do caderno; usa as setas para deslocar">
       <div #measure class="notebook-measure" [style.fontSize.pt]="settings.page.fontPt" aria-hidden="true">
         <app-note-block *ngFor="let item of measured" [block]="item.block" />
       </div>

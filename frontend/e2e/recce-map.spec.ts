@@ -60,7 +60,7 @@ test('FEAT-003 satellite route, labeled notes and video remain synchronized acro
     if (blockTiles) await route.abort(); else await route.continue();
   });
   await page.goto(`/recce/${pec.id}`);
-  await page.getByRole('button', { name: /ST Studio/ }).click();
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await expect(page.locator('.leaflet-container')).toBeVisible();
   await expect(page.locator('.leaflet-tile-loaded').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.leaflet-control-attribution')).toContainText('Esri');
@@ -70,6 +70,7 @@ test('FEAT-003 satellite route, labeled notes and video remain synchronized acro
   await expect(video).toBeVisible();
   expect((await video.boundingBox())!.height, 'The map must not collapse the video').toBeGreaterThan(100);
   await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
+  await page.locator('.studio-tools > details').filter({ has: page.locator('summary', { hasText: /^Sincronização$/ }) }).locator('summary').click();
   await page.getByLabel('Desfasamento vídeo/reconhecimento (s)', { exact: true }).fill('0.2');
   const saved = page.waitForResponse(response => response.url() === `${api}/pecs/${pec.id}` && response.request().method() === 'PATCH');
   await page.getByRole('button', { name: 'Guardar sincronização', exact: true }).click();
@@ -103,7 +104,7 @@ test('FEAT-003 satellite route, labeled notes and video remain synchronized acro
   expect(tileAuth.every(value => value === undefined), 'Map imagery must never receive API credentials').toBeTruthy();
   blockTiles = false;
   await page.reload();
-  await page.getByRole('button', { name: /ST Studio/ }).click();
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await expect(page.getByLabel('Desfasamento vídeo/reconhecimento (s)', { exact: true })).toHaveValue('0.2');
   await expect(page.locator('.recce-map-note')).toHaveCount(2);
   await page.locator('app-recce-map').scrollIntoViewIfNeeded();

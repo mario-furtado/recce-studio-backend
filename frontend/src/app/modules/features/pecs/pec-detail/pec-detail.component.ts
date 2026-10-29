@@ -6,21 +6,24 @@ import { PecsEditorComponent } from '../pecs-editor/pecs-editor.component';
 import { PecService } from '../../../core/services/pecs.service';
 import { RecceModeComponent } from '../../recce-mode/recce-mode.component';
 import { SharedProperties } from '../../../core/shared/shared-properties';
+import { ContextPanelComponent } from '../../../core/shared/components/context-panel.component';
 
 export type ViewMode = 'OVERVIEW' | 'RECONNAISSANCE' | 'STUDIO';
 
 @Component({
   selector: 'app-pec-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RecceModeComponent, PecsEditorComponent],
+  imports: [CommonModule, FormsModule, RouterLink, RecceModeComponent, PecsEditorComponent, ContextPanelComponent],
   templateUrl: './pec-detail.component.html',
   styleUrls: ['./pec-detail.component.css'],
 })
 export class PecDetailComponent implements OnInit {
   @ViewChild(RecceModeComponent) recce?: RecceModeComponent;
+  @ViewChild(PecsEditorComponent) studio?: PecsEditorComponent;
 
-  canDeactivate(): boolean {
-    return this.recce?.canDeactivate() ?? true;
+  canDeactivate(): boolean | Promise<boolean> {
+    if (this.recce && !this.recce.canDeactivate()) return false;
+    return this.studio?.canDeactivate() ?? true;
   }
   pecId: string = '';
   currentMode: ViewMode = 'OVERVIEW';
@@ -80,7 +83,11 @@ export class PecDetailComponent implements OnInit {
 
   setMode(mode: ViewMode): void {
     if (this.isLoadingPec || this.pecUnavailable) return;
-    if (mode !== this.currentMode && !this.canDeactivate()) return;
+    if (mode !== this.currentMode) {
+      const allowed = this.canDeactivate();
+      if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.cancelEditNote(); this.studio?.cancelNewNote(); this.setMode(mode); } }); return; }
+      if (!allowed) return;
+    }
     if (this.pec.status === 'COMPLETED' && mode === 'RECONNAISSANCE') {
       return;
     }
@@ -89,6 +96,9 @@ export class PecDetailComponent implements OnInit {
 
   updateStatus(status: 'COMPLETED' | 'DRAFT'): void {
     if (this.isLoadingPec || this.pecUnavailable || !this.pecId) return;
+    const allowed = this.canDeactivate();
+    if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.cancelEditNote(); this.studio?.cancelNewNote(); this.updateStatus(status); } }); return; }
+    if (!allowed) return;
     this.pecService.updatePecStatus(this.pecId, status).subscribe({
       next: (updated) => {
         this.pec = { ...this.pec, ...updated, status };

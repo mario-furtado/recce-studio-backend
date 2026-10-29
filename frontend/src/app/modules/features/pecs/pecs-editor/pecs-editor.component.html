@@ -1,422 +1,79 @@
-<section *ngIf="targetMissing" role="alert" class="glass-panel p-6 rounded-2xl space-y-4">
-  <h1 class="text-xl font-bold">Seleciona uma PEC</h1>
-  <p>Escolhe uma PEC antes de abrir o Studio.</p>
-  <a routerLink="/new-recce" class="accent-button inline-block px-4 py-2 rounded-xl">Escolher destino</a>
-</section>
-<div *ngIf="!targetMissing" class="min-h-[calc(100vh-4rem)] flex flex-col gap-4">
-  <section class="glass-panel p-3 rounded-xl">
-    <button type="button" class="soft-button px-3 py-2 rounded" (click)="showNotebook = !showNotebook">{{ showNotebook ? 'Fechar caderno' : 'Caderno / PDF' }}</button>
-    <a routerLink="/notes" class="soft-button px-3 py-2 rounded">Configurar notas</a>
-    <p *ngIf="notebookError" role="alert">{{ notebookError }}</p>
-    <button *ngIf="notebookError" type="button" class="soft-button px-3 py-2 rounded" (click)="loadNotebook()">Recarregar modelo pessoal</button>
+<section *ngIf="targetMissing" role="alert" class="studio-empty p-4"><h1>Seleciona uma PEC</h1><p>Escolhe uma PEC antes de abrir o Studio.</p><a routerLink="/new-recce" class="inline-flex min-h-11 items-center rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Escolher destino</a></section>
+<div *ngIf="!targetMissing" class="studio-workspace" [style.--notes-width]="notesWidth + '%'">
+  <header class="studio-actions flex flex-wrap items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-700" aria-label="Ferramentas do Studio">
+    <div class="studio-label flex items-center gap-3"><strong>Studio</strong><span>{{ currentTime.toFixed(1) }} s</span><span *ngIf="isLocked" class="studio-status">Só leitura</span></div>
+    <div class="studio-tools flex flex-wrap items-center gap-2">
+      <details appContextPanel><summary class="inline-flex items-center gap-2 min-h-11 cursor-pointer list-none rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Ficheiros<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="studio-menu">
+        <app-studio-assets [hasVideo]="hasVideo" [hasAudio]="hasAudio" [hasGps]="hasGpx" [videoName]="videoFileName" [audioName]="audioFileName" [gpsName]="gpsFileName" [notesCount]="notes.length" [locked]="isLocked || hasNoteDraft" [blockedReason]="isLocked ? 'PEC em modo de leitura.' : 'Conclui ou cancela a edição para gerir ficheiros.'" (selected)="onFileSelect($event.event, $event.kind)" (notesSelected)="onFileSelected($event)" (removed)="$event === 'video' ? deleteVideo() : deleteAudio()" (download)="onDownloadTemplate()" />
+      </div></details>
+      <details appContextPanel><summary class="inline-flex items-center gap-2 min-h-11 cursor-pointer list-none rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Sincronização<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="studio-menu">
+        <p>Desfasamento atual: {{ (timeOffset + captureOffset).toFixed(1) }} s</p>
+        <label for="capture-offset" class="block mt-3 mb-1 text-sm normal-case">Desfasamento vídeo/reconhecimento (s)</label>
+        <input id="capture-offset" type="number" step="0.1" min="-86400" max="86400" [(ngModel)]="captureOffsetDraft" [disabled]="isLocked || isSavingOffset || hasNoteDraft" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50">
+        <button type="button" (click)="saveCaptureOffset()" [disabled]="isLocked || isSavingOffset || hasNoteDraft" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Guardar sincronização</button>
+        <button type="button" (click)="setAnchorAtCurrentTime()" [disabled]="isLocked || hasNoteDraft" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Fixar Nota 1 Aqui</button>
+        <small class="block text-[13px] text-slate-300">Tempo no vídeo = reconhecimento + desfasamento.</small>
+      </div></details>
+      <button type="button" (click)="showNotebook = true" [disabled]="hasNoteDraft" aria-haspopup="dialog" [attr.aria-expanded]="showNotebook" aria-controls="studio-notebook-preview" class="studio-export inline-flex items-center gap-2 min-h-11 rounded-lg border border-rose-400 bg-rose-950 px-3 py-2 text-sm text-rose-100 disabled:opacity-50"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></svg>Exportar PDF</button>
+      <details appContextPanel class="desktop-options"><summary class="inline-flex items-center gap-2 min-h-11 cursor-pointer list-none rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Opções<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="studio-menu">
+        <label for="notes-width" class="block mt-3 mb-1 text-sm normal-case">Largura do painel de notas</label><input id="notes-width" type="range" min="30" max="50" step="1" [(ngModel)]="notesWidth" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"><output>{{ notesWidth }}%</output>
+        <a routerLink="/notes" class="inline-flex min-h-11 items-center rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Configurar notas</a>
+      </div></details>
+      <a routerLink="/notes" class="mobile-settings inline-flex min-h-11 items-center rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Configurar notas</a>
+    </div>
+  </header>
+  <p *ngIf="notebookError" role="alert">{{ notebookError }} <button type="button" (click)="loadNotebook()" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Recarregar modelo pessoal</button></p>
+  <dialog id="studio-notebook-preview" appFocusPanel [panelOpen]="showNotebook" panelTitle="Caderno / PDF" (panelClosed)="showNotebook = false">
+    <header class="flex items-center justify-between gap-3 mb-4"><h2 data-panel-heading tabindex="-1" class="text-lg font-bold">Caderno / PDF</h2><button type="button" (click)="showNotebook = false" class="soft-button min-h-11 px-3 py-2 rounded-lg">Fechar caderno</button></header>
     <app-notebook *ngIf="showNotebook && notebookLoaded" [settings]="notebookSettings" [notes]="notes" />
-  </section>
-  <div
-    class="studio-toolbar glass-panel flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl shadow-lg"
-  >
-    <div>
-      <!-- <h1 class="text-lg font-extrabold text-white">{{ pecTitle }}</h1> -->
-      <p class="text-xs text-slate-400">
-        Offset: {{ timeOffset + captureOffset >= 0 ? "+" : "" }}{{ (timeOffset + captureOffset).toFixed(1) }}s
-      </p>
-      <p *ngIf="isLocked" class="text-xs text-amber-400 font-semibold mt-1">
-        PEC concluida: volte a rascunho para editar.
-      </p>
-    </div>
-
-    <div
-      class="studio-asset-actions surface-card flex items-center gap-2 p-1.5 rounded-xl"
-    >
-      <label
-        *ngIf="!hasVideo"
-        [class.pointer-events-none]="isLocked"
-        [class.opacity-40]="isLocked"
-        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
-      >
-        <input
-          type="file"
-          (change)="onFileSelect($event, 'video')"
-          accept="video/*"
-          class="hidden"
-        />
-        <span class="desktop-label">+ Add Video</span>
-        <span class="mobile-label">Video</span>
-      </label>
-
-      <button
-        *ngIf="hasVideo"
-        type="button"
-        (click)="deleteVideo()"
-        [disabled]="isLocked"
-        class="danger-button text-xs text-white px-3 py-1.5 rounded-lg font-semibold"
-        [attr.title]="videoFileName || 'Eliminar video'"
-      >
-        <span class="desktop-label">Eliminar Video</span>
-        <span class="mobile-label">Del Video</span>
-      </button>
-
-      <label
-        *ngIf="!hasAudio"
-        [class.pointer-events-none]="isLocked"
-        [class.opacity-40]="isLocked"
-        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
-      >
-        <input
-          type="file"
-          (change)="onFileSelect($event, 'audio')"
-          accept="audio/*"
-          class="hidden"
-        />
-        <span class="desktop-label">+ Add Audio</span>
-        <span class="mobile-label">Audio</span>
-      </label>
-
-      <button
-        *ngIf="hasAudio"
-        type="button"
-        (click)="deleteAudio()"
-        [disabled]="isLocked"
-        class="danger-button text-xs text-white px-3 py-1.5 rounded-lg font-semibold"
-        [attr.title]="audioFileName || 'Eliminar audio'"
-      >
-        <span class="desktop-label">Eliminar Audio</span>
-        <span class="mobile-label">Del Audio</span>
-      </button>
-
-      <label
-        [class.pointer-events-none]="isLocked"
-        [class.opacity-40]="isLocked"
-        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
-      >
-        <input
-          type="file"
-          (change)="onFileSelect($event, 'gpx')"
-          accept=".gpx,.json,application/json"
-          class="hidden"
-        />
-        <span class="desktop-label">{{
-          hasGpx ? "Trocar GPS" : "+ Add GPS"
-        }}</span>
-        <span class="mobile-label">GPS</span>
-      </label>
-
-      <label
-        [class.pointer-events-none]="isLocked"
-        [class.opacity-40]="isLocked"
-        class="soft-button relative cursor-pointer text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
-      >
-        <input
-          type="file"
-          (change)="onFileSelected($event)"
-          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-          class="hidden"
-        />
-        <span class="desktop-label">{{
-          hasNotes ? "Carregar Notas" : "+ Adicionar Notas"
-        }}</span>
-        <span class="mobile-label">Notas</span>
-      </label>
-
-      <button
-        type="button"
-        (click)="onDownloadTemplate()"
-        class="soft-button text-xs text-slate-200 px-3 py-1.5 rounded-lg font-semibold"
-      >
-        <span class="desktop-label">Descarregar Template</span>
-        <span class="mobile-label">Template</span>
-      </button>
-    </div>
-
-    <div class="studio-sync-actions flex items-center gap-3">
-      <button
-        (click)="setAnchorAtCurrentTime()"
-        [disabled]="isLocked"
-        class="accent-button text-white text-xs font-bold px-3 py-2 rounded-xl"
-      >
-        <span class="desktop-label">Fixar Nota 1 Aqui</span>
-        <span class="mobile-label">Fixar Nota 1</span>
-      </button>
-
-      <div class="playback-speed surface-card flex p-1 rounded-xl text-xs">
-        <button
-          *ngFor="let speed of [1.0, 1.25, 1.5, 2.0]"
-          (click)="setPlaybackSpeed(speed)"
-          [class.selected-ring]="playbackSpeed === speed"
-          [class.text-white]="playbackSpeed === speed"
-          [class.text-slate-400]="playbackSpeed !== speed"
-          class="px-2 py-1 rounded-lg font-semibold transition"
-        >
-          {{ speed }}x
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-start">
-    <div class="lg:col-span-8 flex flex-col gap-4 min-w-0">
-      <div
-        class="rounded-2xl overflow-hidden border border-slate-800 shadow-2xl aspect-video min-h-48 flex items-center justify-center relative bg-black/80"
-      >
-        <video
-          *ngIf="videoSrc; else noVideo"
-          #videoPlayer
-          [src]="videoSrc"
-          (timeupdate)="onTimeUpdate()"
-          (seeked)="onTimeUpdate()"
-          controls
-          class="w-full h-full object-contain"
-        ></video>
-        <ng-template #noVideo>
-          <div class="text-sm text-slate-500">Sem video carregado</div>
-        </ng-template>
-      </div>
-
-      <div
-        *ngIf="audioSrc"
-        class="surface-card rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center gap-3"
-      >
-        <div class="min-w-0">
-          <div class="text-xs font-bold text-slate-300">Audio da PEC</div>
-          <div class="text-[11px] text-slate-500 truncate">
-            {{ audioFileName || "Reconhecimento gravado" }}
-          </div>
+  </dialog>
+  <nav class="studio-mobile-views gap-2 mb-4" aria-label="Vistas do Studio">
+    <button type="button" [attr.aria-pressed]="mobileView === 'video'" (click)="mobileView = 'video'" class="min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Vídeo</button>
+    <button type="button" [attr.aria-pressed]="mobileView === 'map'" (click)="mobileView = 'map'" class="min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Mapa</button>
+    <button type="button" [attr.aria-pressed]="mobileView === 'notes'" (click)="mobileView = 'notes'" class="min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Notas<span *ngIf="hasNoteDraft"> · Em edição</span></button>
+  </nav>
+  <div class="studio-grid">
+    <div class="studio-review min-w-0 flex flex-col gap-4">
+      <section class="studio-media min-w-0 overflow-hidden rounded-xl border border-slate-700 bg-slate-900" [class.mobile-inactive]="mobileView !== 'video'" aria-label="Reprodução da PEC">
+        <div class="studio-video aspect-video min-h-40 bg-black grid place-items-center text-center">
+          <video class="w-full h-full object-contain" *ngIf="videoSrc; else noVideo" #videoPlayer [src]="videoSrc" (timeupdate)="onTimeUpdate()" (seeked)="onTimeUpdate()" controls></video>
+          <ng-template #noVideo><p>Sem vídeo carregado<br><small class="block text-[13px] text-slate-300">Adiciona um ficheiro em Ficheiros.</small></p></ng-template>
         </div>
-        <audio
-          #audioPlayer
-          [src]="audioSrc"
-          (timeupdate)="onTimeUpdate()"
-          (seeked)="onTimeUpdate()"
-          controls
-          class="w-full"
-        ></audio>
-      </div>
-
-      <app-recce-map [track]="gpsTrack" [notes]="mapNotes"
-        [playbackTime]="currentTime - captureOffset" [activeNoteId]="activeNoteId"
-        (noteSelected)="selectMapNote($event)"></app-recce-map>
-      <p *ngIf="notes.length > mapNotes.length" class="text-xs text-amber-400">
-        {{ notes.length - mapNotes.length }} notas sem posição GPS identificável.
-      </p>
-      <div class="surface-card rounded-xl p-3 flex flex-wrap gap-3 items-end">
-        <label class="text-xs" for="capture-offset">Desfasamento vídeo/reconhecimento (s)
-          <input id="capture-offset" type="number" step="0.1" min="-86400" max="86400"
-            [(ngModel)]="captureOffsetDraft" [disabled]="isLocked || isSavingOffset"
-            class="themed-input block p-2 rounded-lg" />
-        </label>
-        <button type="button" class="soft-button px-3 py-2" (click)="saveCaptureOffset()"
-          [disabled]="isLocked || isSavingOffset">Guardar sincronização</button>
-        <span class="text-xs text-slate-400">Tempo no vídeo = tempo do reconhecimento + desfasamento.</span>
-      </div>
+        <audio class="w-full" *ngIf="audioSrc" #audioPlayer [src]="audioSrc" (timeupdate)="onTimeUpdate()" (seeked)="onTimeUpdate()" controls aria-label="Áudio da PEC"></audio>
+        <div class="studio-playback flex flex-wrap items-center justify-between gap-2 p-3"><span>{{ currentTime.toFixed(1) }} s</span><div role="group" aria-label="Velocidade de reprodução"><button *ngFor="let speed of [1, 1.25, 1.5, 2]" type="button" [attr.aria-pressed]="playbackSpeed === speed" (click)="setPlaybackSpeed(speed)" class="min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">{{ speed }}x</button></div></div>
+      </section>
+      <section class="studio-map" [class.mobile-inactive]="mobileView !== 'map'" aria-label="Trajeto da PEC">
+        <app-recce-map [track]="gpsTrack" [notes]="mapNotes" [playbackTime]="currentTime - captureOffset" [activeNoteId]="activeNoteId" (noteSelected)="selectMapNote($event)" />
+        <p *ngIf="notes.length > mapNotes.length" class="studio-warning">{{ notes.length - mapNotes.length }} notas sem posição GPS identificável.</p>
+      </section>
     </div>
-
-    <div
-      class="glass-panel lg:col-span-4 rounded-2xl p-4 flex flex-col overflow-hidden"
-    >
-      <div
-        class="flex justify-between items-center pb-3 border-b border-slate-800 mb-3 gap-2"
-      >
-        <div>
-          <h3 class="font-bold text-white text-sm">Caderno de Notas</h3>
-          <span class="text-[11px] text-slate-500">
-            {{ notes.length }} notas registadas
-          </span>
-        </div>
-
-        <button
-          (click)="openAddNoteForm()"
-          [disabled]="isLocked"
-          class="accent-button text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap"
-        >
-          Inserir Nota ({{ currentTime.toFixed(1) }}s)
-        </button>
+    <section class="studio-notes min-w-0 overflow-hidden rounded-xl border border-slate-700 bg-slate-900" [class.mobile-inactive]="mobileView !== 'notes'" aria-label="Notas da PEC">
+      <header class="notes-heading flex items-center justify-between gap-3 p-4 border-b border-slate-700" [hidden]="hasNoteDraft"><div><h2 class="text-lg font-bold">Notas</h2><span>{{ notes.length }} registadas</span></div><button type="button" class="studio-primary min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" (click)="openAddNoteForm()" [disabled]="isLocked">Inserir Nota</button></header>
+      <div class="notes-list p-2" [hidden]="hasNoteDraft">
+        <p *ngIf="!notes.length" class="studio-empty p-4">Ainda não há notas. Insere uma no instante que estás a rever.</p>
+        <article *ngFor="let note of notes; let i = index" class="note-row studio-note-row flex items-start gap-2 border-b border-slate-700 p-3" [class.is-active]="activeNoteId === note.id">
+          <button type="button" class="note-select flex-1 min-w-0 text-left !border-0 !bg-transparent min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" (click)="jumpToNote(note)" [attr.aria-label]="'Rever nota ' + (i + 1) + ': ' + note.text" [attr.aria-current]="activeNoteId === note.id ? 'true' : null">
+            <span class="note-meta text-[13px] text-slate-300 flex items-center gap-3"><span>{{ i + 1 }}</span><time>{{ noteTimeLabel(note) }}</time></span>
+            <span class="note-content"><app-note-display *ngIf="notebookLoaded; else plainNote" [text]="note.text" [rules]="notebookSettings.rules" [presentationJson]="note.presentationJson" /><ng-template #plainNote>{{ note.text }}</ng-template><span *ngIf="note.speedRating" class="note-observation block text-[13px] text-slate-300">{{ note.speedRating }}</span><small *ngIf="note.presentationJson" class="block text-[13px] text-slate-300">Apresentação personalizada</small></span>
+          </button>
+          <div class="note-actions flex items-center gap-1" *ngIf="!isLocked"><button type="button" [attr.data-edit-note]="note.id" (click)="startEditNote(note, $event)" [disabled]="isSavingNote" title="Editar Nota" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Editar</button><details appContextPanel [panelWidth]="180"><summary [attr.aria-label]="'Mais ações da nota ' + (i + 1)" class="inline-flex items-center gap-2 min-h-11 cursor-pointer list-none rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm" title="Mais ações desta nota">Ações<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div><button type="button" class="action-danger min-h-11 rounded-lg border px-3 py-2 text-sm disabled:opacity-50" (click)="deleteNote(note.id, $event)" [disabled]="isSavingNote"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg>Eliminar nota</button></div></details></div>
+        </article>
       </div>
-
-      <div
-        *ngIf="isAddingNote"
-        class="note-edit-panel mb-3 p-3 rounded-xl space-y-2 animate-fade-in"
-      >
-        <div class="flex justify-between items-center">
-          <span class="text-xs font-bold theme-text">
-            Nova Nota aos {{ currentTime.toFixed(1) }}s
-          </span>
-          <button
-            (click)="isAddingNote = false"
-            class="text-slate-500 hover:text-white text-xs"
-          >
-            x
-          </button>
-        </div>
-
-        <input aria-label="Texto da nova nota"
-          type="text"
-          [(ngModel)]="newNoteText"
-          (keyup.enter)="saveNewNote()"
-          placeholder="Ex: D3 com gravilha não corta..."
-          autofocus
-          class="themed-input w-full text-xs rounded-lg px-3 py-2"
-        />
-        <app-note-display *ngIf="notebookLoaded" [text]="newNoteText" [rules]="notebookSettings.rules" />
-        <input aria-label="Observações da nova nota"
-          type="text"
-          [(ngModel)]="newNoteObservation"
-          (keyup.enter)="saveNewNote()"
-          placeholder="Observações / mudança..."
-          class="themed-input w-full text-slate-300 text-xs rounded-lg px-3 py-2"
-        />
-
-        <div class="flex justify-end gap-2 pt-1">
-          <button
-            (click)="isAddingNote = false"
-            class="soft-button px-3 py-1 rounded-lg text-slate-400 text-xs font-semibold"
-          >
-            Cancelar
-          </button>
-          <button
-            (click)="saveNewNote()"
-            class="accent-button px-3 py-1 rounded-lg text-white text-xs font-bold"
-          >
-            Guardar
-          </button>
-        </div>
-      </div>
-
-      <div class="flex-1 overflow-y-auto space-y-2 pr-1">
-        <div
-          *ngFor="let note of notes; let i = index"
-          (click)="jumpToNote(note)"
-          [class.selected-ring]="activeNoteId === note.id"
-          [class.text-white]="activeNoteId === note.id"
-          [class.text-slate-300]="activeNoteId !== note.id"
-          class="note-row p-3 rounded-xl border border-slate-800/80 transition-all duration-200 cursor-pointer flex items-center justify-between group"
-        >
-          <div class="flex items-center gap-3 overflow-hidden flex-1" [class.flex-wrap]="editingNoteId === note.id">
-            <span
-              [class.bg-white]="activeNoteId === note.id"
-              [class.note-index-active]="activeNoteId === note.id"
-              [class.text-slate-400]="activeNoteId !== note.id"
-              class="note-index text-xs font-black w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
-            >
-              {{ i + 1 }}
-            </span>
-
-            <span class="text-xs font-bold opacity-75 shrink-0">
-              {{ noteTimeLabel(note) }}
-            </span>
-
-            <div
-              *ngIf="editingNoteId !== note.id; else editNoteForm"
-              class="min-w-0 flex-1"
-              (dblclick)="startEditNote(note, $event)"
-            >
-              <app-note-display *ngIf="notebookLoaded; else plainNote" [text]="note.text" [rules]="notebookSettings.rules" [presentationJson]="note.presentationJson" />
-              <span *ngIf="note.presentationJson" class="text-[10px] text-slate-400">Apresentação personalizada</span>
-              <ng-template #plainNote><div class="font-semibold text-xs">{{ note.text }}</div></ng-template>
-              <div
-                *ngIf="note.speedRating"
-                class="note-observation text-[11px] truncate mt-0.5"
-              >
-                {{ note.speedRating }}
-              </div>
-            </div>
-
-            <ng-template #editNoteForm>
-              <fieldset [disabled]="isSavingNote"
-                class="note-edit-panel min-w-0 basis-full space-y-2"
-                (click)="$event.stopPropagation()"
-              >
-                <div class="text-[10px] font-black text-slate-500 uppercase">
-                  Editar Nota
-                </div>
-                <input aria-label="Texto da nota"
-                  type="text"
-                  [(ngModel)]="editingNoteText"
-                  (ngModelChange)="editingPresentationJson = null"
-                  class="themed-input w-full text-white text-xs rounded px-2 py-1"
-                />
-                <p class="text-[11px] text-slate-400">Alterar o texto repõe a apresentação desta nota.</p>
-                <app-note-display *ngIf="notebookLoaded" [text]="editingNoteText" [rules]="notebookSettings.rules" [presentationJson]="editingPresentationJson" />
-                <app-note-presentation-editor *ngIf="notebookLoaded" [text]="editingNoteText" [rules]="notebookSettings.rules" [(value)]="editingPresentationJson" />
-                <input aria-label="Observações da nota"
-                  type="text"
-                  [(ngModel)]="editingNoteObservation"
-                  class="themed-input w-full text-slate-300 text-[11px] rounded px-2 py-1"
-                  placeholder="Observações / mudança..."
-                />
-                <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
-                  <input aria-label="Tempo da nota no vídeo (segundos)"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    [(ngModel)]="editingNoteTimestamp"
-                    class="themed-input w-full text-white text-xs rounded px-2 py-1"
-                    placeholder="Tempo no video (s)"
-                  />
-                  <button
-                    type="button"
-                    (click)="saveEditedNoteAtCurrentTime(note, $event)"
-                    class="soft-button px-2 py-1 rounded text-slate-200 text-[11px] font-semibold whitespace-nowrap"
-                    title="Guardar esta nota no tempo atual do video/audio"
-                  >
-                    Afixar aqui
-                  </button>
-                </div>
-                <label class="flex items-center gap-2 text-[11px] text-slate-400">
-                  <input
-                    type="checkbox"
-                    [(ngModel)]="editingShiftFollowing"
-                    class="accent-red-600"
-                  />
-                  Mover notas seguintes que já têm tempo
-                </label>
-                <div class="flex justify-end gap-1">
-                  <button
-                    type="button"
-                    (click)="cancelEditNote($event)"
-                    class="soft-button px-2 py-0.5 rounded text-slate-400 text-[11px] font-semibold"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    (click)="saveEditedNote(note, $event)"
-                    class="accent-button px-2 py-0.5 rounded text-white text-[11px] font-bold"
-                  >
-                    {{ isSavingNote ? 'A guardar…' : 'Guardar' }}
-                  </button>
-                </div>
-              </fieldset>
-            </ng-template>
-          </div>
-
-          <button
-            *ngIf="!isLocked && editingNoteId !== note.id"
-            (click)="startEditNote(note, $event)"
-            title="Editar Nota"
-            class="icon-button soft-button transition shrink-0"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 20h4l11-11-4-4L4 16z" />
-              <path d="M13 7l4 4" />
-            </svg>
-            <span class="sr-only">Editar</span>
-          </button>
-          <button
-            *ngIf="!isLocked"
-            (click)="deleteNote(note.id, $event)"
-            [disabled]="isSavingNote"
-            title="Eliminar Nota"
-            class="icon-button danger-button opacity-0 group-hover:opacity-100 transition shrink-0"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7h16" />
-              <path d="M10 11v6M14 11v6" />
-              <path d="M6 7l1 14h10l1-14" />
-              <path d="M9 7V4h6v3" />
-            </svg>
-            <span class="sr-only">Eliminar</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      <section *ngIf="editingNote as note" class="note-editor" aria-label="Editar nota">
+        <header class="editor-heading flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-700"><div><h2 class="text-lg font-bold">Editar nota</h2><span>{{ noteTimeLabel(note) }} · {{ note.text }}</span></div><button type="button" (click)="backToNotes()" [disabled]="isSavingNote" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Voltar às notas</button></header>
+        <fieldset [disabled]="isSavingNote" class="editor-fields">
+          <section class="mb-4"><h3 class="font-semibold">Conteúdo</h3><label for="edit-note-text" class="block mt-3 mb-1 text-sm normal-case">Texto da nota</label><input id="edit-note-text" [(ngModel)]="editingNoteText" (ngModelChange)="editingPresentationJson = null" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"><small class="block text-[13px] text-slate-300">Alterar o texto repõe a apresentação desta nota.</small><label for="edit-note-observation" class="block mt-3 mb-1 text-sm normal-case">Observações da nota</label><input id="edit-note-observation" [(ngModel)]="editingNoteObservation" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"></section>
+          <section class="note-preview my-4" aria-label="Pré-visualização da nota"><h3 class="font-semibold">Pré-visualização</h3><app-note-display *ngIf="notebookLoaded; else draftText" [text]="editingNoteText" [rules]="notebookSettings.rules" [presentationJson]="editingPresentationJson" /><ng-template #draftText>{{ editingNoteText }}</ng-template><p *ngIf="editingNoteObservation">{{ editingNoteObservation }}</p></section>
+          <details class="note-timing mb-4"><summary class="inline-flex items-center gap-2 min-h-11 cursor-pointer list-none rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm">Tempo · {{ editingNoteTimestamp ?? 'sem instante' }} s</summary><label for="edit-note-time" class="block mt-3 mb-1 text-sm normal-case">Tempo da nota no vídeo (segundos)</label><div class="time-input"><input id="edit-note-time" type="number" min="0" step="0.1" [(ngModel)]="editingNoteTimestamp" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"><button type="button" (click)="setEditingTimestampToCurrentTime($event)" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Usar instante atual</button></div><label class="check-label flex min-h-11 items-center gap-2 block mt-3 mb-1 text-sm normal-case"><input type="checkbox" [(ngModel)]="editingShiftFollowing" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"> Mover notas seguintes que já têm tempo</label></details>
+          <app-note-presentation-editor *ngIf="notebookLoaded" [text]="editingNoteText" [rules]="notebookSettings.rules" [(value)]="editingPresentationJson" />
+        </fieldset>
+        <footer class="editor-actions flex items-center justify-end gap-2 p-3 border-t border-slate-700"><span aria-live="polite">{{ isSavingNote ? 'A guardar…' : 'Só nesta nota' }}</span><button type="button" (click)="cancelEditNote()" [disabled]="isSavingNote" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Cancelar</button><button type="button" class="studio-primary min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" (click)="saveEditedNote(note, $event)" [disabled]="isSavingNote || !editingNoteText.trim()">Guardar</button></footer>
+      </section>
+      <section *ngIf="isAddingNote" class="note-editor" aria-label="Nova nota">
+        <header class="editor-heading flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-700"><h2 class="text-lg font-bold">Nova nota · {{ currentTime.toFixed(1) }} s</h2></header>
+        <fieldset [disabled]="isSavingNote" class="editor-fields"><label for="new-note-text" class="block mt-3 mb-1 text-sm normal-case">Texto da nova nota</label><input id="new-note-text" [(ngModel)]="newNoteText" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"><label for="new-note-observation" class="block mt-3 mb-1 text-sm normal-case">Observações da nova nota</label><input id="new-note-observation" [(ngModel)]="newNoteObservation" class="w-full min-w-0 min-h-11 rounded-lg border border-slate-500 bg-slate-950 p-2 text-sm text-slate-100 disabled:opacity-50"><section class="note-preview my-4" aria-label="Pré-visualização da nova nota"><app-note-display *ngIf="notebookLoaded" [text]="newNoteText" [rules]="notebookSettings.rules" /></section></fieldset>
+        <footer class="editor-actions flex items-center justify-end gap-2 p-3 border-t border-slate-700"><button type="button" (click)="cancelNewNote()" [disabled]="isSavingNote" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Cancelar</button><button type="button" class="studio-primary min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50" (click)="saveNewNote()" [disabled]="isSavingNote || !newNoteText.trim()">Guardar</button></footer>
+      </section>
+    </section>
   </div>
 </div>

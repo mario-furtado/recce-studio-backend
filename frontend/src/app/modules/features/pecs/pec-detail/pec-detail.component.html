@@ -4,10 +4,10 @@
   <p>Não foi possível abrir esta PEC. Escolhe outra PEC para continuar.</p>
   <a routerLink="/new-recce" class="accent-button inline-block px-4 py-2 rounded-xl">Escolher destino</a>
 </section>
-<div *ngIf="!isLoadingPec && !pecUnavailable" class="min-h-screen text-white p-4 md:p-6 flex flex-col gap-6">
+<div *ngIf="!isLoadingPec && !pecUnavailable" class="pec-detail-layout">
   <!-- BARRA DE NAVEGAÇÃO E BOTOES DE TOGGLE DE MODO -->
   <header
-    class="pec-mode-header glass-panel rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl"
+    class="pec-header"
   >
     <!-- Informação da PEC -->
     <div class="flex items-center gap-3">
@@ -40,16 +40,16 @@
           </span>
         </p>
       </div>
-      <div class="flex items-center gap-2 ml-2">
+      <details appContextPanel [panelWidth]="220" class="pec-actions"><summary>Ações da PEC<svg width="14" height="14" class="inline-block ml-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></summary><div class="pec-actions-menu">
         <button
           *ngIf="pec.status !== 'COMPLETED'"
           type="button"
           (click)="startEditPec()"
-          class="icon-button soft-button rounded-lg"
+          class="soft-button rounded-lg px-3 py-2 flex items-center justify-center gap-2"
           title="Editar PEC"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16z" /><path d="M13 7l4 4" /></svg>
-          <span class="sr-only">Editar</span>
+          <svg width="18" height="18" class="inline-block mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16z" /><path d="M13 7l4 4" /></svg>
+          <span>Editar PEC</span>
         </button>
         <button
           *ngIf="pec.status !== 'COMPLETED'"
@@ -67,7 +67,7 @@
         >
           Voltar a Rascunho
         </button>
-      </div>
+      </div></details>
     </div>
 
     <!-- BOTÕES DE TOGGLE (ALTERNAR MODO) -->
@@ -126,7 +126,7 @@
         "
         class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
       >
-        <span class="text-[10px] font-black tracking-widest">OV</span> Visão Geral
+        Visão Geral
       </button>
 
       <!-- Botão: Modo Reconhecimento GPS -->
@@ -153,7 +153,7 @@
             class="relative inline-flex rounded-full h-2 w-2 bg-white"
           ></span>
         </span>
-        <span class="text-[10px] font-black tracking-widest">RC</span> Reconhecimento
+        Reconhecimento
       </button>
 
       <!-- Botão: Studio / Editor -->
@@ -166,7 +166,7 @@
         "
         class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
       >
-        <span class="text-[10px] font-black tracking-widest">ST</span> Studio
+        Studio
       </button>
     </div>
   </header>

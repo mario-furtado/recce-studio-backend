@@ -6,6 +6,7 @@ import { ElementStyle, NotePresentation, presentationElements, presentationError
 
 @Component({
   selector: 'app-note-presentation-editor', standalone: true, imports: [CommonModule, FormsModule],
+  styles: [`:host{display:block;color:#eef2f7;font-size:14px}summary{min-height:44px;padding:10px 12px;border:1px solid #526178;border-radius:8px;cursor:pointer}label{min-height:44px;font-size:14px;text-transform:none!important;margin:12px 0 4px}select,input[type=number]{min-height:44px;width:100%;min-width:0;background:#101620!important;color:#eef2f7!important;border:1px solid #65748a;padding:8px;border-radius:8px;font-size:14px}input[type=checkbox]{width:20px;height:20px;vertical-align:middle;accent-color:#d71940}button{min-height:44px;color:#eef2f7!important;font-size:14px}:is(input,select,summary,button):focus-visible{outline:3px solid #ff8da0;outline-offset:3px}`],
   template: `
     <details><summary>Apresentação desta nota</summary>
       <p class="text-xs my-2">Só nesta ocorrência.</p>

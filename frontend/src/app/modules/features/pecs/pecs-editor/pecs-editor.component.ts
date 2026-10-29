@@ -6,6 +6,7 @@ import {
   OnDestroy,
   Input,
   Optional,
+  HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -29,11 +30,14 @@ import { NotebookService } from '../../../core/notebook/notebook.service';
 import { defaultNotebook } from '../../../core/notebook/notebook.model';
 import { NotePresentationEditorComponent } from '../../../core/notebook/note-presentation-editor.component';
 import { presentationError } from '../../../core/notebook/note-presentation';
+import { ContextPanelComponent } from '../../../core/shared/components/context-panel.component';
+import { FocusPanelComponent } from '../../../core/shared/components/focus-panel.component';
+import { StudioAssetsComponent } from './studio-assets.component';
 
 @Component({
   selector: 'app-pecs-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RecceMapComponent, NotebookComponent, NoteDisplayComponent, NotePresentationEditorComponent],
+  imports: [CommonModule, FormsModule, RouterLink, RecceMapComponent, NotebookComponent, NoteDisplayComponent, NotePresentationEditorComponent, ContextPanelComponent, FocusPanelComponent, StudioAssetsComponent],
   templateUrl: './pecs-editor.component.html',
   styleUrl: './pecs-editor.component.css',
 })
@@ -85,6 +89,39 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   notebookLoaded = false;
   notebookError = '';
   showNotebook = false;
+  mobileView: 'video' | 'map' | 'notes' = 'video';
+  notesWidth = 38;
+  private draftInitial = '';
+  get hasNoteDraft() { return !!this.editingNoteId || this.isAddingNote; }
+  get editingNote() { return this.notes.find(note => note.id === this.editingNoteId); }
+  private draftValue(): string {
+    return JSON.stringify(this.isAddingNote ? [this.newNoteText, this.newNoteObservation] : [this.editingNoteText, this.editingNoteObservation, this.editingNoteTimestamp, this.editingPresentationJson, this.editingShiftFollowing]);
+  }
+  get hasUnsavedChanges() { return this.hasNoteDraft && this.draftValue() !== this.draftInitial; }
+  canDeactivate(): boolean | Promise<boolean> {
+    if (this.isSavingNote) return false;
+    if (!this.hasUnsavedChanges) return true;
+    return this.confirmDialog.confirm({ title: 'Descartar alterações?', message: 'Esta nota tem alterações por guardar.', confirmText: 'Descartar', cancelText: 'Continuar a editar', tone: 'danger' });
+  }
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent) { if (this.hasUnsavedChanges || this.isSavingNote) { event.preventDefault(); event.returnValue = ''; } }
+  private focusEditor(id: string) {
+    this.mobileView = 'notes';
+    requestAnimationFrame(() => {
+      const input = document.getElementById(id);
+      if (window.innerWidth < 1100) input?.closest('.note-editor')?.scrollIntoView({ block: 'start' });
+      input?.focus({ preventScroll: window.innerWidth < 1100 });
+    });
+  }
+  cancelNewNote() {
+    if (this.isSavingNote) return;
+    this.isAddingNote = false; this.newNoteText = ''; this.newNoteObservation = '';
+  }
+  backToNotes() {
+    const allowed = this.canDeactivate();
+    if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) this.cancelEditNote(); }); }
+    else if (allowed) this.cancelEditNote();
+  }
 
   constructor(
     private route: ActivatedRoute,
@@ -306,7 +343,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   openAddNoteForm(): void {
-    if (this.isLocked) return;
+    if (this.isLocked || this.isSavingNote) return;
+    if (this.hasUnsavedChanges) { void Promise.resolve(this.canDeactivate()).then(allowed => { if (allowed) { this.cancelEditNote(); this.cancelNewNote(); this.openAddNoteForm(); } }); return; }
+    this.cancelEditNote();
     const media = this.activeMediaElement();
     if (media) {
       media.pause();
@@ -315,10 +354,12 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.newNoteText = '';
     this.newNoteObservation = '';
     this.isAddingNote = true;
+    this.draftInitial = this.draftValue(); this.focusEditor('new-note-text');
   }
 
   saveNewNote(): void {
-    if (!this.newNoteText.trim()) return;
+    if (!this.newNoteText.trim() || this.isLocked || this.isSavingNote) return;
+    this.isSavingNote = true;
 
     const exactTimestamp = parseFloat(
       (this.currentTime - this.timeOffset - this.captureOffset).toFixed(1),
@@ -332,6 +373,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
 
     this.pecService.saveNote(this.pecId, newNote).subscribe({
       next: (saved: any) => {
+        this.isSavingNote = false;
         const savedNote: Note = {
           id: String(saved.id),
           originalTimestamp: this.normalizeOptionalTimestamp(saved.originalTimestamp),
@@ -348,6 +390,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
         this.shared.success('Nota guardada');
       },
       error: (err) => {
+        this.isSavingNote = false;
         console.error('Erro ao guardar nota:', err);
         this.shared.error('Erro ao guardar nota');
       },
@@ -390,23 +433,29 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   startEditNote(note: Note, event: Event): void {
     event.stopPropagation();
     if (this.isLocked || this.isSavingNote) return;
+    if (this.editingNoteId === note.id) { this.focusEditor('edit-note-text'); return; }
+    if (this.hasUnsavedChanges) { void Promise.resolve(this.canDeactivate()).then(allowed => { if (allowed) { this.cancelEditNote(); this.cancelNewNote(); this.startEditNote(note, new Event('click')); } }); return; }
+    this.cancelNewNote();
     this.editingNoteId = note.id;
     this.editingNoteText = note.text;
     this.editingPresentationJson = note.presentationJson ?? null;
     this.editingNoteObservation = note.speedRating || '';
     this.editingNoteTimestamp = this.noteVideoTimestamp(note);
     this.editingShiftFollowing = false;
+    this.draftInitial = this.draftValue(); this.focusEditor('edit-note-text');
   }
 
   cancelEditNote(event?: Event): void {
     event?.stopPropagation();
     if (this.isSavingNote) return;
+    const previousId = this.editingNoteId;
     this.editingNoteId = null;
     this.editingNoteText = '';
     this.editingPresentationJson = null;
     this.editingNoteObservation = '';
     this.editingNoteTimestamp = null;
     this.editingShiftFollowing = false;
+    if (previousId) requestAnimationFrame(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-edit-note]')).find(button => button.dataset['editNote'] === previousId)?.focus({ preventScroll: true }));
   }
 
   saveEditedNote(note: Note, event: Event): void {
@@ -579,22 +628,22 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       this.pecService.uploadVideo(this.pecId, file).subscribe({
         next: (assets) => {
           this.applyAssets(assets);
-          this.shared.success('Video guardado');
+          this.shared.success('Vídeo guardado');
         },
         error: (err) => {
-          console.error('Erro ao guardar video:', err);
-          this.shared.error('Erro ao guardar video');
+          console.error('Erro ao guardar vídeo:', err);
+          this.shared.error('Erro ao guardar vídeo');
         },
       });
     } else if (type === 'audio') {
       this.pecService.uploadAudio(this.pecId, file, file.name).subscribe({
         next: (assets) => {
           this.applyAssets(assets);
-          this.shared.success('Audio guardado');
+          this.shared.success('Áudio guardado');
         },
         error: (err) => {
-          console.error('Erro ao guardar audio:', err);
-          this.shared.error('Erro ao guardar audio');
+          console.error('Erro ao guardar áudio:', err);
+          this.shared.error('Erro ao guardar áudio');
         },
       });
     } else {
@@ -616,9 +665,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   async deleteVideo(): Promise<void> {
     if (this.isLocked) return;
     const confirmed = await this.confirmDialog.confirm({
-      title: 'Eliminar video',
-      message: 'Queres eliminar o video desta PEC?',
-      detail: this.videoFileName || 'O ficheiro de video associado será removido.',
+      title: 'Eliminar vídeo',
+      message: 'Queres eliminar o vídeo desta PEC?',
+      detail: this.videoFileName || 'O ficheiro de vídeo associado será removido.',
       confirmText: 'Eliminar',
       tone: 'danger',
     });
@@ -627,11 +676,11 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.pecService.deleteVideo(this.pecId).subscribe({
       next: (assets) => {
         this.applyAssets(assets);
-        this.shared.success('Video eliminado');
+        this.shared.success('Vídeo eliminado');
       },
       error: (err) => {
-        console.error('Erro ao eliminar video:', err);
-        this.shared.error('Erro ao eliminar video');
+        console.error('Erro ao eliminar vídeo:', err);
+        this.shared.error('Erro ao eliminar vídeo');
       },
     });
   }
@@ -639,9 +688,9 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   async deleteAudio(): Promise<void> {
     if (this.isLocked) return;
     const confirmed = await this.confirmDialog.confirm({
-      title: 'Eliminar audio',
-      message: 'Queres eliminar o audio desta PEC?',
-      detail: this.audioFileName || 'O audio gravado/importado será removido.',
+      title: 'Eliminar áudio',
+      message: 'Queres eliminar o áudio desta PEC?',
+      detail: this.audioFileName || 'O áudio gravado/importado será removido.',
       confirmText: 'Eliminar',
       tone: 'danger',
     });
@@ -650,11 +699,11 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.pecService.deleteAudio(this.pecId).subscribe({
       next: (assets) => {
         this.applyAssets(assets);
-        this.shared.success('Audio eliminado');
+        this.shared.success('Áudio eliminado');
       },
       error: (err) => {
-        console.error('Erro ao eliminar audio:', err);
-        this.shared.error('Erro ao eliminar audio');
+        console.error('Erro ao eliminar áudio:', err);
+        this.shared.error('Erro ao eliminar áudio');
       },
     });
   }

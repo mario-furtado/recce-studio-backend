@@ -44,7 +44,7 @@
   </section>
   <section *ngIf="kind === 'studio'" class="glass-panel demo-panel">
     <h1 data-demo="studio-heading">Studio — simulação</h1>
-    <div data-demo="studio-assets" class="demo-status demo-box"><span>+ Add Video</span><span>Áudio</span><span>+ Add GPS</span><span>Adicionar Notas</span></div>
+    <div data-demo="studio-assets" class="demo-status demo-box"><span>Ficheiros</span><span>Adicionar vídeo</span><span>Adicionar áudio</span><span>Importar GPS</span><span>Importar notas</span></div>
     <div class="demo-media demo-box">Vídeo de exemplo · sem ficheiro real ou reprodução</div>
     <div data-demo="studio-timeline" class="demo-box"><label>Tempo de exemplo<input type="range" min="0" max="30" [value]="videoTime"></label><strong>{{ videoTime }}s / 30s</strong></div>
     <div data-demo="studio-anchor" class="demo-box"><button type="button" class="accent-button demo-control">Fixar Nota 1 Aqui</button><span>Referência de exemplo: Nota 1 aos 12s</span></div>
@@ -57,7 +57,7 @@
       </svg>
     </div>
     <div data-demo="studio-notes" class="demo-box">
-      <h2>Notas de exemplo</h2>
+      <h2>Notas de exemplo</h2><p>Editar → Conteúdo · Tempo · Apresentação</p>
       <div *ngFor="let note of sampleNotes" class="demo-note" [class.demo-active-note]="note.time === videoTime"><span>{{ note.time }}s</span><app-note-display [text]="note.text" [rules]="settings.rules" /></div>
     </div>
     <div *ngIf="index === 6" data-demo="studio-notebook" class="demo-box"><h2>Caderno / PDF — exemplo</h2><app-notebook [settings]="settings" [notes]="sampleNotes" /></div>

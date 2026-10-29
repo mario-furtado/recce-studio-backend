@@ -7,7 +7,7 @@ import { MapNote, positionAt, trackSegments, validCoordinate } from './gps-timel
 @Component({
   selector: 'app-recce-map', standalone: true, imports: [CommonModule],
   template: `
-    <section #panel class="recce-map surface-card" [class.expanded]="expanded" aria-label="Mapa do reconhecimento">
+    <section #panel class="recce-map" [class.expanded]="expanded" aria-label="Mapa do reconhecimento">
       <div class="map-toolbar">
         <strong>Mapa de satélite</strong>
         <button type="button" (click)="zoom(1)" aria-label="Aumentar zoom">+</button>
@@ -29,10 +29,10 @@ import { MapNote, positionAt, trackSegments, validCoordinate } from './gps-timel
     </section>`,
   styles: [`
     :host { display:block; min-width:0; }
-    .recce-map { border-radius:1rem; padding:.75rem; min-width:0; }
+    .recce-map { border-radius:12px; padding:12px; min-width:0; background:#151c26; color:#eef2f7; border:1px solid #39465a; }
     .recce-map.expanded { position:fixed; inset:1rem; width:auto; height:auto; margin:0; z-index:10000; overflow:auto; background:var(--bg,#111827); color:var(--text,#fff); }
     .map-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin-bottom:.5rem; }
-    button { padding:.3rem .6rem; border:1px solid #64748b; border-radius:.4rem; background:#1e293b; color:#fff; }
+    button { padding:8px 12px; min-height:44px; min-width:44px; font-size:14px; border:1px solid #64748b; border-radius:8px; background:#1e293b; color:#fff; }
     button:focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
     .map-canvas { height:300px; width:100%; z-index:0; background:#172332; border-radius:.5rem; }
     .expanded .map-canvas { height:calc(100dvh - 12rem); min-height:250px; }

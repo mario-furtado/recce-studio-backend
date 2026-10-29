@@ -57,11 +57,11 @@ test('FEAT-004 personal dictionary persists and the Studio exports the measured 
   ];
   for (const note of original) expect((await request.post(`${api}/pecs/${pec.id}/notes`, { headers, data: note })).ok()).toBeTruthy();
   await page.goto(`/recce/${pec.id}`);
-  await page.getByRole('button', { name: /ST Studio/ }).click();
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
   const noteElement = page.locator('app-note-display .note-element').filter({ hasText: /^\+\+$/ }).first();
   await expect(noteElement).toHaveCSS('text-decoration-line', 'underline');
   await expect(noteElement.locator('..')).toHaveCSS('grid-area', '1 / 1');
-  await page.getByRole('button', { name: 'Caderno / PDF', exact: true }).click();
+  await page.getByRole('button', { name: 'Exportar PDF', exact: true }).click();
   const notebook = page.locator('app-notebook');
   await expect(notebook.getByRole('button', { name: 'Imprimir / Guardar PDF', exact: true })).toBeEnabled();
   const pages = notebook.locator('.notebook-page');
@@ -109,6 +109,8 @@ test('FEAT-004 personal dictionary persists and the Studio exports the measured 
   await context.close();
   const saved = await (await request.get(`${api}/pecs/${pec.id}/notes`, { headers })).json();
   expect(saved.map((note: {text: string; speedRating: string; originalTimestamp: number}) => ({ text: note.text, speedRating: note.speedRating, originalTimestamp: note.originalTimestamp }))).toEqual(original);
+  await page.getByRole('button', { name: 'Fechar caderno', exact: true }).click();
+  await page.locator('.desktop-options > summary').click();
   await page.getByRole('link', { name: 'Configurar notas', exact: true }).click();
   await expect(page).toHaveURL(/\/notes$/);
   await expect(page.getByRole('heading', { name: 'Configurar notas', exact: true })).toBeVisible();

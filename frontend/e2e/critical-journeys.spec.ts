@@ -61,7 +61,7 @@ test('real login, rally/PEC/note creation, reload persistence and logout revocat
   const pec = await pecResponse.json();
   await page.getByRole('heading', { name: 'QA browser PEC', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/recce/${pec.id}$`));
-  await page.getByRole('button', { name: /ST Studio/ }).click();
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await page.getByRole('button', { name: /Inserir Nota/ }).click();
   await page.getByLabel('Texto da nova nota', { exact: true }).fill('D3 browser persisted');
   await page.getByLabel('Observações da nova nota', { exact: true }).fill('gravilha');
@@ -69,7 +69,7 @@ test('real login, rally/PEC/note creation, reload persistence and logout revocat
   await page.getByRole('button', { name: 'Guardar', exact: true }).click();
   expect((await noteSaved).status()).toBe(200);
   await page.reload();
-  await page.getByRole('button', { name: /ST Studio/ }).click();
+  await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await expect(page.getByText('D3 browser persisted', { exact: true })).toBeVisible();
   await expect(page.getByText('gravilha', { exact: true })).toBeVisible();
 
@@ -99,7 +99,7 @@ test('a second real account cannot list, open or modify another team PEC', async
   const headers = { Authorization: `Bearer ${token}` };
   await page.goto(`/recce/${pec.id}`);
   await expect(page.getByRole('heading', { name: 'PEC indisponível' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /ST Studio/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Studio', exact: true })).toHaveCount(0);
   expect((await request.patch(`${api}/pecs/${pec.id}`, { headers, data: { name: 'Spoofed' } })).status()).toBe(404);
   const unchanged = await request.get(`${api}/pecs/${pec.id}`, { headers: ownerHeaders });
   expect(unchanged.status()).toBe(200);

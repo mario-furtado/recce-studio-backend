@@ -44,11 +44,11 @@ export const workflowGuides: ReadonlyMap<string, WorkflowGuide> = new Map([
   ] }],
   ['studio', { name: 'Studio', practice: 'Escolher PEC para o Studio', steps: [
     { title: 'Abrir o Studio da PEC', target: '[data-demo="studio-heading"]', text: 'Abre a tua PEC e muda para Studio. Aqui mostramos uma amostra isolada, sem carregar ralis, PECs ou ficheiros reais.' },
-    { title: 'Vídeo, áudio, GPS e notas', target: '[data-demo="studio-assets"]', text: 'Os controlos + Add Video, áudio, GPS e notas carregam os ficheiros da PEC. Revê o conteúdo antes de substituir. Neste exemplo não abrimos ficheiros, câmara ou microfone.' },
+    { title: 'Vídeo, áudio, GPS e notas', target: '[data-demo="studio-assets"]', text: 'Abre Ficheiros para adicionar vídeo, áudio, GPS ou importar notas. Revê o conteúdo antes de substituir. Durante uma edição, conclui ou cancela a nota primeiro. O exemplo não abre ficheiros nem dispositivos.' },
     { title: 'Tempo e navegação', target: '[data-demo="studio-timeline"]', text: 'O vídeo controla o instante da revisão. Avançar ou recuar permite conferir as notas e o trajeto nesse momento. O exemplo muda de instante apenas ao mudar de passo.' },
-    { title: 'Alinhar as notas', target: '[data-demo="studio-anchor"]', text: 'Usa Fixar Nota 1 Aqui para alinhar o início das notas com o vídeo. Confirma a referência temporal e o desfasamento antes de guardar. Neste guia o ajuste é apenas ilustrativo.' },
+    { title: 'Alinhar as notas', target: '[data-demo="studio-anchor"]', text: 'Em Sincronização, usa Fixar Nota 1 Aqui para alinhar o início das notas com o vídeo. Confirma o desfasamento antes de guardar. Neste guia o ajuste é apenas ilustrativo.' },
     { title: 'Mapa e notas no mesmo instante', target: '[data-demo="studio-map"]', text: 'Com GPS temporizado, a posição no mapa acompanha o vídeo. As notas com coordenadas aparecem no trajeto; sem coordenadas não se inventa uma posição. Este desenho representa pontos simulados, sem imagens de satélite.' },
-    { title: 'Rever a nota', target: '[data-demo="studio-notes"]', text: 'Revê texto, instante e observações antes de guardar. Configurar notas ajusta os símbolos e o modelo pessoal. O destaque deste exemplo usa o componente real de apresentação.' },
-    { title: 'Caderno e PDF', target: '[data-demo="studio-notebook"] .notebook-controls', text: 'Abre Caderno / PDF, confirma a paginação e usa Imprimir / Guardar PDF. Se algo não couber, ajusta o modelo. A amostra usa o caderno real; o tutorial não abre a impressão automaticamente.' },
+    { title: 'Rever a nota', target: '[data-demo="studio-notes"]', text: 'Escolhe Editar na nota. O painel próprio reúne Conteúdo, Tempo e Apresentação com pré-visualização e Guardar/Cancelar. No telemóvel, abre Notas; Configurar notas continua a ajustar o modelo pessoal. O exemplo usa a apresentação real.' },
+    { title: 'Caderno e PDF', target: '[data-demo="studio-notebook"] .notebook-controls', text: 'Abre Exportar PDF, confirma a paginação e usa Imprimir / Guardar PDF. Se algo não couber, ajusta o modelo. A amostra usa o caderno real; o tutorial não abre a impressão automaticamente.' },
   ] }],
 ]);

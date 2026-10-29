@@ -91,10 +91,12 @@ describe('AUD-ACC-001 rendered form names', () => {
   });
 
   it('distinguishes new-note and existing-note controls, including the timestamp unit', () => {
-    const fixture = render(PecsEditorComponent, { pecId: 'fixture', isAddingNote: true, editingNoteId: 'note',
+    const fixture = render(PecsEditorComponent, { pecId: 'fixture', isAddingNote: true,
       notes: [{ id: 'note', text: 'D3', speedRating: '', originalTimestamp: 0 }] });
-    const names = assertNamed(fixture.nativeElement, 7).map(name);
-    expect(names).toEqual(['Desfasamento vídeo/reconhecimento (s)', 'Texto da nova nota', 'Observações da nova nota', 'Texto da nota',
+    expect(assertNamed(fixture.nativeElement, 4).map(name)).toEqual(['Desfasamento vídeo/reconhecimento (s)', 'Largura do painel de notas', 'Texto da nova nota', 'Observações da nova nota']);
+    fixture.componentInstance.isAddingNote = false; fixture.componentInstance.editingNoteId = 'note'; fixture.detectChanges();
+    const names = assertNamed(fixture.nativeElement, 6).map(name);
+    expect(names).toEqual(['Desfasamento vídeo/reconhecimento (s)', 'Largura do painel de notas', 'Texto da nota',
       'Observações da nota', 'Tempo da nota no vídeo (segundos)', 'Mover notas seguintes que já têm tempo']);
   });
 
