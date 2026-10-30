@@ -59,7 +59,7 @@ test('real login, rally/PEC/note creation, reload persistence and logout revocat
   const pecResponse = await pecCreated;
   expect(pecResponse.status()).toBe(201);
   const pec = await pecResponse.json();
-  await page.getByRole('heading', { name: 'QA browser PEC', exact: true }).click();
+  await page.getByRole('link', { name: 'Continuar reconhecimento', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/recce/${pec.id}$`));
   await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await page.getByRole('button', { name: /Inserir Nota/ }).click();
@@ -71,7 +71,7 @@ test('real login, rally/PEC/note creation, reload persistence and logout revocat
   await page.reload();
   await page.getByRole('button', { name: 'Studio', exact: true }).click();
   await expect(page.getByText('D3 browser persisted', { exact: true })).toBeVisible();
-  await expect(page.getByText('gravilha', { exact: true })).toBeVisible();
+  await expect(page.locator('.notes-list').getByText('gravilha', { exact: true })).toBeVisible();
 
   const token = await page.evaluate(() => localStorage.getItem('recce_auth_token'));
   expect(token).toBeTruthy();

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, HostListener, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -97,6 +97,19 @@ export class NotesComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subscriptions.unsubscribe();
+  }
+
+  canDeactivate(): boolean | Promise<boolean> {
+    const cover = this.personalSettings?.reccebook;
+    if (cover?.saving) return false;
+    if (!cover?.hasUnsavedChanges) return true;
+    return this.confirmDialog.confirm({ title: 'Descartar alterações?', message: 'A capa principal tem alterações por guardar.', confirmText: 'Descartar', cancelText: 'Continuar a editar', tone: 'danger' });
+  }
+
+  @HostListener('window:beforeunload', ['$event'])
+  beforeUnload(event: BeforeUnloadEvent) {
+    const cover = this.personalSettings?.reccebook;
+    if (cover?.hasUnsavedChanges || cover?.saving) { event.preventDefault(); event.returnValue = ''; }
   }
 
   loadNoteSystem(): void {

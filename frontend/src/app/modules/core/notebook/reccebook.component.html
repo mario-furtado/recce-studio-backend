@@ -1,0 +1,38 @@
+<div class="flex flex-wrap items-center gap-3 p-3">
+  <p class="text-sm text-slate-300">{{ personal ? 'Capa principal · modelo pessoal' : 'Capa desta PEC · partilhada com a equipa' }}</p>
+  <button *ngIf="!editing" type="button" class="soft-button rounded-lg px-3 py-2" (click)="edit()" [disabled]="!loaded || locked || !editable">{{ personal ? 'Editar capa principal' : 'Editar capa' }}</button>
+  <span *ngIf="loaded && (locked || !editable)" class="text-sm">Só leitura</span>
+</div>
+<p *ngIf="!loaded && !error" role="status">A carregar capa…</p>
+<div *ngIf="error" role="alert" class="cover-error p-3">{{ error }}<button *ngIf="!loaded" type="button" class="soft-button rounded-lg px-3 py-2 ml-2" (click)="load()">Tentar carregar capa</button></div>
+<section *ngIf="editing" class="cover-settings" aria-labelledby="cover-editor-title">
+  <h3 id="cover-editor-title" class="font-bold mb-2">Personalizar capa e contracapa</h3>
+  <p class="text-sm text-slate-300 mb-3">O logótipo tem uma zona fixa. Posições em percentagem da área de texto; guarda ou cancela antes de exportar.</p>
+  <p *ngIf="personal" class="text-sm mb-3" ngNonBindable>Campos automáticos: {{rali}}, {{pec}}, {{equipa}}, {{carro}}, {{data}}. Aplicam-se às PECs sem capa guardada; capas personalizadas mantêm-se.</p>
+  <fieldset [disabled]="saving || locked || !editable">
+    <div class="cover-fields">
+      <label>Lado<select aria-label="Lado" [(ngModel)]="side" (ngModelChange)="changeSide()"><option value="front">Capa</option><option value="back">Contracapa</option></select></label>
+      <label>Fundo<input type="color" [(ngModel)]="page.background" (ngModelChange)="changed()" /></label>
+      <label>Elemento<select aria-label="Elemento" [(ngModel)]="selected"><option *ngFor="let element of page.elements; let i = index" [ngValue]="i">{{ i + 1 }} · {{ element.text.slice(0, 35) || 'Texto vazio' }}</option></select></label>
+    </div>
+    <div class="flex flex-wrap gap-2 my-3"><button type="button" (click)="add()" [disabled]="page.elements.length >= 12" class="soft-button rounded-lg px-3 py-2">Adicionar texto</button><button type="button" (click)="remove()" [disabled]="!item" class="danger-button rounded-lg px-3 py-2">Remover elemento</button></div>
+    <ng-container *ngIf="item">
+      <label class="mb-3">Texto<textarea rows="3" maxlength="1000" [(ngModel)]="item.text" (ngModelChange)="changed()"></textarea></label>
+      <div class="cover-fields">
+        <label>Posição X (%)<input type="number" min="0" max="95" step="1" [(ngModel)]="item.x" (ngModelChange)="changed()" /></label>
+        <label>Posição Y (%)<input type="number" min="0" max="95" step="1" [(ngModel)]="item.y" (ngModelChange)="changed()" /></label>
+        <label>Largura (%)<input type="number" min="5" max="100" step="1" [(ngModel)]="item.width" (ngModelChange)="changed()" /></label>
+        <label>Tamanho (pt)<input type="number" min="8" max="72" step="1" [(ngModel)]="item.fontPt" (ngModelChange)="changed()" /></label>
+        <label>Tipo de letra<select aria-label="Tipo de letra" [(ngModel)]="item.font" (ngModelChange)="changed()"><option>Arial</option><option>Georgia</option><option>Courier New</option></select></label>
+        <label>Alinhamento<select aria-label="Alinhamento" [(ngModel)]="item.align" (ngModelChange)="changed()"><option value="left">Esquerda</option><option value="center">Centro</option><option value="right">Direita</option></select></label>
+        <label>Cor do texto<input type="color" [(ngModel)]="item.color" (ngModelChange)="changed()" /></label>
+        <label class="cover-check"><input type="checkbox" [(ngModel)]="item.bold" (ngModelChange)="changed()" />Negrito</label>
+        <label class="cover-check"><input type="checkbox" [(ngModel)]="item.italic" (ngModelChange)="changed()" />Itálico</label>
+        <label class="cover-check"><input type="checkbox" [(ngModel)]="item.underline" (ngModelChange)="changed()" />Sublinhado</label>
+      </div>
+    </ng-container>
+  </fieldset>
+  <p *ngIf="schemaError" role="alert" class="cover-error mt-2">{{ schemaError }}</p>
+  <div class="flex flex-wrap gap-2 mt-3"><button type="button" (click)="save()" [disabled]="saving || locked || !editable || !!schemaError || !!layoutError" class="accent-button rounded-lg px-3 py-2">{{ saving ? 'A guardar…' : 'Guardar capa' }}</button><button type="button" (click)="cancel()" [disabled]="saving" class="soft-button rounded-lg px-3 py-2">Cancelar edição da capa</button></div>
+</section>
+<app-notebook [settings]="settings" [notes]="notes" [cover]="editing ? draft : cover" [active]="active" (coverValidated)="layoutError = $event" [exportBlocked]="!loaded || editing || saving" />

@@ -101,7 +101,7 @@ test('FEAT-004 personal dictionary persists and the Studio exports the measured 
   const pdf = await pdfPage.pdf({ preferCSSPageSize: true, printBackground: true, path: '../.factory-results/FEAT-004-notebook.pdf' });
   expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
   const pdfText = pdf.toString('latin1');
-  expect((pdfText.match(/\/Type \/Page\b/g) || []).length).toBe(await pages.count());
+  expect((pdfText.match(/\/Type \/Page\b/g) || []).length).toBe(await notebook.locator('.book-sheet').count());
   const mediaBox = /\/MediaBox\s*\[0 0 ([\d.]+) ([\d.]+)\]/.exec(pdfText);
   expect(mediaBox).not.toBeNull();
   expect(Math.abs(Number(mediaBox![1]) - 210 / 25.4 * 72)).toBeLessThan(1);

@@ -10,6 +10,7 @@ import { ConfirmDialogService } from '../../core/shared/components/confirm-dialo
 import { RecceNoteParserService } from '../../core/services/recce-note-parser.service';
 import { defaultNotebook } from '../../core/notebook/notebook.model';
 import { API_BASE_URL } from '../../core/services/api.config';
+import { defaultBookCover } from '../../core/notebook/book-cover.model';
 
 describe('FEAT-005 centralized note settings', () => {
   let http: HttpTestingController;
@@ -19,7 +20,7 @@ describe('FEAT-005 centralized note settings', () => {
     localStorage.removeItem('recce_note_dictionary_rules');
     TestBed.configureTestingModule({ imports: [NotesComponent, TeamProfileComponent], providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(),
       { provide: SharedProperties, useValue: { connectionMode$: new BehaviorSubject('online'), success: jasmine.createSpy('success'), error: jasmine.createSpy('error'), info: jasmine.createSpy('info') } },
-      { provide: ConfirmDialogService, useValue: {} },
+      { provide: ConfirmDialogService, useValue: { confirm: jasmine.createSpy('confirm').and.resolveTo(false) } },
     ] });
     http = TestBed.inject(HttpTestingController);
   });
@@ -46,12 +47,18 @@ describe('FEAT-005 centralized note settings', () => {
     const settings = view.personalSettings!;
     settings.settings.rules[0].size = 110; settings.refresh();
     view.area = 'notebook'; fixture.detectChanges();
+    http.expectOne(`${API_BASE_URL}/api/reccebook-template`).flush({ cover: defaultBookCover(), editable: true }); fixture.detectChanges();
+    const cover = settings.reccebook!; cover.edit(); cover.draft.front.elements[0].text = 'Principal'; cover.changed();
     settings.settings.page.rowsPerPage = 7; settings.refresh();
     view.area = 'dictionary'; fixture.detectChanges();
     view.area = 'presentation'; fixture.detectChanges();
     expect(view.personalSettings).toBe(settings);
     expect(settings.settings.page.rowsPerPage).toBe(7);
     expect(settings.settings.rules[0].size).toBe(110);
+    expect(settings.reccebook).toBe(cover); expect(cover.hasUnsavedChanges).toBeTrue();
+    expect(view.canDeactivate()).toBeInstanceOf(Promise);
+    const event = new Event('beforeunload', { cancelable: true }); view.beforeUnload(event as BeforeUnloadEvent); expect(event.defaultPrevented).toBeTrue();
+    settings.load(); expect(settings.error).toContain('Guarda ou cancela');
     http.expectNone(request => request.method !== 'GET'); fixture.destroy();
   });
   it('links a dictionary symbol without duplication or overwriting existing personal styles', () => {

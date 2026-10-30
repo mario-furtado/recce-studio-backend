@@ -260,5 +260,5 @@
     </div>
   </section>
   </div>
-  <app-notebook-settings [hidden]="area === 'dictionary'" [active]="area !== 'dictionary'" [area]="area === 'notebook' ? 'notebook' : 'presentation'" [dictionaryRules]="rules" [dictionaryReady]="dictionaryLoaded && !isLoading" (configureDictionary)="area = 'dictionary'" />
+  <app-notebook-settings [demonstration]="demonstration" [hidden]="area === 'dictionary'" [active]="area !== 'dictionary'" [area]="area === 'notebook' ? 'notebook' : 'presentation'" [dictionaryRules]="rules" [dictionaryReady]="dictionaryLoaded && !isLoading" (configureDictionary)="area = 'dictionary'" />
 </div>

@@ -43,9 +43,9 @@ describe('FEAT-004 measured notebook', () => {
         expect(Math.abs(difference)).toBeLessThan(1); expect(row.classList.contains('ruled')).toBeTrue();
       }
       expect(Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.notebook-pages .note-element')).filter(node => node.textContent === 'ATT').length).toBe(8);
-      fixture.componentInstance.print();
+      const done = fixture.componentInstance.print();
       const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Caderno para impressão"]')!;
-      spyOn(frame.contentWindow!, 'print'); await frame.contentDocument!.fonts.ready; await Promise.resolve();
+      spyOn(frame.contentWindow!, 'print'); await done;
       expect(frame.contentDocument!.querySelector<HTMLElement>('.notebook-row')!.style.justifyContent).toBe(alignment === 'left' ? 'flex-start' : alignment === 'right' ? 'flex-end' : 'center');
       expect(frame.contentDocument!.querySelector('.notebook-pages')!.textContent).toContain('ATT');
     }
@@ -100,12 +100,13 @@ describe('FEAT-004 measured notebook', () => {
     fixture.componentRef.setInput('settings', settings);
     fixture.componentRef.setInput('notes', [{ text: '<img src=x onerror=alert(1)>' }]); fixture.detectChanges();
     expect(fixture.componentInstance.error).toBeNull();
-    fixture.componentInstance.print();
+    const done = fixture.componentInstance.print();
     const frame = document.querySelector<HTMLIFrameElement>('iframe[title="Caderno para impressão"]')!;
     const printing = spyOn(frame.contentWindow!, 'print');
-    await frame.contentDocument!.fonts.ready; await Promise.resolve();
+    await done;
     expect(printing).toHaveBeenCalled();
-    expect(frame.contentDocument!.querySelector('img')).toBeNull();
+    expect(frame.contentDocument!.querySelectorAll('img').length).toBe(1);
+    expect(Array.from(frame.contentDocument!.images).every(img => img.src.endsWith('/assets/brand/recce-studio-logo-rs.png'))).toBeTrue();
     expect(frame.contentDocument!.body.textContent).toContain('onerror=alert(1)>');
     expect(frame.contentDocument!.querySelector('button')).toBeNull();
     expect(frame.contentDocument!.querySelector('style')!.textContent).toContain('size:210mm 297mm');

@@ -1,0 +1,96 @@
+import { test, expect } from '@playwright/test';
+
+test('FEAT-017 edit PEC cover, protect drafts, reload and export branded front/notes/back PDF', async ({ page, request, browser }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/login'); await page.getByLabel('Email', { exact: true }).fill('owner@e2e.invalid');
+  await page.getByLabel('Password', { exact: true }).fill(process.env['RECCE_E2E_PASSWORD']!); await page.getByRole('button', { name: 'Entrar', exact: true }).click(); await expect(page).toHaveURL(/\/pecs$/);
+  const api = 'http://127.0.0.1:18765/api', headers = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem('recce_auth_token'))}` };
+  const rally = await (await request.post(`${api}/rallies`, { headers, data: { name: 'Rali RecceBook', year: 2026, surface: 'TERRA', location: 'Serra' } })).json();
+  const pec = await (await request.post(`${api}/rallies/${rally.id}/pecs`, { headers, data: { name: 'PEC da capa', number: 1, distanceKm: 8.5 } })).json();
+  expect((await request.post(`${api}/pecs/${pec.id}/notes`, { headers, data: { text: 'D6 E3 ATT', originalTimestamp: 1 } })).ok()).toBeTruthy();
+  await page.goto(`/recce/${pec.id}`); await page.getByRole('button', { name: 'Studio', exact: true }).click(); await page.getByRole('button', { name: 'Exportar PDF', exact: true }).click();
+  const book = page.locator('app-reccebook'), notebook = book.locator('app-notebook');
+  await expect(book.getByRole('button', { name: 'Editar capa', exact: true })).toBeEnabled();
+  await expect(notebook.locator('.book-sheet')).toHaveCount(3); await expect(notebook.locator('.reccebook-cover').first()).toContainText('Rali RecceBook');
+  await expect(notebook.locator('.reccebook-cover').first()).toContainText('PEC da capa');
+  await book.getByRole('button', { name: 'Editar capa', exact: true }).click();
+  await book.getByLabel('Texto', { exact: true }).fill('Serra · Edição especial');
+  await book.getByLabel('Largura (%)', { exact: true }).fill('80'); await book.getByLabel('Posição X (%)', { exact: true }).fill('10');
+  await book.getByLabel('Tamanho (pt)', { exact: true }).fill('24'); await book.getByLabel('Tipo de letra', { exact: true }).selectOption('Georgia');
+  await book.getByLabel('Lado', { exact: true }).selectOption('back'); await book.getByRole('button', { name: 'Adicionar texto', exact: true }).click();
+  await book.getByLabel('Texto', { exact: true }).fill('Equipa Serra — observações do caderno'); await book.getByLabel('Posição Y (%)', { exact: true }).fill('50');
+  await expect(notebook.getByRole('button', { name: 'Imprimir / Guardar PDF', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Fechar caderno', exact: true }).click(); await page.getByRole('link', { name: 'Notas', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Descartar alterações?', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar a editar', exact: true }).click(); await expect(page).toHaveURL(new RegExp(`/recce/${pec.id}$`));
+  await page.getByRole('button', { name: 'Exportar PDF', exact: true }).click(); await expect(book.getByLabel('Texto', { exact: true })).toHaveValue('Equipa Serra — observações do caderno');
+  await page.screenshot({ path: '../.factory-results/FEAT-017-editor-desktop.png', fullPage: true });
+  const saved = page.waitForResponse(r => r.url() === `${api}/pecs/${pec.id}/reccebook-cover` && r.request().method() === 'PUT');
+  await expect(book.getByRole('button', { name: 'Guardar capa', exact: true })).toBeEnabled(); await book.getByRole('button', { name: 'Guardar capa', exact: true }).click(); expect((await saved).ok()).toBeTruthy();
+  await page.reload(); await page.getByRole('button', { name: 'Studio', exact: true }).click(); await page.getByRole('button', { name: 'Exportar PDF', exact: true }).click();
+  await expect(notebook.locator('.cover-item').first()).toHaveText('Serra · Edição especial'); await expect(notebook.locator('.cover-item').first()).toHaveCSS('font-family', 'Georgia');
+  await expect(notebook.locator('.cover-item').last()).toContainText('observações do caderno');
+  await page.setViewportSize({ width: 360, height: 800 }); await book.getByRole('button', { name: 'Editar capa', exact: true }).click(); await page.screenshot({ path: '../.factory-results/FEAT-017-editor-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await book.getByRole('button', { name: 'Cancelar edição da capa', exact: true }).click(); await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => {
+    const append = document.body.appendChild;
+    document.body.appendChild = function<T extends Node>(node: T): T { const result = append.call(this, node) as T; if (node instanceof HTMLIFrameElement && node.title === 'Caderno para impressão') node.contentWindow!.print = () => {}; return result; };
+  });
+  await expect(notebook.getByRole('button', { name: 'Imprimir / Guardar PDF', exact: true })).toBeEnabled(); await notebook.getByRole('button', { name: 'Imprimir / Guardar PDF', exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Caderno para impressão"]'); await expect(frame.locator('.book-sheet')).toHaveCount(3);
+  await expect(frame.locator('.book-sheet').first()).toContainText('Serra · Edição especial'); await expect(frame.locator('.book-sheet').last()).toContainText('Official product by Recce Studio');
+  const html = await frame.locator('html').evaluate(node => node.outerHTML);
+  const context = await browser.newContext(), pdfPage = await context.newPage(); await pdfPage.setContent(html); await pdfPage.evaluate(() => Promise.all(Array.from(document.images).map(img => img.decode())));
+  const pdf = await pdfPage.pdf({ preferCSSPageSize: true, printBackground: true, path: '../.factory-results/FEAT-017-reccebook.pdf' });
+  expect((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length).toBe(3); await pdfPage.screenshot({ path: '../.factory-results/FEAT-017-print-preview.png', fullPage: true }); await context.close();
+  const originalNotes = await (await request.get(`${api}/pecs/${pec.id}/notes`, { headers })).json(); expect(originalNotes.map((note: {text: string}) => note.text)).toEqual(['D6 E3 ATT']);
+  expect((await request.patch(`${api}/pecs/${pec.id}`, { headers, data: { status: 'COMPLETED' } })).ok()).toBeTruthy();
+  await page.reload(); await page.getByRole('button', { name: 'Studio', exact: true }).click(); await page.getByRole('button', { name: 'Exportar PDF', exact: true }).click();
+  await expect(book.getByRole('button', { name: 'Editar capa', exact: true })).toBeDisabled(); await expect(notebook.getByRole('button', { name: 'Imprimir / Guardar PDF', exact: true })).toBeEnabled();
+});
+
+test('FEAT-017 main cover in Notes persists personally and seeds only unsaved PEC covers', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/login'); await page.getByLabel('Email', { exact: true }).fill('owner@e2e.invalid');
+  await page.getByLabel('Password', { exact: true }).fill(process.env['RECCE_E2E_PASSWORD']!);
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click(); await expect(page).toHaveURL(/\/pecs$/);
+  const api = 'http://127.0.0.1:18765/api';
+  const headers = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem('recce_auth_token'))}` };
+  const initial = (await (await request.get(`${api}/reccebook-template`, { headers })).json()).cover;
+  try {
+    await page.getByRole('link', { name: 'Notas', exact: true }).click();
+    await page.getByRole('button', { name: 'Caderno e exportação', exact: true }).click();
+    const book = page.locator('app-reccebook');
+    await book.getByRole('button', { name: 'Editar capa principal', exact: true }).click();
+    await book.getByLabel('Texto', { exact: true }).fill('Livro {{rali}}');
+    await page.getByRole('button', { name: 'Dicionário', exact: true }).click();
+    await page.getByRole('button', { name: 'Caderno e exportação', exact: true }).click();
+    await expect(book.getByLabel('Texto', { exact: true })).toHaveValue('Livro {{rali}}');
+    await page.getByRole('link', { name: 'Ralis & PECs', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Descartar alterações?', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar a editar', exact: true }).click();
+    await page.screenshot({ path: '../.factory-results/FEAT-017-main-cover-desktop.png', fullPage: true });
+    const save = page.waitForResponse(r => r.url() === `${api}/reccebook-template` && r.request().method() === 'PUT');
+    await book.getByRole('button', { name: 'Guardar capa', exact: true }).click(); expect((await save).status()).toBe(200);
+    await page.reload(); await page.getByRole('button', { name: 'Caderno e exportação', exact: true }).click();
+    await expect(book.locator('.cover-item').first()).toHaveText('Livro {{rali}}');
+    const rally = await (await request.post(`${api}/rallies`, { headers, data: { name: 'Rali modelo', year: 2026, surface: 'TERRA', location: 'Serra' } })).json();
+    const pec = await (await request.post(`${api}/rallies/${rally.id}/pecs`, { headers, data: { name: 'PEC independente', number: 1, distanceKm: 2 } })).json();
+    const url = `${api}/pecs/${pec.id}/reccebook-cover`;
+    const inherited = (await (await request.get(url, { headers })).json()).cover;
+    expect(inherited.front.elements[0].text).toBe('Livro Rali modelo');
+    inherited.front.elements[0].text = 'Capa apenas desta PEC'; expect((await request.put(url, { headers, data: inherited })).status()).toBe(200);
+    await book.getByRole('button', { name: 'Editar capa principal', exact: true }).click();
+    await book.getByLabel('Texto', { exact: true }).fill('Principal seguinte {{rali}}');
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    await page.screenshot({ path: '../.factory-results/FEAT-017-main-cover-mobile.png', fullPage: true });
+    await book.getByRole('button', { name: 'Guardar capa', exact: true }).click();
+    await expect(book.getByRole('button', { name: 'Editar capa principal', exact: true })).toBeVisible();
+    expect((await (await request.get(url, { headers })).json()).cover.front.elements[0].text).toBe('Capa apenas desta PEC');
+    expect((await (await request.get(`${api}/reccebook-template`, { headers })).json()).cover.front.elements[0].text).toBe('Principal seguinte {{rali}}');
+  } finally {
+    expect((await request.put(`${api}/reccebook-template`, { headers, data: initial })).status()).toBe(200);
+  }
+});

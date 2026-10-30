@@ -8,6 +8,7 @@ import { SharedProperties } from '../shared/shared-properties';
 import { defaultNotebook, displayRule } from './notebook.model';
 import { CustomNoteDictionaryRule, NoteDictionaryService } from '../services/note-dictionary.service';
 import { API_BASE_URL } from '../services/api.config';
+import { defaultBookCover } from './book-cover.model';
 
 describe('FEAT-007 dictionary is the source of presentation symbols', () => {
   let http: HttpTestingController;
@@ -64,6 +65,7 @@ describe('FEAT-007 dictionary is the source of presentation symbols', () => {
     expect(fixture.nativeElement.querySelector('.dictionary > details.rule summary').textContent).toContain('D6');
     fixture.nativeElement.querySelector('.context-help > summary').click();
     view.area = 'notebook'; fixture.detectChanges();
+    http.expectOne(`${API_BASE_URL}/api/reccebook-template`).flush({ cover: defaultBookCover(), editable: true });
     view.area = 'presentation'; fixture.detectChanges(); personal.selectSymbol('E6'); fixture.detectChanges();
     expect(personal.settings.rules.find(rule => rule.match === 'E6')!.size).toBe(115);
     expect(personal.settings.rules.length).toBe(count);

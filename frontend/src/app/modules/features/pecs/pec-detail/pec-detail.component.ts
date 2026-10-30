@@ -85,7 +85,7 @@ export class PecDetailComponent implements OnInit {
     if (this.isLoadingPec || this.pecUnavailable) return;
     if (mode !== this.currentMode) {
       const allowed = this.canDeactivate();
-      if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.cancelEditNote(); this.studio?.cancelNewNote(); this.setMode(mode); } }); return; }
+      if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.discardDrafts(); this.setMode(mode); } }); return; }
       if (!allowed) return;
     }
     if (this.pec.status === 'COMPLETED' && mode === 'RECONNAISSANCE') {
@@ -97,7 +97,7 @@ export class PecDetailComponent implements OnInit {
   updateStatus(status: 'COMPLETED' | 'DRAFT'): void {
     if (this.isLoadingPec || this.pecUnavailable || !this.pecId) return;
     const allowed = this.canDeactivate();
-    if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.cancelEditNote(); this.studio?.cancelNewNote(); this.updateStatus(status); } }); return; }
+    if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.discardDrafts(); this.updateStatus(status); } }); return; }
     if (!allowed) return;
     this.pecService.updatePecStatus(this.pecId, status).subscribe({
       next: (updated) => {

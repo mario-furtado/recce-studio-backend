@@ -1,7 +1,7 @@
 <div class="workflow-demo" inert aria-hidden="true">
   <p class="example-label">Demonstração temporária — dados de exemplo, sem gravação na conta ou no navegador.</p>
   <app-pecs-list *ngIf="kind === 'rally'" />
-  <app-rally-detail *ngIf="kind === 'pec'" />
+  <app-rally-detail *ngIf="kind === 'pec'" [demoPreview]="true" />
   <section *ngIf="kind === 'team'" class="glass-panel demo-panel">
     <h1 data-demo="team-heading">Perfil da Equipa — simulação</h1>
     <div data-demo="team-identity" class="demo-box">

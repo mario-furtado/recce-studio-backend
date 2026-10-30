@@ -25,7 +25,7 @@
   <p *ngIf="notebookError" role="alert">{{ notebookError }} <button type="button" (click)="loadNotebook()" class="min-h-11 min-w-11 rounded-lg border border-slate-500 bg-slate-800 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Recarregar modelo pessoal</button></p>
   <dialog id="studio-notebook-preview" appFocusPanel [panelOpen]="showNotebook" panelTitle="Caderno / PDF" (panelClosed)="showNotebook = false">
     <header class="flex items-center justify-between gap-3 mb-4"><h2 data-panel-heading tabindex="-1" class="text-lg font-bold">Caderno / PDF</h2><button type="button" (click)="showNotebook = false" class="soft-button min-h-11 px-3 py-2 rounded-lg">Fechar caderno</button></header>
-    <app-notebook *ngIf="showNotebook && notebookLoaded" [settings]="notebookSettings" [notes]="notes" />
+    <app-reccebook *ngIf="notebookLoaded" [pecId]="pecId" [settings]="notebookSettings" [notes]="notes" [locked]="isLocked" [active]="showNotebook" />
   </dialog>
   <nav class="studio-mobile-views gap-2 mb-4" aria-label="Vistas do Studio">
     <button type="button" [attr.aria-pressed]="mobileView === 'video'" (click)="mobileView = 'video'" class="min-h-11 min-w-11 rounded-lg border border-slate-500 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">Vídeo</button>

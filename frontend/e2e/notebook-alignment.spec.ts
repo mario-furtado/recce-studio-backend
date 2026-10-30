@@ -56,7 +56,10 @@ test('FEAT-009 legacy notebooks center by default, alignment persists and export
     await pdfPage.setContent(html);
     const pdf = await pdfPage.pdf({ preferCSSPageSize: true, printBackground: true, path: `../.factory-results/FEAT-009-${value}.pdf` });
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
-    expect((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length).toBe(1);
+    await expect(notebook.locator('.notebook-page')).toHaveCount(1);
+    await expect(frame.locator('.book-sheet').first()).toHaveAttribute('aria-label', 'Capa');
+    await expect(frame.locator('.book-sheet').last()).toHaveAttribute('aria-label', 'Contracapa');
+    expect((pdf.toString('latin1').match(/\/Type \/Page\b/g) || []).length).toBe(3);
     await context.close();
   }
   await expect(personal.getByLabel('Texto para pré-visualização', { exact: true })).toHaveValue(sample);

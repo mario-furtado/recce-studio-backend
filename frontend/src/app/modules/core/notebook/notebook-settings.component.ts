@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NotebookComponent } from './notebook.component';
+import { RecceBookComponent } from './reccebook.component';
 import { defaultNotebook, displayRule, positions, settingsError } from './notebook.model';
 import { NotebookService } from './notebook.service';
 import { CustomNoteDictionaryRule } from '../services/note-dictionary.service';
 
 @Component({
-  selector: 'app-notebook-settings', standalone: true, imports: [CommonModule, FormsModule, NotebookComponent],
+  selector: 'app-notebook-settings', standalone: true, imports: [CommonModule, FormsModule, NotebookComponent, RecceBookComponent],
   templateUrl: './notebook-settings.component.html',
   styleUrl: './notebook-settings.component.css',
   styles: [`:host{display:block;margin-top:24px}:host([hidden]),[hidden]{display:none!important}label{display:flex;flex-direction:column;gap:4px}input,select,textarea{color:var(--text-primary,#eee);background:var(--surface-input,#17202c);border:1px solid #697586;border-radius:6px;padding:6px;max-width:100%}.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.rule{padding:12px;border:1px solid #697586;border-radius:8px;margin:8px 0}.check{flex-direction:row;align-items:center}.error{color:#f97373}.dictionary{max-height:420px;overflow:auto}button{margin:8px 8px 8px 0}summary{cursor:pointer;font-weight:bold}`],
@@ -15,6 +16,9 @@ import { CustomNoteDictionaryRule } from '../services/note-dictionary.service';
 export class NotebookSettingsComponent implements OnInit, OnChanges {
   @Input() area: 'presentation' | 'notebook' = 'presentation';
   @Input() active = true;
+  @Input() demonstration = false;
+  @ViewChild(RecceBookComponent) reccebook?: RecceBookComponent;
+  coverOpened = false;
   @Input() dictionaryRules: readonly CustomNoteDictionaryRule[] = [];
   @Input() dictionaryReady = false;
   @Output() configureDictionary = new EventEmitter<void>();
@@ -46,7 +50,7 @@ export class NotebookSettingsComponent implements OnInit, OnChanges {
     const symbols = new Set(this.dictionarySymbols.map(rule => rule.symbol));
     return this.settings.rules.filter(rule => !symbols.has(rule.match));
   }
-  ngOnChanges() { this.syncDefinitions(); }
+  ngOnChanges() { if (this.area === 'notebook') this.coverOpened = true; this.syncDefinitions(); }
   private syncDefinitions() {
     if (!this.loaded || !this.dictionaryReady) return;
     const symbols = new Map(this.dictionarySymbols.map(rule => [rule.symbol, rule]));
@@ -58,6 +62,7 @@ export class NotebookSettingsComponent implements OnInit, OnChanges {
   }
   ngOnInit() { this.load(); }
   load() {
+    if (this.reccebook?.hasUnsavedChanges || this.reccebook?.saving) { this.error = 'Guarda ou cancela a edição da capa antes de carregar o modelo.'; return; }
     this.error = ''; this.loaded = false;
     this.notebook.load().subscribe({ next: settings => { this.settings = settings; this.loaded = true; this.syncDefinitions(); },
       error: () => { this.error = 'Não foi possível ler o modelo pessoal. Tenta carregar novamente antes de guardar.'; } });

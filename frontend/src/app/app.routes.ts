@@ -27,7 +27,7 @@ export const routes: Routes = [
       { path: 'notes/learn', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
       { path: 'tutorial/notes', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
       { path: 'tutorial/learn/:workflow', loadComponent: () => import('./modules/features/tutorial/workflow-tour.component').then(m => m.WorkflowTourComponent) },
-      { path: 'notes', loadComponent: () => import('./modules/features/notes/notes.component').then(m => m.NotesComponent) },
+      { path: 'notes', loadComponent: () => import('./modules/features/notes/notes.component').then(m => m.NotesComponent), canDeactivate: [recceExitGuard] },
       { path: 'team-profile', loadComponent: () => import('./modules/features/team-profile/team-profile.component').then(m => m.TeamProfileComponent) },
       { path: 'settings', loadComponent: () => import('./modules/features/settings/settings.component').then(m => m.SettingsComponent) },
       { path: 'tutorial', loadComponent: () => import('./modules/features/tutorial/tutorial.component').then(m => m.TutorialComponent) },

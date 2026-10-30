@@ -1,115 +1,26 @@
-<div class="max-w-7xl mx-auto space-y-6">
-  <div
-    class="glass-panel rs-page-header flex-col md:flex-row"
-  >
-    <div>
-      <p class="rs-eyebrow">Rali</p>
-      <h1 class="rs-page-title">Ralis & PECs</h1>
-      <p class="rs-page-subtitle">Explora, gere e analisa as tuas PECs.</p>
+<div class="rally-workspace text-white">
+  <header class="rs-page-header management-header glass-panel rounded-xl p-4">
+    <div><p class="text-xs uppercase tracking-widest text-slate-300">Gestão de ralis</p><h1 class="text-2xl font-extrabold">Ralis &amp; PECs</h1></div>
+    <button type="button" (click)="openCreateRallyForm()" class="accent-button rounded-lg px-4 py-2">Criar novo rali</button>
+  </header>
+  <section aria-label="Pesquisa e filtros" class="filter-section">
+    <div class="flex flex-wrap gap-3 items-end">
+      <label class="management-field grow">Pesquisa<input aria-label="Pesquisar ralis" type="search" [(ngModel)]="searchTerm" placeholder="Nome ou localização" class="themed-input rounded-lg px-3 py-2" /></label>
+      <label class="management-field">Estado<select aria-label="Filtrar ralis por estado" [(ngModel)]="statusFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todos os estados</option><option value="ACTIVE">Ralis ativos</option><option value="COMPLETED">Ralis terminados</option></select></label>
+      <button type="button" (click)="toggleFilters()" [attr.aria-expanded]="areFiltersOpen" aria-controls="rallyFilters" class="soft-button rounded-lg px-3 py-2">Filtros avançados<span *ngIf="activeFiltersCount"> · {{ activeFiltersCount }}</span></button>
+      <button type="button" (click)="clearFilters()" class="soft-button rounded-lg px-3 py-2">Limpar filtros</button>
     </div>
-
-    <div class="flex items-center gap-3 w-full md:w-auto">
-      <input aria-label="Pesquisar ralis"
-        type="text"
-        [(ngModel)]="searchTerm"
-        placeholder="Pesquisar rali..."
-        class="themed-input w-full md:w-80 text-sm rounded-xl px-4 py-2.5"
-      />
-
-      <button
-        (click)="openCreateRallyForm()"
-        class="accent-button font-semibold px-4 py-2.5 rounded-xl whitespace-nowrap"
-      >
-        Criar novo rali
-      </button>
+    <div id="rallyFilters" [hidden]="!areFiltersOpen" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+      <label class="management-field">Piso<select aria-label="Filtrar ralis por piso" [(ngModel)]="surfaceFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todas as superfícies</option><option *ngFor="let surface of surfaceOptions" [value]="surface">{{ surface }}</option></select></label>
+      <label class="management-field">Ano<select aria-label="Filtrar ralis por ano" [(ngModel)]="yearFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todos os anos</option><option *ngFor="let year of yearOptions" [value]="year">{{ year }}</option></select></label>
+      <label class="management-field">Carro<select aria-label="Filtrar ralis por carro" [(ngModel)]="carFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todos os carros</option><option *ngFor="let car of cars" [value]="car.id">{{ car.name }}</option></select></label>
+      <label class="management-field">Classe<select aria-label="Filtrar ralis por classe" [(ngModel)]="classFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todas as classes</option><option *ngFor="let carClass of registeredClassOptions" [value]="carClass">{{ carClass }}</option></select></label>
     </div>
-  </div>
-
-  <button
-    type="button"
-    (click)="toggleFilters()"
-    class="mobile-filter-toggle soft-button w-full justify-between px-4 py-3 rounded-xl text-sm font-bold"
-    [attr.aria-expanded]="areFiltersOpen"
-    aria-controls="rallyFilters"
-  >
-    <span>Filtros</span>
-    <span class="flex items-center gap-2">
-      <span *ngIf="activeFiltersCount" class="themed-chip text-[11px] px-2 py-0.5">
-        {{ activeFiltersCount }}
-      </span>
-      <svg viewBox="0 0 24 24" aria-hidden="true" [class.rotate-180]="areFiltersOpen">
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </span>
-  </button>
-
-  <div
-    id="rallyFilters"
-    class="rally-filter-bar glass-panel p-4 rounded-2xl grid grid-cols-1 md:grid-cols-6 gap-3"
-    [class.mobile-open]="areFiltersOpen"
-  >
-    <select aria-label="Filtrar ralis por estado"
-      [(ngModel)]="statusFilter"
-      class="themed-input text-sm rounded-xl px-3 py-2.5"
-    >
-      <option value="">Todos os estados</option>
-      <option value="ACTIVE">Ralis ativos</option>
-      <option value="COMPLETED">Ralis terminados</option>
-    </select>
-
-    <select aria-label="Filtrar ralis por piso"
-      [(ngModel)]="surfaceFilter"
-      class="themed-input text-sm rounded-xl px-3 py-2.5"
-    >
-      <option value="">Todas as superficies</option>
-      <option *ngFor="let surface of surfaceOptions" [value]="surface">
-        {{ surface }}
-      </option>
-    </select>
-
-    <select aria-label="Filtrar ralis por ano"
-      [(ngModel)]="yearFilter"
-      class="themed-input text-sm rounded-xl px-3 py-2.5"
-    >
-      <option value="">Todas as datas</option>
-      <option *ngFor="let year of yearOptions" [value]="year">
-        {{ year }}
-      </option>
-    </select>
-
-    <select aria-label="Filtrar ralis por carro"
-      [(ngModel)]="carFilter"
-      class="themed-input text-sm rounded-xl px-3 py-2.5"
-    >
-      <option value="">Todos os carros</option>
-      <option *ngFor="let car of cars" [value]="car.id">{{ car.name }}</option>
-    </select>
-
-    <select aria-label="Filtrar ralis por classe"
-      [(ngModel)]="classFilter"
-      class="themed-input text-sm rounded-xl px-3 py-2.5"
-    >
-      <option value="">Todas as classes</option>
-      <option
-        *ngFor="let carClass of registeredClassOptions"
-        [value]="carClass"
-      >
-        {{ carClass }}
-      </option>
-    </select>
-
-    <button
-      type="button"
-      (click)="clearFilters()"
-      class="soft-button text-slate-300 text-sm font-bold rounded-xl px-3 py-2.5"
-    >
-      Limpar filtros
-    </button>
-  </div>
-
+    <p class="text-xs text-slate-300 mt-2" *ngIf="!isLoading && !hasLoadError" aria-live="polite">{{ filteredRallies.length }} de {{ rallies.length }} ralis · {{ activeFiltersCount }} filtros adicionais</p>
+  </section>
   <div
     *ngIf="isCreatingRally"
-    class="glass-panel rounded-2xl p-6 shadow-2xl space-y-6"
+    class="glass-panel rounded-2xl p-4 space-y-4"
   >
     <div
       class="flex items-center justify-between pb-4 border-b border-slate-800"
@@ -117,12 +28,12 @@
       <h2 class="text-lg font-bold text-white">
         {{ editingRallyId ? "Editar Rali" : "Criar Novo Rali" }}
       </h2>
-      <button (click)="cancelForm()" class="text-slate-400 hover:text-white">
+      <button type="button" (click)="cancelForm()" aria-label="Fechar formulário do rali" class="soft-button rounded-lg px-3 py-2">
         x
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
       <div class="md:col-span-12 flex flex-col gap-2">
         <label class="text-xs font-bold text-slate-400">LOGO DO RALI</label>
         <div class="flex flex-wrap items-center gap-3">
@@ -139,12 +50,12 @@
               {{ getRallyInitials(rallyForm.name) }}
             </ng-template>
           </div>
-          <label class="soft-button rounded-xl px-4 py-2 text-xs font-bold">
+          <label class="file-picker soft-button rounded-xl px-4 py-2 text-xs font-bold">
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               (change)="onRallyLogoSelected($event)"
-              class="hidden"
+              class="sr-only" aria-label="Escolher imagem do rali"
             />
             Escolher imagem
           </label>
@@ -156,7 +67,7 @@
 
       <div class="md:col-span-6 flex flex-col gap-2">
         <label for="rally-name" class="text-xs font-bold text-slate-400">NOME DO RALI *</label>
-        <input id="rally-name"
+        <input #rallyName id="rally-name"
           type="text"
           [(ngModel)]="rallyForm.name"
           class="themed-input text-sm rounded-xl px-4 py-2.5"
@@ -248,97 +159,26 @@
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div
-      *ngFor="let rally of filteredRallies"
-      class="interactive-card glass-panel rounded-2xl p-6 flex flex-col justify-between shadow-xl transition group cursor-pointer"
-    >
-      <div>
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-center gap-3 min-w-0">
-            <div
-              class="rally-logo-tile w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black shrink-0 overflow-hidden"
-            >
-              <img
-                *ngIf="getRallyLogoUrl(rally); else cardInitials"
-                [src]="getRallyLogoUrl(rally)!"
-                alt="Logo do rali"
-                class="w-full h-full object-cover"
-              />
-              <ng-template #cardInitials>
-                {{ getRallyInitials(rally.name) }}
-              </ng-template>
-            </div>
-            <div class="min-w-0">
-              <h2 class="text-lg font-bold text-white transition truncate">
-                {{ rally.name }} {{ rally.year }}
-              </h2>
-              <p class="text-xs text-slate-400 mt-0.5 truncate">
-                {{ rally.location }}
-              </p>
-            </div>
-          </div>
 
-          <div class="flex items-center gap-1">
-            <button
-              (click)="openEditRallyForm(rally, $event)"
-              title="Editar Rali"
-              class="icon-button soft-button rounded-lg text-slate-400 hover:text-white transition"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 20h4l11-11-4-4L4 16z" />
-                <path d="M13 7l4 4" />
-              </svg>
-              <span class="sr-only">Editar</span>
-            </button>
-            <button
-              (click)="deleteRally(rally.id, rally.name, $event)"
-              title="Eliminar Rali"
-              class="icon-button danger-button rounded-lg transition"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 7h16" />
-                <path d="M10 11v6M14 11v6" />
-                <path d="M6 7l1 14h10l1-14" />
-                <path d="M9 7V4h6v3" />
-              </svg>
-              <span class="sr-only">Eliminar</span>
-            </button>
-          </div>
+  <p *ngIf="isLoading" role="status" class="management-empty glass-panel rounded-xl p-4">A carregar ralis…</p>
+  <section *ngIf="!isLoading && hasLoadError" role="alert" class="management-empty glass-panel rounded-xl p-4"><h2 class="font-bold">Não foi possível carregar os ralis</h2><button type="button" (click)="loadRalliesFromApi()" class="soft-button rounded-lg px-3 py-2 mt-3">Tentar novamente</button></section>
+  <div *ngIf="!isLoading && !hasLoadError" [hidden]="isCreatingRally">
+    <section *ngIf="!rallies.length" class="management-empty glass-panel rounded-xl p-5"><h2 class="font-bold">Ainda não tens ralis</h2><p class="text-sm text-slate-300 mt-1">Usa Criar novo rali para começar a organizar as tuas PECs.</p></section>
+    <section *ngIf="rallies.length && !filteredRallies.length" class="management-empty glass-panel rounded-xl p-5"><h2 class="font-bold">Nenhum rali corresponde aos filtros</h2><p class="text-sm text-slate-300 mt-1">Ajusta a pesquisa ou usa Limpar filtros.</p></section>
+    <div class="management-list">
+      <article *ngFor="let rally of filteredRallies; trackBy: trackRallyId" class="interactive-card management-row glass-panel rounded-xl p-4" [attr.aria-label]="rally.name">
+        <div class="management-logo rally-logo-tile flex items-center justify-center rounded-lg overflow-hidden" aria-hidden="true"><img *ngIf="getRallyLogoUrl(rally); else cardInitials" [src]="getRallyLogoUrl(rally)!" alt="" class="w-full h-full object-cover" /><ng-template #cardInitials>{{ getRallyInitials(rally.name) }}</ng-template></div>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><h2 class="text-lg font-bold"><a [routerLink]="['/rally', rally.id]">{{ rally.name }}</a></h2><span class="text-sm text-slate-300">{{ rally.year }}</span><span class="status-badge" [class.status-badge-success]="rally.status === 'COMPLETED'" [class.status-badge-warning]="rally.status !== 'COMPLETED'">{{ rally.status === 'COMPLETED' ? 'Concluído' : 'Ativo' }}</span></div>
+          <p class="text-sm text-slate-300">{{ rally.location }} · {{ rally.surface }}</p>
+          <p class="text-sm text-slate-300 mt-1">{{ getCarName(rally.carId) || 'Sem carro associado' }}<span *ngIf="rally.carClass"> · {{ rally.carClass }}</span> · <strong>{{ getPecsCount(rally) }} PECs</strong></p>
         </div>
-
-        <div
-          class="flex items-center gap-3 mt-6 pt-4 border-t border-slate-900 flex-wrap"
-        >
-          <span
-            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
-          >
-            {{ rally.surface }}
-          </span>
-          <span class="themed-chip text-xs px-3 py-1 rounded-lg font-semibold">
-            {{ getPecsCount(rally) }} PECs Registadas
-          </span>
-          <span
-            *ngIf="rally.carId"
-            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
-          >
-            {{ getCarName(rally.carId) }}
-          </span>
-          <span
-            *ngIf="rally.carClass"
-            class="surface-card text-xs px-3 py-1 rounded-lg font-semibold text-slate-300"
-          >
-            {{ rally.carClass }}
-          </span>
+        <div class="management-actions flex flex-wrap items-center gap-2">
+          <button type="button" (click)="viewRallyDetails(rally.id)" class="soft-button rounded-lg px-3 py-2">Ver Rali e PECs<span aria-hidden="true"> →</span></button>
+          <button type="button" (click)="openEditRallyForm(rally, $event)" [attr.aria-label]="'Editar ' + rally.name" class="soft-button rounded-lg px-3 py-2">Editar</button>
+          <button type="button" (click)="deleteRally(rally.id, rally.name, $event)" [attr.aria-label]="'Eliminar ' + rally.name" class="danger-button rounded-lg px-3 py-2">Eliminar</button>
         </div>
-      </div>
-
-      <button
-        (click)="viewRallyDetails(rally.id)"
-        class="soft-button mt-6 w-full py-3 rounded-xl text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2"
-      >
-        Ver Rali e PECs
-      </button>
+      </article>
     </div>
   </div>
 </div>

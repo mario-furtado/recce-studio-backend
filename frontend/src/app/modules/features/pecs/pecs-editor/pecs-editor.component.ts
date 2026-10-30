@@ -24,7 +24,7 @@ import { SharedProperties } from '../../../core/shared/shared-properties';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { RecceMapComponent } from './recce-map.component';
 import { MapNote, notesOnMap, trackSegments } from './gps-timeline';
-import { NotebookComponent } from '../../../core/notebook/notebook.component';
+import { RecceBookComponent } from '../../../core/notebook/reccebook.component';
 import { NoteDisplayComponent } from '../../../core/notebook/note-display.component';
 import { NotebookService } from '../../../core/notebook/notebook.service';
 import { defaultNotebook } from '../../../core/notebook/notebook.model';
@@ -37,7 +37,7 @@ import { StudioAssetsComponent } from './studio-assets.component';
 @Component({
   selector: 'app-pecs-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RecceMapComponent, NotebookComponent, NoteDisplayComponent, NotePresentationEditorComponent, ContextPanelComponent, FocusPanelComponent, StudioAssetsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, RecceMapComponent, RecceBookComponent, NoteDisplayComponent, NotePresentationEditorComponent, ContextPanelComponent, FocusPanelComponent, StudioAssetsComponent],
   templateUrl: './pecs-editor.component.html',
   styleUrl: './pecs-editor.component.css',
 })
@@ -89,6 +89,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   notebookLoaded = false;
   notebookError = '';
   showNotebook = false;
+  @ViewChild(RecceBookComponent) reccebook?: RecceBookComponent;
   mobileView: 'video' | 'map' | 'notes' = 'video';
   notesWidth = 38;
   private draftInitial = '';
@@ -99,12 +100,12 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
   get hasUnsavedChanges() { return this.hasNoteDraft && this.draftValue() !== this.draftInitial; }
   canDeactivate(): boolean | Promise<boolean> {
-    if (this.isSavingNote) return false;
-    if (!this.hasUnsavedChanges) return true;
-    return this.confirmDialog.confirm({ title: 'Descartar alterações?', message: 'Esta nota tem alterações por guardar.', confirmText: 'Descartar', cancelText: 'Continuar a editar', tone: 'danger' });
+    if (this.isSavingNote || this.reccebook?.saving) return false;
+    if (!this.hasUnsavedChanges && !this.reccebook?.hasUnsavedChanges) return true;
+    return this.confirmDialog.confirm({ title: 'Descartar alterações?', message: this.hasUnsavedChanges ? (this.reccebook?.hasUnsavedChanges ? 'A nota e a capa têm alterações por guardar.' : 'Esta nota tem alterações por guardar.') : 'A capa tem alterações por guardar.', confirmText: 'Descartar', cancelText: 'Continuar a editar', tone: 'danger' });
   }
   @HostListener('window:beforeunload', ['$event'])
-  beforeUnload(event: BeforeUnloadEvent) { if (this.hasUnsavedChanges || this.isSavingNote) { event.preventDefault(); event.returnValue = ''; } }
+  beforeUnload(event: BeforeUnloadEvent) { if (this.hasUnsavedChanges || this.reccebook?.hasUnsavedChanges || this.isSavingNote || this.reccebook?.saving) { event.preventDefault(); event.returnValue = ''; } }
   private focusEditor(id: string) {
     this.mobileView = 'notes';
     requestAnimationFrame(() => {
@@ -116,6 +117,10 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   cancelNewNote() {
     if (this.isSavingNote) return;
     this.isAddingNote = false; this.newNoteText = ''; this.newNoteObservation = '';
+  }
+  discardDrafts() {
+    if (this.isSavingNote || this.reccebook?.saving) return;
+    this.cancelEditNote(); this.cancelNewNote(); this.reccebook?.cancel();
   }
   backToNotes() {
     const allowed = this.canDeactivate();

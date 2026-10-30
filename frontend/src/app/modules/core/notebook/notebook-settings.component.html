@@ -70,5 +70,6 @@
     </div>
   </fieldset>
   <label>Texto para pré-visualização<textarea rows="3" [(ngModel)]="sample"></textarea></label>
-  <app-notebook *ngIf="loaded && active" [settings]="settings" [notes]="[{text: sample}]" />
+  <app-reccebook *ngIf="loaded && coverOpened && !demonstration" [hidden]="area !== 'notebook'" [personal]="true" [active]="active && area === 'notebook'" [settings]="settings" [notes]="[{text: sample}]" />
+  <app-notebook *ngIf="loaded && active && (area === 'presentation' || demonstration)" [settings]="settings" [notes]="[{text: sample}]" />
 </section>

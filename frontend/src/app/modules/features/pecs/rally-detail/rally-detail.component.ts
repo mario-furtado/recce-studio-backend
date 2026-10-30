@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -10,15 +10,20 @@ import {
   TeamProfileService,
 } from '../../../core/services/team-profile.service';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
+import { FocusPanelComponent } from '../../../core/shared/components/focus-panel.component';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 
 @Component({
   selector: 'app-rally-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, FocusPanelComponent],
   templateUrl: './rally-detail.component.html',
+  styleUrl: './rally-detail.component.css',
 })
 export class RallyDetailComponent implements OnInit, OnDestroy {
+  @Input() demoPreview = false;
+  isLoading = false;
+  loadError: 'rally' | 'pecs' | null = null;
   rallyId: string | null = null;
   searchTerm = '';
   rallyLogoObjectUrl: string | null = null;
@@ -80,6 +85,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
 
   getRally(): void {
     if (!this.rallyId) return;
+    this.isLoading = true; this.loadError = null;
     this.rallyService.getRallyById(this.rallyId).subscribe({
       next: (data: Rally) => {
         this.rally = {
@@ -100,18 +106,20 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
         this.loadRallyLogo(data);
         this.getRallyPecs();
       },
-      error: () => this.shared.error('Erro ao carregar rali'),
+      error: () => { this.isLoading = false; this.loadError = 'rally'; this.shared.error('Erro ao carregar rali'); },
     });
   }
 
   getRallyPecs(): void {
     if (!this.rallyId) return;
+    this.isLoading = true; this.loadError = null;
     this.rallyService.getRallyPecs(this.rallyId).subscribe({
       next: (data: Pec[]) => {
+        this.isLoading = false;
         this.rally.pecs = data;
         this.rally.pecsCount = data.length;
       },
-      error: () => this.shared.error('Erro ao carregar PECs'),
+      error: () => { this.isLoading = false; this.loadError = 'pecs'; this.shared.error('Erro ao carregar PECs'); },
     });
   }
 
@@ -246,6 +254,12 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
       return `${words[0][0]}${words[1][0]}`.toUpperCase();
     }
     return (words[0] || 'RS').slice(0, 2).toUpperCase();
+  }
+
+  async confirmFinishRally(): Promise<void> {
+    if (this.isCompleted) return;
+    const confirmed = await this.confirmDialog.confirm({ title: 'Terminar Rali', message: `Queres terminar ${this.rally.name}?`, detail: 'A criação e a gestão das PECs ficarão bloqueadas até voltares a rascunho.', confirmText: 'Terminar Rali' });
+    if (confirmed) this.updateRallyStatus('COMPLETED');
   }
 
   updateRallyStatus(status: 'DRAFT' | 'COMPLETED'): void {

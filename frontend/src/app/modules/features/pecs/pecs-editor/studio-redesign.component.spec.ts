@@ -1,3 +1,5 @@
+import { HttpClient } from '@angular/common/http';
+import { RecceBookComponent } from '../../../core/notebook/reccebook.component';
 import { ActivatedRoute } from '@angular/router';
 import { of } from 'rxjs';
 import { PecsEditorComponent } from './pecs-editor.component';
@@ -39,6 +41,14 @@ describe('FEAT-014 Studio draft navigation', () => {
     editor.startEditNote(note, new Event('click')); editor.currentTime = 12; editor.activeNoteId = '1'; editor.editingNoteText = 'E3 ATT';
     editor.mobileView = 'map'; editor.mobileView = 'video'; editor.mobileView = 'notes';
     expect(editor.currentTime).toBe(12); expect(editor.activeNoteId).toBe('1'); expect(editor.editingNoteText).toBe('E3 ATT');
+  });
+  it('protects unsaved covers and discards them once when switching parent mode', async () => {
+    const book = new RecceBookComponent({} as HttpClient); book.loaded = true; book.editable = true; book.edit(); book.draft.front.elements[0].text = 'Unsaved'; editor.reccebook = book;
+    const parent = new PecDetailComponent({} as ActivatedRoute, {} as PecService, {} as SharedProperties);
+    parent.isLoadingPec = false; parent.currentMode = 'STUDIO'; parent.studio = editor;
+    confirm.confirm.and.resolveTo(false); parent.setMode('OVERVIEW'); await Promise.resolve(); expect(parent.currentMode).toBe('STUDIO'); expect(book.hasUnsavedChanges).toBeTrue();
+    const unload = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent; editor.beforeUnload(unload); expect(unload.defaultPrevented).toBeTrue();
+    confirm.confirm.and.resolveTo(true); parent.setMode('OVERVIEW'); await Promise.resolve(); expect(parent.currentMode).toBe('OVERVIEW'); expect(book.hasUnsavedChanges).toBeFalse();
   });
   it('integrates asynchronous draft confirmation with parent mode and completion actions', async () => {
     const api = jasmine.createSpyObj<PecService>('PecService', ['updatePecStatus']);

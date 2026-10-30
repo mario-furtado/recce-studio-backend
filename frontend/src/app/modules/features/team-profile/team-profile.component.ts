@@ -1,6 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { catchError, from, map, mergeMap, of, reduce, Subscription, switchMap } from 'rxjs';
+import { Pec } from '../../core/models/rally';
+import { RallyService } from '../../core/services/rally.service';
 import {
   TeamCar,
   TeamProfile,
@@ -13,7 +17,7 @@ import { SharedProperties } from '../../core/shared/shared-properties';
 @Component({
   selector: 'app-team-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './team-profile.component.html',
   styleUrl: './team-profile.component.css',
 })
@@ -24,6 +28,13 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
   private logoVersion = Date.now();
   private failedCarPhotoIds = new Set<string>();
   private carPhotoUrls = new Map<string, string>();
+  private activitySubscription?: Subscription;
+  recentPecs: (Pec & { rallyName: string })[] = [];
+  activityState: 'loading' | 'ready' | 'error' = 'loading';
+  get activeCar(): TeamCar | undefined { return this.cars.find(car => car.active); }
+  get orderedCars(): TeamCar[] {
+    return [...this.cars].sort((a, b) => Number(!!b.active) - Number(!!a.active));
+  }
 
   readonly distanceUnitOptions = ['Quilometros (km)', 'Milhas (mi)'];
   readonly classOptions = [
@@ -56,17 +67,41 @@ export class TeamProfileComponent implements OnInit, OnDestroy {
     private teamProfileService: TeamProfileService,
     private confirmDialog: ConfirmDialogService,
     private shared: SharedProperties,
+    private rallyService: RallyService,
   ) {}
 
   ngOnInit(): void {
     this.loadTeamProfile();
     this.loadCars();
     this.loadStats();
+    this.loadActivity();
   }
 
   ngOnDestroy(): void {
     this.revokeLogoUrl();
     this.revokeCarPhotoUrls();
+    this.activitySubscription?.unsubscribe();
+  }
+
+  loadActivity(): void {
+    this.activitySubscription?.unsubscribe();
+    this.activityState = 'loading';
+    this.activitySubscription = this.rallyService.getRallies().pipe(
+      switchMap(rallies => from(rallies.filter(rally => (rally.pecsCount ?? 0) > 0)).pipe(
+        mergeMap(rally => this.rallyService.getRallyPecs(rally.id).pipe(
+          map((pecs: Pec[]) => pecs.map(pec => ({ ...pec, rallyName: rally.name }))),
+        ), 4),
+        reduce((recent, pecs) => [...recent, ...pecs]
+          .filter(pec => /^\d{4}-\d{2}-\d{2}$/.test(pec.updatedAt ?? '') &&
+            Number.isFinite(Date.parse(pec.updatedAt)) && new Date(pec.updatedAt).toISOString().slice(0, 10) === pec.updatedAt)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).slice(0, 5),
+        [] as (Pec & { rallyName: string })[]),
+      )),
+      catchError(() => { this.activityState = 'error'; return of(null); }),
+    ).subscribe(recent => {
+      this.recentPecs = recent ?? [];
+      if (recent !== null) this.activityState = 'ready';
+    });
   }
 
   loadTeamProfile(): void {

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, NavigationEnd } from '@angular/router';
@@ -19,8 +19,11 @@ type Surface = 'TERRA' | 'ASFALTO' | 'NEVE' | 'MISTO';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './pecs-list.component.html',
+  styleUrl: '../rally-management.css',
 })
 export class PecsListComponent implements OnInit, OnDestroy {
+  @ViewChild('rallyName') private rallyName?: ElementRef<HTMLInputElement>;
+  private formInvoker?: HTMLElement;
   searchTerm = '';
   surfaceFilter = '';
   yearFilter = '';
@@ -28,6 +31,8 @@ export class PecsListComponent implements OnInit, OnDestroy {
   classFilter = '';
   statusFilter = 'ACTIVE';
   areFiltersOpen = false;
+  isLoading = false;
+  hasLoadError = false;
 
   isCreatingRally = false;
   editingRallyId: string | null = null;
@@ -83,16 +88,19 @@ export class PecsListComponent implements OnInit, OnDestroy {
 
   loadRalliesFromApi(): void {
     if (!this.isOnlineMode) {
+      this.isLoading = false; this.hasLoadError = false;
       this.rallies = [];
       return;
     }
 
+    this.isLoading = true; this.hasLoadError = false;
     this.rallyService.getRallies().subscribe({
       next: (data: Rally[]) => {
+        this.isLoading = false;
         this.rallies = data;
         this.loadRallyLogos(data);
       },
-      error: () => this.shared.error('Erro ao carregar ralis'),
+      error: () => { this.isLoading = false; this.hasLoadError = true; this.shared.error('Erro ao carregar ralis'); },
     });
   }
 
@@ -145,6 +153,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
     this.resetForm();
     this.clearLogoSelection();
     this.isCreatingRally = true;
+    this.focusRallyForm();
   }
 
   openEditRallyForm(rally: Rally, event: Event): void {
@@ -163,10 +172,18 @@ export class PecsListComponent implements OnInit, OnDestroy {
     };
     this.clearLogoSelection();
     this.isCreatingRally = true;
+    this.focusRallyForm();
+  }
+
+  private focusRallyForm(): void {
+    this.formInvoker = document.activeElement as HTMLElement;
+    requestAnimationFrame(() => this.rallyName?.nativeElement.focus());
   }
 
   cancelForm(): void {
     this.isCreatingRally = false;
+    const invoker = this.formInvoker;
+    requestAnimationFrame(() => { if (invoker?.isConnected) invoker.focus(); });
     this.editingRallyId = null;
     this.resetForm();
     this.clearLogoSelection();
@@ -266,6 +283,8 @@ export class PecsListComponent implements OnInit, OnDestroy {
   getCarClass(carId?: string): string {
     return this.cars.find((car) => car.id === carId)?.carClass || '';
   }
+
+  trackRallyId(_index: number, rally: Rally): string { return rally.id; }
 
   getPecsCount(rally: Rally): number {
     return rally.pecsCount ?? rally.pecs?.length ?? 0;
@@ -377,6 +396,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
 
   private syncRemoteDataWithConnectionMode(): void {
     if (!this.isOnlineMode) {
+      this.isLoading = false; this.hasLoadError = false;
       this.rallies = [];
       this.cars = [];
       this.cancelForm();
