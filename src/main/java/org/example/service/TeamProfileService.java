@@ -333,6 +333,7 @@ public class TeamProfileService {
     }
 
     private void ensureDefaultCar(String teamProfileId) {
+        if (teamProfileRepository.findById(teamProfileId).map(p -> Boolean.TRUE.equals(p.getManagedCrew())).orElse(false)) return;
         if (teamCarRepository.countByTeamProfileId(teamProfileId) > 0) {
             return;
         }

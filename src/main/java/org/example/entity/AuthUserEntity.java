@@ -7,6 +7,7 @@ import javax.persistence.Table;
 
 @Entity
 @Table(name = "auth_users")
+@org.hibernate.annotations.Check(constraints="legacy_crew_migrated is null or legacy_crew_migrated = false or team_profile_id is null")
 public class AuthUserEntity {
     @Id
     private String id;
@@ -27,6 +28,17 @@ public class AuthUserEntity {
     private boolean active = true;
 
     private String teamProfileId;
+    // null identifies a pre-verification legacy account; no bulk rewrite of existing users.
+    private Boolean emailVerified;
+    private Long credentialVersion;
+    @Column(name="legacy_crew_migrated") private Boolean legacyCrewMigrated;
+    public Boolean getLegacyCrewMigrated() { return legacyCrewMigrated; }
+    public void setLegacyCrewMigrated(Boolean value) { legacyCrewMigrated=value; }
+
+    public Boolean getEmailVerified() { return emailVerified; }
+    public void setEmailVerified(Boolean value) { emailVerified = value; }
+    public Long getCredentialVersion() { return credentialVersion; }
+    public void setCredentialVersion(Long value) { credentialVersion = value; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

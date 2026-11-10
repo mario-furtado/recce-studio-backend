@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 import java.util.UUID;
 import java.util.Optional;
 import java.time.Clock;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -20,9 +21,10 @@ public class AuthService {
     private final TeamProfileService teamProfileService;
     private final Clock clock;
     private final long tokenTtlMillis;
+    private final LegacyMigrationAccess migrationAccess;
 
     public AuthService(AuthUserRepository authUserRepository, TeamProfileService teamProfileService,
-                       Clock clock, @Value("${recce.auth.token-ttl-seconds:28800}") long tokenTtlSeconds) {
+                       Clock clock, @Value("${recce.auth.token-ttl-seconds:28800}") long tokenTtlSeconds, LegacyMigrationAccess migrationAccess) {
         if (tokenTtlSeconds <= 0) {
             throw new IllegalArgumentException("A validade dos tokens deve ser positiva.");
         }
@@ -30,10 +32,12 @@ public class AuthService {
         this.teamProfileService = teamProfileService;
         this.clock = clock;
         this.tokenTtlMillis = Math.multiplyExact(tokenTtlSeconds, 1000L);
+        this.migrationAccess=migrationAccess;
     }
 
     public AuthResponseDTO register(AuthRequestDTO request) {
         validateCredentials(request);
+        if (migrationAccess.hasCutover()) throw new IllegalStateException("Criação legada indisponível após cutover. Usa conta pessoal e tripulação explícita.");
         String email = normalizeEmail(request.getEmail());
         if (authUserRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("Este email ja esta registado.");
@@ -59,35 +63,44 @@ public class AuthService {
         return new AuthResponseDTO(user.getToken(), user.getEmail(), savedProfile);
     }
 
+    @Transactional
     public AuthResponseDTO login(AuthRequestDTO request) {
-        validateCredentials(request);
+        if (request == null || !StringUtils.hasText(request.getEmail()) || !StringUtils.hasText(request.getPassword())) {
+            throw new IllegalArgumentException("Email e password sao obrigatorios.");
+        }
         String email = normalizeEmail(request.getEmail());
-        AuthUserEntity user = authUserRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new IllegalArgumentException("Credenciais invalidas."));
-
-        if (!user.isActive() || !BCrypt.checkpw(request.getPassword(), user.getPasswordHash())) {
+        AuthUserEntity user = authUserRepository.lockByEmail(email).orElse(null);
+        boolean passwordMatches = AccountPasswords.matches(request.getPassword(), user == null ? null : user.getPasswordHash());
+        if (user == null || !user.isActive() || !verifiedOrLegacy(user) || !passwordMatches) {
             throw new IllegalArgumentException("Credenciais invalidas.");
         }
 
         issueToken(user);
         authUserRepository.save(user);
-        return new AuthResponseDTO(user.getToken(), user.getEmail(), teamProfileService.getProfile(user.getTeamProfileId()));
+        String workspace=getWorkspaceTeamProfileId(user);
+        return new AuthResponseDTO(user.getToken(), user.getEmail(), StringUtils.hasText(workspace) ? teamProfileService.getProfile(workspace) : null);
     }
 
     public boolean isTokenValid(String token) {
         return findActiveUserByToken(token)
-                .map(AuthUserEntity::getTeamProfileId)
-                .filter(StringUtils::hasText)
+                .filter(user -> { String workspace=getWorkspaceTeamProfileId(user); return Boolean.TRUE.equals(user.getEmailVerified()) || StringUtils.hasText(workspace); })
                 .isPresent();
     }
+
+    public String getWorkspaceTeamProfileId(AuthUserEntity user) { return migrationAccess.resolve(user); }
 
     public Optional<AuthUserEntity> findActiveUserByToken(String token) {
         if (!StringUtils.hasText(token)) {
             return Optional.empty();
         }
         return authUserRepository.findByTokenAndActiveTrue(token)
+                .filter(this::verifiedOrLegacy)
                 .filter(user -> user.getTokenExpiresAtEpochMillis() != null
                         && user.getTokenExpiresAtEpochMillis() > clock.millis());
+    }
+
+    private boolean verifiedOrLegacy(AuthUserEntity user) {
+        return !Boolean.FALSE.equals(user.getEmailVerified());
     }
 
     public void logout(String token) {
@@ -118,7 +131,7 @@ public class AuthService {
     }
 
     private String normalizeEmail(String email) {
-        return email.trim().toLowerCase();
+        return email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private String extractBearerToken(String authorization) {

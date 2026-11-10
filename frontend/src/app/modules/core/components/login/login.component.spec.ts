@@ -37,7 +37,7 @@ describe('FEAT-002 login destinations', () => {
   let shared: SharedProperties;
 
   beforeEach(() => {
-    auth = jasmine.createSpyObj('AuthService', ['isAuthenticated', 'isOfflineSession', 'enterOffline', 'login']);
+    auth = jasmine.createSpyObj('AuthService', ['isAuthenticated', 'isOfflineSession', 'isPersonalAccount', 'enterOffline', 'login']);
     auth.isAuthenticated.and.returnValue(false);
     auth.isOfflineSession.and.returnValue(false);
     auth.login.and.returnValue(of({ token: 'online-token', email: 'owner@example.test' }));
@@ -81,6 +81,12 @@ describe('FEAT-002 login destinations', () => {
       expect(store.listSessions).not.toHaveBeenCalled();
     }));
   }
+  it('sends a verified personal account to its own identity instead of a legacy workspace', fakeAsync(() => {
+    auth.isPersonalAccount.and.returnValue(true);
+    const component = new LoginComponent(auth, store, router, shared); component.isBrowserOffline = false;
+    component.form.email = 'personal@example.test'; component.form.password = 'personal-password'; component.submit(); flushMicrotasks();
+    expect(router.navigate).toHaveBeenCalledOnceWith(['/account']); expect(store.listSessions).not.toHaveBeenCalled();
+  }));
 
   for (const storage of ['empty', 'pending', 'unavailable']) {
     it(`preserves the online login destination with ${storage} storage`, fakeAsync(() => {

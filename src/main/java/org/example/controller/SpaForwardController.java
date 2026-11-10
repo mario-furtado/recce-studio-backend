@@ -8,6 +8,7 @@ public class SpaForwardController {
 
     @GetMapping({
             "/login",
+            "/register", "/recover-access", "/verify-email", "/reset-password", "/account",
             "/pecs",
             "/new-recce",
             "/recce-mode",

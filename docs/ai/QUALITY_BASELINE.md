@@ -31,9 +31,22 @@ The following block is consumed by `node tools/compare-quality-baseline.mjs`. Si
 
 Focused update, 2026-10-23 (`FEAT-003`): AUTO selected STANDARD with FACTORY_RISK=medium and passed selected backend29/29, targeted98/98, integration103/103, real E2E7/7 and runner3/3, configuration/lint/typecheck/build. Final review added an out-of-media-range seek guard; affected unit/component9/9, typecheck and real satellite/media E2E1/1 with production rebuild passed afterwards; unchanged STANDARD results reused. Initial bundle474.32kB, no size warning, existing unused RouterLink warning remains. Leaflet ESM avoids a new CommonJS warning. Fresh full lockfile audit: critical=0, high=0, moderate=8, low=0; plain npm audit exits1 for moderate findings, while the actual required `npm --prefix frontend run audit:security` (high threshold) PASS. Omit-dev audit0 findings, no Leaflet advisory. Only Leaflet/types/geojson lock entries were added; no existing dependency upgrades. The previously recorded high signature is absent in the current advisory response; its upstream reason was not investigated. Removed that obsolete active failure signature following actual check execution; historical evidence above and AUD-DEP-001 ticket state are retained. No global release/DEEP suite, bootstrap-default recheck, production DB migration, physical GPS or live offline tile cache validation. Pre-existing user edits to application.properties were preserved. Logs: `.factory-results/FEAT-003-ticket-final.log`, `FEAT-003-ticket.json`, `FEAT-003-review-targeted.log`, `FEAT-003-review-e2e.log`, `FEAT-003-security-gate.log`, `FEAT-003-audit.json`, `FEAT-003-audit-runtime.json`. TICKET_GATE PASS; RELEASE_GATE NOT_RUN.
 
+Focused observation, 2026-11-02 (FEAT-018, STANDARD): selected backend regression ran 80 tests: 71 passed, 2 failures and 7 errors, zero skips. All 13 new personal-account tests, 2 SMTP simulator tests, token lifecycle/settings/schema, tenant/interceptor and test-user persistence checks passed. The unchanged `TestUserBootstrapAuditTest` failed 9/38 cases: `auditSec005IsDisabledByDefault` expected false/observed true; `auditSec005OptInDoesNotSupplyDefaultCredentials` expected an exception/none thrown; seven `auditSec005MissingFlagDoesNotProvisionInDeploymentEnvironments` cases threw the existing local-environment guard exception. The checkout's committed `application.properties` already explicitly enables/provides the local test user; FEAT-018 only appends account/SMTP configuration and preserves those values. This is a pre-existing configuration mismatch with the secure-default audit, not a personal-account test failure. Do not suppress the tests or change the user's local credentials to make this pass. Release remains blocked until default configuration is reconciled (local credentials should be supplied externally). Evidence: `.factory-results/FEAT-018-ticket.json`, its referenced `backend-test.log`, and `.factory-results/FEAT-018-preexisting-config.json` (booleans only, no credentials). This is a focused observation, not a full release run.
+
+Focused recheck, 2026-11-03 (FEAT-020, STANDARD): the selected backend gate ran 134 tests, with 125 passing, 2 failures and 7 errors. All nine failures were in `TestUserBootstrapAuditTest` and match the three AUD-SEC-005 signatures below. This recheck covers the affected bootstrap boundary; local credentials and defaults were preserved. Evidence: `.factory-results/FEAT-020-ticket.json` and its backend log. No global release run.
+
 <!-- QUALITY_BASELINE_JSON
 {
   "schemaVersion": 1,
-  "checks": {}
+  "checks": {
+    "backend:test": {
+      "tickets": ["AUD-SEC-005"],
+      "signatures": [
+        "auditSec005IsDisabledByDefault",
+        "auditSec005OptInDoesNotSupplyDefaultCredentials",
+        "auditSec005MissingFlagDoesNotProvisionInDeploymentEnvironments"
+      ]
+    }
+  }
 }
 -->

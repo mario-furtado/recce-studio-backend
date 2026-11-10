@@ -8,6 +8,7 @@ import java.util.List;
 
 @Repository
 public interface NoteRepository extends JpaRepository<NoteEntity, Long> {
+    java.util.Optional<NoteEntity> findByIdAndPecId(Long id, String pecId);
 
     // Procura todas as notas de uma determinada PEC, ordenadas por tempo cronológico
     List<NoteEntity> findByPecIdOrderByOriginalTimestampAsc(String pecId);

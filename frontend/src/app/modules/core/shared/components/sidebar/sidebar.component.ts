@@ -4,14 +4,23 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../services/auth.service';
 import { SharedProperties } from '../../shared-properties';
+import { getCrewContext } from '../../../services/crew-context';
 
 @Component({
   selector: 'app-sidebar',
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './sidebar.component.html',
+  styles: [`@media (max-width: 768px) {
+    :host .sidebar-nav.crew-account-navigation {
+      grid-template-columns: repeat(7, minmax(2.75rem, 1fr)) !important;
+      overflow-x: auto;
+    }
+  }`],
 })
 export class SidebarComponent {
+  get personalAccount(): boolean { return this.auth.isPersonalAccount(); }
+  get crewSelected(): boolean { return !!getCrewContext(); }
   private readonly collapsedKey = 'recce_sidebar_collapsed';
 
   isCollapsed = localStorage.getItem(this.collapsedKey) === 'true';

@@ -61,9 +61,9 @@
       </div>
 
       <div *ngIf="!isBrowserOffline" class="surface-card rounded-2xl p-4">
-        <div class="text-sm font-black text-white">Acesso privado beta</div>
+        <div class="text-sm font-black text-white">Aceder ao Recce Studio</div>
         <p class="text-xs text-slate-400 mt-2">
-          Entra com as credenciais fornecidas pela equipa Recce Studio.
+          Entra com a tua conta ou com o acesso beta já disponibilizado.
         </p>
       </div>
 
@@ -94,7 +94,7 @@
             name="password"
             [(ngModel)]="form.password"
             class="themed-input w-full mt-1 rounded-xl px-4 py-3"
-            placeholder="Minimo 6 caracteres"
+            autocomplete="current-password"
           />
         </div>
 
@@ -121,6 +121,10 @@
           Entrar em modo offline
         </button>
       </form>
+      <nav *ngIf="!isBrowserOffline" class="flex flex-wrap gap-4 mt-4" aria-label="Acesso à conta">
+        <a routerLink="/register" class="soft-button px-4 py-3 rounded-lg">Criar conta</a>
+        <a routerLink="/recover-access" class="soft-button px-4 py-3 rounded-lg">Recuperar acesso</a>
+      </nav>
 
       <button
         *ngIf="isBrowserOffline"

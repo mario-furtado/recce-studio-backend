@@ -16,20 +16,17 @@ import java.util.Map;
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
 public class AuthController {
     private final AuthService authService;
+    private final org.example.service.AccountRateLimiter limiter;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, org.example.service.AccountRateLimiter limiter) {
         this.authService = authService;
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> register() {
-        return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
-                .body(Collections.singletonMap("message", "Criacao de contas desativada nesta beta."));
+        this.limiter = limiter;
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(@RequestBody AuthRequestDTO request) {
+    public ResponseEntity<AuthResponseDTO> login(@RequestBody AuthRequestDTO request, javax.servlet.http.HttpServletRequest http) {
+        String email = request.getEmail() == null ? "" : request.getEmail().trim().toLowerCase(java.util.Locale.ROOT);
+        limiter.check("LOGIN", email, http.getRemoteAddr());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(authService.login(request));
     }
 

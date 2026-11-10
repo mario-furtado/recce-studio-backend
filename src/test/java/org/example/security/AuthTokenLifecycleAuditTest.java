@@ -43,12 +43,15 @@ class AuthTokenLifecycleAuditTest {
     @Autowired private ObjectMapper json;
     @Autowired private AuthUserRepository users;
     @Autowired private AuthService auth;
+    @Autowired private org.example.repository.AccountRateLimitRepository rateLimits;
     @Autowired private org.example.service.TeamProfileService profiles;
+    @Autowired private org.example.service.LegacyMigrationAccess migrationAccess;
     @MockBean private Clock clock;
     private final AtomicLong now = new AtomicLong();
 
     @BeforeEach
     void setUp() {
+        rateLimits.deleteByIdNot(org.example.service.AccountRateLimiter.GUARD);
         now.set(1700000000000L);
         when(clock.millis()).thenAnswer(invocation -> now.get());
         users.deleteAll();
@@ -80,7 +83,7 @@ class AuthTokenLifecycleAuditTest {
                 .andExpect(status().isUnauthorized());
         assertNull(users.findById("lifecycle-user").orElseThrow(AssertionError::new).getTokenExpiresAtEpochMillis());
         AuthService reconstructed = new AuthService(users, profiles,
-                Clock.fixed(Instant.ofEpochMilli(now.get()), ZoneOffset.UTC), 60);
+                Clock.fixed(Instant.ofEpochMilli(now.get()), ZoneOffset.UTC), 60, migrationAccess);
         assertFalse(reconstructed.isTokenValid(token), "Revocation survives reconstructing the service");
         http.perform(post("/api/auth/logout").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
@@ -120,7 +123,7 @@ class AuthTokenLifecycleAuditTest {
         now.incrementAndGet();
         assertFalse(auth.isTokenValid(token));
         AuthService reconstructed = new AuthService(users, profiles,
-                Clock.fixed(Instant.ofEpochMilli(now.get()), ZoneOffset.UTC), 60);
+                Clock.fixed(Instant.ofEpochMilli(now.get()), ZoneOffset.UTC), 60, migrationAccess);
         assertFalse(reconstructed.isTokenValid(token));
         http.perform(post("/api/auth/logout").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());

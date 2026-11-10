@@ -16,6 +16,7 @@ describe('AUD-SEC-006 guard validation race', () => {
         { provide: AuthService, useValue: {
           isAuthenticated: () => true, isOfflineSession: () => false,
           getToken: () => token, validate: () => validation, logout,
+          isPersonalAccount: () => false,
         } },
         { provide: SharedProperties, useValue: { connectionMode$: new BehaviorSubject('online') } },
       ] });

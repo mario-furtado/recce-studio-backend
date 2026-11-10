@@ -68,7 +68,7 @@ public class TestUserBootstrap implements CommandLineRunner {
             throw new IllegalStateException("RECCE_TEST_USER_PASSWORD deve ter pelo menos 6 caracteres.");
         }
 
-        TeamProfileDTO profile = teamProfileService.getProfile("default");
+        if (authUserRepository.existsByLegacyCrewMigratedTrue()) throw new IllegalStateException("O bootstrap legado deve ficar desativado após cutover de tripulações.");
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         AuthUserEntity user = authUserRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseGet(() -> {
@@ -77,6 +77,9 @@ public class TestUserBootstrap implements CommandLineRunner {
                     created.setToken(newToken());
                     return created;
                 });
+
+        if (Boolean.TRUE.equals(user.getLegacyCrewMigrated())) throw new IllegalStateException("O utilizador convertido não pode ser reconfigurado pelo bootstrap legado.");
+        TeamProfileDTO profile = teamProfileService.getProfile("default");
 
         user.setEmail(normalizedEmail);
         user.setPasswordHash(BCrypt.hashpw(password, BCrypt.gensalt()));

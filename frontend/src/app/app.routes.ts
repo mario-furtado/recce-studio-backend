@@ -9,6 +9,10 @@ import { recceExitGuard } from './modules/core/guards/recce-exit.guard';
 export const routes: Routes = [
   // 1. Rota Pública de Login (Sem Sidebar)
   { path: 'login', component: LoginComponent },
+  ...(['register', 'recover-access', 'verify-email', 'reset-password'] as const).map((path, index) => ({
+    path, loadComponent: () => import('./modules/core/components/account-access/account-access.component').then(m => m.AccountAccessComponent),
+    data: { page: ['register', 'recover', 'verify', 'reset'][index] },
+  })),
 
   // 3. Área Privada do Studio (Com Sidebar mantida pelo MainLayoutComponent)
   {
@@ -17,6 +21,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
     canActivateChild: [authGuard],
     children: [
+      { path: 'account', loadComponent: () => import('./modules/core/components/account-access/personal-account.component').then(m => m.PersonalAccountComponent) },
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
       { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent) }, // Lista de PECs/Ralis
       { path: 'new-recce', loadComponent: () => import('./modules/features/recce-mode/new-recce.component').then(m => m.NewRecceComponent) },

@@ -393,11 +393,8 @@ public class NoteExcelParserService {
 
     public NoteEntity updateNote(String pecId, Long noteId, NoteEntity note) {
         ensurePecCanBeEdited(pecId);
-        NoteEntity existing = noteRepository.findById(noteId)
-                .orElseThrow(() -> new RuntimeException("Nota nao encontrada com ID: " + noteId));
-        if (!pecId.equals(existing.getPecId())) {
-            throw new RuntimeException("Nota nao pertence a esta PEC");
-        }
+        NoteEntity existing = noteRepository.findByIdAndPecId(noteId,pecId)
+                .orElseThrow(() -> new ResourceNotFoundException("Nota nao encontrada com ID: " + noteId));
         String presentation = NotePresentationValidator.validate(note.getPresentationJson(), note.getText());
         existing.setPresentationJson(presentation);
         existing.setText(note.getText());
@@ -409,11 +406,8 @@ public class NoteExcelParserService {
     @Transactional
     public List<NoteEntity> alignNote(String pecId, Long noteId, NoteAlignmentDTO alignment) {
         ensurePecCanBeEdited(pecId);
-        NoteEntity target = noteRepository.findById(noteId)
-                .orElseThrow(() -> new RuntimeException("Nota nao encontrada com ID: " + noteId));
-        if (!pecId.equals(target.getPecId())) {
-            throw new RuntimeException("Nota nao pertence a esta PEC");
-        }
+        NoteEntity target = noteRepository.findByIdAndPecId(noteId,pecId)
+                .orElseThrow(() -> new ResourceNotFoundException("Nota nao encontrada com ID: " + noteId));
 
         String presentation = target.getPresentationJson();
         if (alignment != null) {

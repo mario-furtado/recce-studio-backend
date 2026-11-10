@@ -9,6 +9,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(org.example.service.AccountFlowException.class)
+    public ResponseEntity<ErrorResponseDTO> handleAccountFlow(org.example.service.AccountFlowException exception) {
+        org.springframework.http.ResponseEntity.BodyBuilder builder = ResponseEntity.status(exception.status).cacheControl(org.springframework.http.CacheControl.noStore());
+        if (exception.status == HttpStatus.TOO_MANY_REQUESTS) builder.header("Retry-After", "900");
+        return builder.body(new ErrorResponseDTO(exception.getMessage()));
+    }
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponseDTO> handleNotFound(ResourceNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponseDTO(exception.getMessage()));

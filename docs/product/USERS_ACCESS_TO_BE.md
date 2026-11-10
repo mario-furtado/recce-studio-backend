@@ -67,7 +67,7 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | ID | Questão | Recomendação ou alternativas, sem aprovação implícita | Bloqueia |
 | --- | --- | --- | --- |
 | D01 | Partilha por tripulação ou por rali? | Preferência sugerida: tripulação com ralis atuais e futuros. Alternativa: seleção de ralis. Exige confirmação explícita do alcance futuro. | Contrato de convite/concessão e abertura da partilha. |
-| D02 | Quem fica proprietário de cada equipa legada? | Mapeamento confirmado por responsável; não escolher pela ordem de IDs, nomes desportivos ou primeiro login. | Cutover do grupo legado afetado. |
+| D02 | Quem fica proprietário de cada equipa legada? | Processo aprovado para UAC-P03: manifesto explícito por IDs, bloquear equipas com dono/membros ambíguos e ensaiar isoladamente. Não escolher pela ordem de IDs, nomes ou primeiro login; sem conversão da beta nesta tarefa. | Cada mapeamento real e cutover continuam a exigir aprovação do responsável; membros adicionais sem política aprovada bloqueiam o contexto. |
 | D03 | Saída, desativação e eliminação da conta do proprietário | Separar bloqueio de autenticação, gestão, consulta e eliminação de dados. Recomenda-se congelar escrita pendente de sucessão, sem promoção automática de convidado. | Autosserviço de encerramento/transferência e política de continuidade. |
 | D04 | Transferência de propriedade | Transferência explícita para conta verificada, aceite pelo destinatário, preservando IDs; alternativa adiar e usar suporte controlado. | Feature de transferência e cenários de sucessão. |
 | D05 | Retenção, período de recuperação e exportação | Duração, âmbito dos backups e eliminação física a definir; proibir limpeza automática por simples conclusão/expiração comercial. | Eliminação definitiva e fecho de conta/tripulação. |
@@ -76,8 +76,8 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | D08 | Consulta/exportação após expiração de subscrição | Preservar dados existentes e acesso de leitura autorizado; decidir quem paga novas criações, quotas, reativação e efeitos de contas suspensas. | Paywall/entitlements, nunca autorização básica. |
 | D09 | Caderno visível ao convidado e configuração visual | Recomenda-se snapshot partilhado explícito dos estilos necessários, sem expor dicionário/modelo privado completo. Outra opção: representação neutra identificada. | Leitura/exportação coerente do caderno partilhado. |
 | D10 | Adoção de captura sem conta e registos locais antigos | Recuperação explícita com prova/contexto de posse e consentimento; casos ambíguos preservados/quarentenados. Não mudar dono pelo próximo login. | Adoção automática proibida; recuperação assistida/MVP offline público. |
-| D11 | Uso de viaturas/imagens/sistema base entre várias tripulações | Recomenda-se património por tripulação, sem biblioteca global implícita; cópia/associação explícita pode ser futura. | Migração do perfil/garagem e definição de propriedade desses recursos. |
-| D12 | Sessões, verificação de conta e abuso | Manter credenciais opacas como ponto de partida; decidir multissessão, verificação antes da criação e limites de envio/recuperação. | Registo público e alterações à política de sessão. |
+| D11 | Uso de viaturas/imagens/sistema base entre várias tripulações | Aprovado para UAC-P02 em 2026-11-02: recursos próprios por nova tripulação, sem partilha ou cópia automática; sem biblioteca global implícita. | Migração do perfil/garagem legado continua reservada a P03; aprovação não reatribui dados antigos. |
+| D12 | Sessões, verificação de conta e abuso | Política inicial UAC-P01 aprovada em 2026-11-02: email verificado antes do primeiro login novo; passwords 12–128 caracteres; sessão única de 8h; recuperação revoga sessão; verificação 24h e recuperação 30min; 5 pedidos por email/IP em 15min, por operação. SMTP por ambiente, fluxos públicos fechados até configuração, sem envio real nesta tarefa. | Decisão inicial registada em FEAT-018; restantes fases e decisões não ficam aprovadas por esta política. |
 
 O documento usa os cenários A e B sem ativar ambos no MVP. Nenhuma exceção de rali privado é assumida como existente dentro de uma partilha de toda a tripulação.
 
@@ -97,7 +97,7 @@ Ciclo sugerido: registo → verificação de email → conta ativa; recuperaçã
 
 **[PROPOSTA]** Tripulação tem ID estável, nome, ownerUserId, identificação desportiva, estado e datas; vínculo a antigo perfil quando migrada. Lista «As minhas tripulações» reúne as controladas; «Partilhadas» reúne apenas as concedidas. Seleção ativa é conveniência de UI, não autorização global nem destino implícito de todas as operações.
 
-Criar primeira tripulação deve ser leve: nome e dados desportivos opcionais, com possibilidade de criar primeiro rali no mesmo percurso. Não criar uma segunda conta por cada dupla. D11 decidirá se nome/unidades/logo/garagem do TeamProfile passam a integrar a tripulação ou ficam em perfil associado compatível. A recomendação inicial é manter o perfil como extensão da tripulação, evitando nova biblioteca global de carros.
+Criar primeira tripulação deve ser leve: nome e dados desportivos opcionais, com possibilidade de criar primeiro rali no mesmo percurso. Não criar uma segunda conta por cada dupla. D11 foi aprovada para novas tripulações: perfil associado próprio com recursos independentes, sem biblioteca global implícita. A transformação dos perfis/garagens legados continua reservada à P03; esta aprovação não reatribui dados antigos.
 
 **[PENDENTE D07]** Estado de tripulação não é estado do convite ou rali. Arquivar não significa apagar, expulsar leitores ou mover ralis de origem. Uma alteração de nome não deve alterar IDs nem confundir autoria histórica; datas e contexto da passagem podem ser conservados em snapshots de exportação.
 
@@ -470,6 +470,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 
 ### UAC-P01 — Conta pessoal, registo verificado e recuperação
 
+**Implementação — atualização de 2026-11-02:** entregue na [FEAT-018](../features/FEAT-018-conta-pessoal-registo-recuperacao.md), estado **IN_REVIEW**. Política inicial D12 e SMTP aprovados pelo utilizador; critérios P01-AC1–3 cobertos pelos critérios/testes da feature. TICKET_GATE focalizado **PASS**, com wrapper bruto **FAIL** pela auditoria anterior de defaults do utilizador de testes; RELEASE_GATE **BLOCKED** por essa falha, sem execução de release completo. Registo/recuperação permanecem desativados até configuração explícita de email. Este registo atualiza o estado desta fase; as declarações de proposta documental original não descrevem a implementação posterior. P02 e restantes fases não foram implementadas por esta entrega.
+
 **Objetivo/descrição:** permitir identidade própria sem equipa obrigatória, com registo/verificação, autenticação e recuperação de acesso. **Pré-requisitos:** D12, política de password/sessão e transporte de verificação/recuperação definidos; compatibilidade com contas atuais.
 
 - **P01-AC1 — Given** visitante sem tripulação, **When** regista e verifica o seu email, **Then** obtém conta pessoal e pode entrar sem criar equipa formal nem convidar alguém; IDs de contas existentes não mudam.
@@ -480,6 +482,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 
 ### UAC-P02 — Tripulações, propriedade e contexto autorizado
 
+**Implementação — atualização de 2026-11-02:** [FEAT-019](../features/FEAT-019-tripulacoes-propriedade-contexto.md), **IN_REVIEW**, D11 aprovada. TICKET_GATE **PASS** após correções e reexecuções afetadas; RELEASE_GATE **BLOCKED** pelo bloqueio anterior de defaults seguros, sem release completo nesta fase. Backend77/77 e E2E33/33 aprovados, com revalidações finais documentadas na feature. Novas crews permanecem sob flag desativada por omissão; legado não migrado e offline multi-crew bloqueado até P03/P09. Não foram implementadas fases seguintes.
+
 **Objetivo/descrição:** uma conta cria/controla várias tripulações, sem atribuir permissões por papel desportivo. **Pré-requisitos:** P01 ou adaptador de identidade equivalente; D11 e contrato de autorização central; grant futuro não requer já convites ativos.
 
 - **P02-AC1 — Given** conta ativa sem tripulação, **When** cria duas tripulações e rali em cada, **Then** é proprietária de ambas, recursos têm contexto estável e nenhum convite é necessário.
@@ -489,6 +493,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** crew inexistente, owner inválido/inativo, criação repetida, troca de contexto durante pedido, carro de outra crew. **Testes de autorização:** todas as famílias de recursos, queries e ficheiros, papéis sobrepostos por conta, acesso por URL antiga e endpoint pessoal sem crew. **Conclusão:** fonte de verdade e adaptadores definidos, deny por omissão e bloqueios de estado demonstrados; criação multi-contexto permanece sob flag até P03/P09 compatíveis.
 
 ### UAC-P03 — Migração do legado e compatibilidade
+
+**Implementação:** [FEAT-020](../features/FEAT-020-migracao-legado-compatibilidade.md). Ferramenta offline e compatibilidade implementadas e ensaiadas com H2 e media locais sintéticos. O mapeamento real de proprietários, o ensaio representativo do alvo e o cutover da beta continuam pendentes.
 
 **Objetivo/descrição:** mapear equipa única para tripulação preservando relações, propriedade e dados. **Pré-requisitos:** P02; D02/D11; inventário, backups/restauro e política de membros legados aprovados.
 

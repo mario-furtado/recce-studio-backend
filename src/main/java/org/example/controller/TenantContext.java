@@ -8,6 +8,7 @@ import javax.servlet.http.HttpServletRequest;
 public class TenantContext {
     public static final String TEAM_PROFILE_ID_ATTRIBUTE = "recce.auth.teamProfileId";
     public static final String USER_EMAIL_ATTRIBUTE = "recce.auth.userEmail";
+    public static final String ACCOUNT_ID_ATTRIBUTE = "recce.auth.accountId";
 
     private final HttpServletRequest request;
 
@@ -22,6 +23,8 @@ public class TenantContext {
     public String requireUserEmail() {
         return requireAttribute(USER_EMAIL_ATTRIBUTE, "A conta autenticada nao tem email associado.");
     }
+
+    public String requireAccountId() { return requireAttribute(ACCOUNT_ID_ATTRIBUTE, "Sessão inválida."); }
 
     private String requireAttribute(String name, String message) {
         Object value = request.getAttribute(name);

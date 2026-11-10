@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { SharedProperties } from '../../shared-properties';
+import { getCrewContext } from '../../../services/crew-context';
 
 @Component({
   selector: 'app-main-layout',
@@ -13,6 +14,7 @@ import { SharedProperties } from '../../shared-properties';
       <app-sidebar></app-sidebar>
 
       <main class="flex-1 p-6 md:p-8 overflow-y-auto">
+        <p *ngIf="activeCrewName" class="mb-3 text-sm text-slate-300 break-all">Tripulação: {{ activeCrewName }}</p>
         <router-outlet></router-outlet>
       </main>
 
@@ -49,5 +51,6 @@ import { SharedProperties } from '../../shared-properties';
   `,
 })
 export class MainLayoutComponent {
+  get activeCrewName(): string { return getCrewContext()?.name ?? ''; }
   constructor(public shared: SharedProperties) {}
 }

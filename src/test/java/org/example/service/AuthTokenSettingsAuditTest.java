@@ -14,12 +14,12 @@ class AuthTokenSettingsAuditTest {
     @ValueSource(longs = {0, -1})
     void auditSec006NonPositiveLifetimeFailsClosed(long seconds) {
         assertThrows(IllegalArgumentException.class, () -> new AuthService(
-                mock(AuthUserRepository.class), mock(TeamProfileService.class), Clock.systemUTC(), seconds));
+                mock(AuthUserRepository.class), mock(TeamProfileService.class), Clock.systemUTC(), seconds, null));
     }
 
     @Test
     void auditSec006OverflowingLifetimeFailsClosed() {
         assertThrows(ArithmeticException.class, () -> new AuthService(
-                mock(AuthUserRepository.class), mock(TeamProfileService.class), Clock.systemUTC(), Long.MAX_VALUE));
+                mock(AuthUserRepository.class), mock(TeamProfileService.class), Clock.systemUTC(), Long.MAX_VALUE, null));
     }
 }

@@ -30,23 +30,29 @@ public class OwnershipMigration implements CommandLineRunner {
     private final TeamCarRepository teamCarRepository;
     private final PecRepository pecRepository;
     private final OfflineRecceSyncRepository syncRepository;
+    private final org.example.repository.LegacyCrewMigrationRepository migrations;
 
     public OwnershipMigration(
             AuthUserRepository authUserRepository,
             RallyRepository rallyRepository,
             TeamCarRepository teamCarRepository,
             PecRepository pecRepository,
-            OfflineRecceSyncRepository syncRepository) {
+            OfflineRecceSyncRepository syncRepository, org.example.repository.LegacyCrewMigrationRepository migrations) {
         this.authUserRepository = authUserRepository;
         this.rallyRepository = rallyRepository;
         this.teamCarRepository = teamCarRepository;
         this.pecRepository = pecRepository;
         this.syncRepository = syncRepository;
+        this.migrations=migrations;
     }
 
     @Override
     @Transactional
     public void run(String... args) {
+        if (migrations.count()>0 || authUserRepository.existsByLegacyCrewMigratedTrue()) {
+            log.info("Legacy automatic backfill disabled after explicit crew cutover; unresolved records remain unchanged.");
+            return;
+        }
         Set<String> teamProfileIds = authUserRepository.findAll().stream()
                 .map(user -> user.getTeamProfileId())
                 .filter(StringUtils::hasText)

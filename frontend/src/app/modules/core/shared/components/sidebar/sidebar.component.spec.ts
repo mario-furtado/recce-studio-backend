@@ -50,7 +50,7 @@ describe('FEAT-002 offline sidebar navigation', () => {
     await TestBed.configureTestingModule({
       imports: [SidebarComponent],
       providers: [provideRouter([]),
-        { provide: AuthService, useValue: {} },
+        { provide: AuthService, useValue: { isPersonalAccount: () => false } },
         { provide: SharedProperties, useValue: shared }],
     }).compileComponents();
     router = TestBed.inject(Router);

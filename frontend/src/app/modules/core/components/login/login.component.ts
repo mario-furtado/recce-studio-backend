@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthPayload, AuthService } from '../../services/auth.service';
 import { OfflineRecceStoreService } from '../../services/offline-recce-store.service';
 import { SharedProperties } from '../../shared/shared-properties';
@@ -9,7 +9,7 @@ import { SharedProperties } from '../../shared/shared-properties';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })
@@ -103,6 +103,8 @@ export class LoginComponent {
       this.router.navigate(['/offline-recces']);
       return;
     }
+
+    if (this.auth.isPersonalAccount()) { this.router.navigate(['/account']); return; }
 
     try {
       const sessions = await this.offlineStore.listSessions();

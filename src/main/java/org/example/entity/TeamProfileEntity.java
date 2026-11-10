@@ -10,6 +10,10 @@ import javax.persistence.Table;
 public class TeamProfileEntity {
     @Id
     private String id;
+    // Nullable for untouched legacy profiles; new crew profiles never receive fictional cars.
+    private Boolean managedCrew;
+    public Boolean getManagedCrew() { return managedCrew; }
+    public void setManagedCrew(Boolean value) { managedCrew=value; }
 
     @Column(nullable = false)
     private String name;
