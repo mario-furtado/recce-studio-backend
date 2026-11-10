@@ -1,13 +1,19 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewChecked, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, OnChanges, OnDestroy, ViewChild } from '@angular/core';
 import { blockStyles, NoteBlockComponent } from './note-display.component';
-import { composeNote, defaultNotebook, NoteBlock, NotebookNote, NotebookSettings, pageDimensions, settingsError } from './notebook.model';
+import { composeNote, defaultNotebook, NoteBlock, NotebookNote, NotebookSettings, pageDimensions, RenderedElement, settingsError } from './notebook.model';
 import { composePresentedNote, presentationError } from './note-presentation';
 
 import { BookCover, coverError, defaultBookCover } from './book-cover.model';
 import { BookCoverPageComponent, coverPageStyles } from './book-cover-page.component';
 
-interface NotebookRow { blocks: NoteBlock[]; number: number }
+type RenderedBlock = NoteBlock<RenderedElement & { meaning?: string }>;
+interface NotebookRow { blocks: RenderedBlock[]; number: number }
+export interface PublishedNotebook {
+  page: NotebookSettings['page'];
+  cover: BookCover;
+  notes: NoteBlock<RenderedElement>[][];
+}
 export const notebookStyles = `
 .notebook-page{background:white;color:black;box-sizing:border-box;break-after:page;page-break-after:always;font-family:Arial,sans-serif;overflow:visible;flex-shrink:0}
 .notebook-page:last-child{break-after:auto;page-break-after:auto}
@@ -22,7 +28,7 @@ ${blockStyles}
   template: `
     <div class="notebook-controls">
       <p *ngIf="error" role="alert">{{ error }}</p>
-      <p *ngIf="!notes.length">Sem notas. O ficheiro inclui a capa e a contracapa.</p>
+      <p *ngIf="!(publishedNotes ?? notes).length">Sem notas. O ficheiro inclui a capa e a contracapa.</p>
       <p>Pré-visualização à escala real. As sequências longas continuam nas linhas seguintes.</p>
       <button type="button" class="soft-button px-3 py-2 rounded" (click)="print()" [disabled]="!!error || pending || exportBlocked">Imprimir / Guardar PDF</button>
       <p *ngIf="printError" role="alert">{{ printError }}</p>
@@ -52,10 +58,11 @@ export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy
   @Output() coverValidated = new EventEmitter<string | null>(true);
   coverLayoutError: string | null = null;
   @Input() notes: NotebookNote[] = [];
+  @Input() publishedNotes: PublishedNotebook['notes'] | null = null;
   @Input() settings: NotebookSettings = defaultNotebook();
   @ViewChild('measure') measure?: ElementRef<HTMLElement>;
   @ViewChild('pagesElement') pagesElement?: ElementRef<HTMLElement>;
-  measured: { block: NoteBlock; number: number; newRow: boolean }[] = [];
+  measured: { block: RenderedBlock; number: number; newRow: boolean }[] = [];
   pages: NotebookRow[][] = [];
   dimensions: [number, number] = [210, 297];
   rowHeight = 0;
@@ -70,13 +77,26 @@ export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy
     this.error = settingsError(this.settings) || this.coverLayoutError;
     this.dimensions = pageDimensions(this.settings);
     this.rowHeight = (this.dimensions[1] - 2 * this.settings.page.marginMm) / this.settings.page.rowsPerPage;
-    this.measured = this.notes.flatMap((note, index) => {
+    const blocksByNote = this.publishedNotes ?? this.notes.map(note => {
       this.error ||= presentationError(note.text, note.presentationJson);
       const blocks = composePresentedNote(note.text, this.settings.rules, note.presentationJson);
       if (note.speedRating?.trim()) blocks.push(...composeNote('\n' + note.speedRating, []));
-      return blocks.map((block, at) => ({ block, number: index + 1, newRow: at === 0 || !!block.breakBefore }));
+      return blocks;
     });
+    this.measured = blocksByNote.flatMap((blocks, index) =>
+      blocks.map((block, at) => ({ block, number: index + 1, newRow: at === 0 || !!block.breakBefore })));
     this.pages = []; this.pending = true;
+  }
+
+  publication(): PublishedNotebook | null {
+    if (!this.active || this.pending || this.error || this.exportBlocked || this.publishedNotes !== null) return null;
+    const notes: PublishedNotebook['notes'] = this.notes.map(() => []);
+    for (const { block, number } of this.measured) {
+      const elements = block.elements.map(({ display, position, size, bold, underline, highlight }) =>
+        ({ display, position, size, bold, underline, highlight }));
+      notes[number - 1].push({ breakBefore: !!block.breakBefore, elements });
+    }
+    return { page: this.settings.page, cover: this.cover, notes };
   }
 
   ngAfterViewChecked() {

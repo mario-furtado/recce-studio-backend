@@ -12,6 +12,17 @@ import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.context.ApplicationContext;
 import org.example.repository.AuthUserRepository;
+import org.example.repository.NoteRepository;
+import org.example.repository.NotebookPreferencesRepository;
+import org.example.repository.PecRepository;
+import org.example.repository.RallyReadGrantRepository;
+import org.example.repository.RallyRepository;
+import org.example.entity.AuthUserEntity;
+import org.example.entity.NoteEntity;
+import org.example.entity.NotebookPreferencesEntity;
+import org.example.entity.PecEntity;
+import org.example.entity.RallyEntity;
+import org.example.entity.RallyReadGrantEntity;
 
 /** Test-classpath only: never included in the production jar or component scan. */
 public final class E2eServer {
@@ -73,8 +84,51 @@ public final class E2eServer {
                     auth.register(request);
                 }
                 migratedFixture(context);
+                sharedRallyFixture(context);
             };
         }
+    }
+
+    private static void sharedRallyFixture(ApplicationContext context) {
+        AuthUserRepository users = context.getBean(AuthUserRepository.class);
+        AuthUserEntity migrated = users.findByEmailIgnoreCase("migrated@e2e.invalid").get();
+        AuthUserEntity reader = new AuthUserEntity();
+        reader.setId("e2e-reader");
+        reader.setEmail("reader@e2e.invalid");
+        reader.setEmailVerified(true);
+        reader.setPasswordHash(migrated.getPasswordHash());
+        reader.setToken(java.util.UUID.randomUUID().toString());
+        users.save(reader);
+
+        RallyEntity rally = new RallyEntity();
+        rally.setName("Rali partilhado FEAT021");
+        rally.setYear(2026);
+        rally.setSurface("TERRA");
+        rally.setLocation("Fixture");
+        rally.setStatus("COMPLETED");
+        rally.setTeamProfileId(context.getBean(AuthService.class).getWorkspaceTeamProfileId(migrated));
+        rally = context.getBean(RallyRepository.class).save(rally);
+        PecRepository pecs = context.getBean(PecRepository.class);
+        PecEntity pec = new PecEntity("shared-e2e-pec", 1, "PEC partilhada", 2, 1, "COMPLETED", java.time.LocalDate.now(), rally);
+        pec.setAudioFileName("legacy.wav");
+        pec.setAudioContentType("audio/wav");
+        pec.setAudioStoragePath(pecs.findById("legacy-e2e-pec").get().getAudioStoragePath());
+        pecs.save(pec);
+
+        NoteEntity note = new NoteEntity();
+        note.setPecId(pec.getId());
+        note.setText("D6 publicado");
+        note.setOriginalTimestamp(1.0);
+        note.setLatitude(38.7);
+        note.setLongitude(-9.1);
+        context.getBean(NoteRepository.class).save(note);
+        context.getBean(RallyReadGrantRepository.class).save(new RallyReadGrantEntity(reader, rally, true));
+
+        NotebookPreferencesEntity preference = new NotebookPreferencesEntity();
+        preference.setUserId(reader.getId());
+        preference.setSettings("{\"version\":1,\"rules\":[],\"page\":{\"format\":\"A5\",\"orientation\":\"landscape\","
+                + "\"marginMm\":10,\"rowsPerPage\":4,\"fontPt\":14,\"separators\":false,\"alignment\":\"right\"}}");
+        context.getBean(NotebookPreferencesRepository.class).save(preference);
     }
 
     /** Explicit test manifest; no production data, startup migration hook or inferred owner. */

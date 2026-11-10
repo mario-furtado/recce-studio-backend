@@ -1,0 +1,61 @@
+<nav class="flex gap-3 flex-wrap mb-4" aria-label="Navegação de ralis partilhados">
+  <a class="soft-button px-3 py-2 rounded-lg" routerLink="/account">A minha conta</a>
+  <a *ngIf="rallyId" class="soft-button px-3 py-2 rounded-lg" routerLink="/shared-rallies">Ralis partilhados</a>
+  <a *ngIf="pecId" class="soft-button px-3 py-2 rounded-lg" [routerLink]="['/shared-rallies', rallyId]">Voltar ao rali</a>
+</nav>
+<header class="mb-4">
+  <p class="read-meta">Partilhado comigo · Só leitura</p>
+  <h1 class="text-2xl font-black">{{ stage?.pec?.name ?? rally?.name ?? 'Ralis partilhados comigo' }}</h1>
+</header>
+<p *ngIf="loading" role="status">A carregar…</p>
+<div *ngIf="error" class="read-card" role="alert">
+  <p>{{ error }}</p>
+  <button type="button" class="soft-button px-3 py-2 rounded-lg mt-2" (click)="retry()">Tentar novamente</button>
+</div>
+<section *ngIf="!rallyId && !loading && !error" aria-label="Ralis concedidos" class="read-grid">
+  <p *ngIf="!rallies.length">Ainda não tens ralis partilhados.</p>
+  <article *ngFor="let item of rallies" class="read-card">
+    <h2><a class="font-bold underline" [routerLink]="['/shared-rallies', item.id]">{{ item.name }}</a></h2>
+    <p class="read-meta">{{ item.surface }} · {{ item.status === 'COMPLETED' ? 'Concluído' : 'Em preparação' }}</p>
+  </article>
+</section>
+<section *ngIf="rally" aria-label="PECs do rali" class="read-grid">
+  <p class="read-meta">{{ rally.surface }} · {{ rally.status === 'COMPLETED' ? 'Concluído' : 'Em preparação' }}</p>
+  <p *ngIf="!rally.pecs.length">Este rali ainda não tem PECs.</p>
+  <article *ngFor="let item of rally.pecs" class="read-card">
+    <h2><a class="font-bold underline" [routerLink]="['/shared-rallies', rallyId, 'pecs', item.id]">PEC {{ item.number }} · {{ item.name }}</a></h2>
+    <p class="read-meta">{{ item.distanceKm }} km</p>
+  </article>
+</section>
+<div *ngIf="stage as view" class="read-grid">
+  <section *ngIf="view.hasVideo || view.hasAudio" class="read-card" aria-label="Media da PEC">
+    <video *ngIf="videoUrl" [src]="videoUrl" controls playsinline aria-label="Vídeo da PEC" (error)="mediaError = true"></video>
+    <audio *ngIf="audioUrl" [src]="audioUrl" controls aria-label="Áudio da PEC" (error)="mediaError = true"></audio>
+    <p *ngIf="mediaError" role="status">Não foi possível carregar um ficheiro desta PEC.</p>
+  </section>
+  <p *ngIf="mapError" role="status">O traçado GPS não está disponível.</p>
+  <app-recce-map *ngIf="track" [track]="track" [notes]="mapNotes" />
+  <section class="read-card" aria-label="Notas da PEC">
+    <h2 class="font-bold">Notas da PEC</h2>
+    <p *ngIf="!view.notes.length">Ainda não há notas.</p>
+    <ol class="divide-y divide-slate-700">
+      <li *ngFor="let note of view.notes" class="py-2">
+        <span *ngIf="note.originalTimestamp !== null" class="read-meta">{{ note.originalTimestamp | number:'1.0-1' }} s · </span>{{ note.text }}
+        <p *ngIf="note.speedRating" class="read-meta">{{ note.speedRating }}</p>
+      </li>
+    </ol>
+  </section>
+  <section class="read-card" aria-label="Caderno publicado">
+    <h2 class="font-bold">Caderno publicado</h2>
+    <button type="button" class="soft-button px-3 py-2 rounded-lg my-2" (click)="openBook()" [disabled]="bookStatus === 'loading'">
+      {{ bookStatus === 'idle' ? 'Abrir caderno publicado' : 'Verificar publicação' }}
+    </button>
+    <p *ngIf="bookStatus === 'loading'" role="status">A carregar publicação…</p>
+    <p *ngIf="bookStatus === 'missing'" role="status">O proprietário ainda não publicou o caderno desta PEC.</p>
+    <p *ngIf="bookStatus === 'error'" role="alert">O caderno publicado não está disponível.</p>
+    <ng-container *ngIf="book as version">
+      <p>Versão publicada {{ version.revision }}</p>
+      <app-notebook *ngIf="bookSettings as settings" [settings]="settings" [cover]="version.snapshot.cover" [publishedNotes]="version.snapshot.notes" />
+    </ng-container>
+  </section>
+</div>

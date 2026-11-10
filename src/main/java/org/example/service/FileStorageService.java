@@ -2,7 +2,7 @@ package org.example.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.ByteArrayOutputStream;
@@ -117,11 +118,32 @@ public class FileStorageService {
 
         if (isS3Key(storageKey)) {
             ensureS3Configured();
-            InputStream inputStream = open(storageKey);
-            return new InputStreamResource(inputStream) {
+            long size = s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(storageKey).build()).contentLength();
+            // Spring needs the length and may open the resource again for byte ranges.
+            return new AbstractResource() {
+                @Override
+                public String getDescription() {
+                    return "S3 object " + fileName(storageKey);
+                }
+
                 @Override
                 public String getFilename() {
                     return fileName(storageKey);
+                }
+
+                @Override
+                public boolean exists() {
+                    return true;
+                }
+
+                @Override
+                public long contentLength() {
+                    return size;
+                }
+
+                @Override
+                public InputStream getInputStream() {
+                    return open(storageKey);
                 }
             };
         }

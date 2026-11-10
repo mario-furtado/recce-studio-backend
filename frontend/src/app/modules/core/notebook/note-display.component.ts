@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges } from '@angular/core';
-import { DisplayRule, NoteBlock, Position, positions } from './notebook.model';
+import { DisplayRule, NoteBlock, Position, positions, RenderedElement } from './notebook.model';
 import { composePresentedNote } from './note-presentation';
 
 export const blockStyles = `
@@ -19,7 +19,7 @@ export const blockStyles = `
   styles: [blockStyles],
 })
 export class NoteBlockComponent {
-  @Input({ required: true }) block!: NoteBlock;
+  @Input({ required: true }) block!: NoteBlock<RenderedElement & { meaning?: string }>;
   readonly positions = positions;
   elementsAt(position: Position) { return this.block.elements.filter(element => element.position === position); }
   area(position: Position): string {

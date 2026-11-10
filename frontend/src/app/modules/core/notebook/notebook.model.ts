@@ -18,7 +18,8 @@ export interface NotebookSettings {
   rules: DisplayRule[];
   page: { format: 'A4' | 'A5'; orientation: 'portrait' | 'landscape'; marginMm: number; rowsPerPage: number; fontPt: number; separators: boolean; alignment?: NotebookAlignment };
 }
-export interface NoteBlock { elements: DisplayRule[]; breakBefore?: boolean }
+export type RenderedElement = Pick<DisplayRule, 'display' | 'position' | 'size' | 'bold' | 'underline' | 'highlight'>;
+export interface NoteBlock<T = DisplayRule> { elements: T[]; breakBefore?: boolean }
 export interface NotebookNote { text: string; speedRating?: string; presentationJson?: string | null }
 
 export function displayRule(match = '', role: DisplayRule['role'] = 'standalone'): DisplayRule {

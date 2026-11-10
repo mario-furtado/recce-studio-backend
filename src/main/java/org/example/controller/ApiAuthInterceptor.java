@@ -38,8 +38,10 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
             request.setAttribute(TenantContext.USER_EMAIL_ATTRIBUTE, user.getEmail());
             Class<?> controller=handler instanceof org.springframework.web.method.HandlerMethod
                 ? ((org.springframework.web.method.HandlerMethod)handler).getBeanType() : null;
-            if (controller!=null && CrewController.class.isAssignableFrom(controller)) {
+            if (controller != null && (CrewController.class.isAssignableFrom(controller)
+                    || SharedRallyController.class.isAssignableFrom(controller))) {
                 if (!authService.isTokenValid(token)) { response.sendError(401); return false; }
+                response.setHeader("Cache-Control", "no-store");
                 return true;
             }
             java.util.List<String> contexts=java.util.Collections.list(request.getHeaders("X-Crew-Id"));

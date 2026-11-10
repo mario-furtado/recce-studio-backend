@@ -26,21 +26,31 @@ export class RecceBookComponent implements OnChanges, OnDestroy {
   side: 'front' | 'back' = 'front'; selected = 0;
   layoutError: string | null = null;
   private request?: Subscription;
+  private publicationRequest?: Subscription;
+  revision: number | null = null;
+  publishing = false;
+  publicationError = '';
+  publicationStatus = '';
+  private publicationReady = false;
   constructor(private http: HttpClient) {}
   ngOnChanges(changes: SimpleChanges) { if (changes['pecId'] || changes['personal']) this.load(); }
   get endpoint() { return this.personal ? `${API_BASE_URL}/api/reccebook-template` : `${API_BASE_URL}/api/pecs/${encodeURIComponent(this.pecId)}/reccebook-cover`; }
+  private get publicationEndpoint() { return `${API_BASE_URL}/api/pecs/${encodeURIComponent(this.pecId)}/book-publication`; }
   get page(): CoverSide { return this.draft[this.side]; }
   get item() { return this.page.elements[this.selected]; }
   get schemaError() { return coverError(this.draft); }
   get hasUnsavedChanges() { return this.editing && JSON.stringify(this.draft) !== JSON.stringify(this.cover); }
   load() {
     this.request?.unsubscribe(); this.loaded = false; this.editable = false; this.editing = false; this.error = ''; this.saving = false;
+    this.publicationRequest?.unsubscribe(); this.revision = null; this.publishing = false; this.publicationError = ''; this.publicationStatus = '';
+    this.publicationReady = false;
     this.cover = defaultBookCover(); this.draft = defaultBookCover();
     if (!this.personal && !this.pecId) return;
-    this.request = this.http.get<{ cover: BookCover; editable: boolean }>(this.endpoint).subscribe({
+    this.request = this.http.get<{ cover: BookCover; editable: boolean; publicationRevision?: number }>(this.endpoint).subscribe({
       next: value => {
         if (coverError(value.cover)) { this.error = 'A configuração da capa não é válida. Tenta carregar novamente.'; return; }
         this.cover = value.cover; this.draft = structuredClone(value.cover); this.editable = value.editable; this.loaded = true;
+        if (!this.personal) this.revision = value.publicationRevision ?? null;
       },
       error: () => { this.error = 'Não foi possível carregar a capa. Tenta novamente antes de guardar ou exportar.'; },
     });
@@ -59,5 +69,22 @@ export class RecceBookComponent implements OnChanges, OnDestroy {
       error: () => { this.error = 'Não foi possível guardar a capa. As alterações mantêm-se; tenta novamente.'; this.saving = false; },
     });
   }
-  ngOnDestroy() { this.request?.unsubscribe(); }
+  previewValidated(error: string | null) {
+    this.layoutError = error;
+    this.publicationReady = !!this.preview && !this.preview.pending && !this.preview.error;
+  }
+
+  get canPublish() { return this.revision !== null && this.publicationReady && !this.publishing && !this.editing && this.active; }
+
+  publish() {
+    if (!this.canPublish) return;
+    const snapshot = this.preview?.publication();
+    if (!snapshot) return;
+    this.publishing = true; this.publicationError = ''; this.publicationStatus = '';
+    this.publicationRequest = this.http.put<{ revision: number }>(this.publicationEndpoint, snapshot).subscribe({
+      next: value => { this.revision = value.revision; this.publishing = false; this.publicationStatus = `Versão ${value.revision} publicada.`; },
+      error: () => { this.publishing = false; this.publicationError = 'Não foi possível publicar. A última versão publicada continua disponível.'; },
+    });
+  }
+  ngOnDestroy() { this.request?.unsubscribe(); this.publicationRequest?.unsubscribe(); }
 }

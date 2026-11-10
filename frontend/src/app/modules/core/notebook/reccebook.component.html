@@ -35,4 +35,13 @@
   <p *ngIf="schemaError" role="alert" class="cover-error mt-2">{{ schemaError }}</p>
   <div class="flex flex-wrap gap-2 mt-3"><button type="button" (click)="save()" [disabled]="saving || locked || !editable || !!schemaError || !!layoutError" class="accent-button rounded-lg px-3 py-2">{{ saving ? 'A guardar…' : 'Guardar capa' }}</button><button type="button" (click)="cancel()" [disabled]="saving" class="soft-button rounded-lg px-3 py-2">Cancelar edição da capa</button></div>
 </section>
-<app-notebook [settings]="settings" [notes]="notes" [cover]="editing ? draft : cover" [active]="active" (coverValidated)="layoutError = $event" [exportBlocked]="!loaded || editing || saving" />
+<section *ngIf="revision !== null" class="p-3" aria-label="Publicação do caderno">
+  <p class="text-sm">A versão publicada fica disponível para quem tem acesso de leitura a este rali.</p>
+  <p class="text-sm">{{ revision ? 'Última versão publicada: ' + revision : 'Ainda sem publicação.' }}</p>
+  <button type="button" class="soft-button rounded-lg px-3 py-2 mt-2" (click)="publish()" [disabled]="!canPublish">
+    {{ publishing ? 'A publicar…' : revision ? 'Publicar nova versão' : 'Publicar caderno' }}
+  </button>
+  <p *ngIf="publicationStatus" role="status">{{ publicationStatus }}</p>
+  <p *ngIf="publicationError" role="alert" class="cover-error">{{ publicationError }}</p>
+</section>
+<app-notebook [settings]="settings" [notes]="notes" [cover]="editing ? draft : cover" [active]="active" (coverValidated)="previewValidated($event)" [exportBlocked]="!loaded || editing || saving" />

@@ -66,7 +66,7 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 
 | ID | Questão | Recomendação ou alternativas, sem aprovação implícita | Bloqueia |
 | --- | --- | --- | --- |
-| D01 | Partilha por tripulação ou por rali? | Preferência sugerida: tripulação com ralis atuais e futuros. Alternativa: seleção de ralis. Exige confirmação explícita do alcance futuro. | Contrato de convite/concessão e abertura da partilha. |
+| D01 | Partilha por tripulação ou por rali? | Aprovado em 2026-11-10: por rali, apenas o rali concedido. | P04 usa concessões de teste. |
 | D02 | Quem fica proprietário de cada equipa legada? | Processo aprovado para UAC-P03: manifesto explícito por IDs, bloquear equipas com dono/membros ambíguos e ensaiar isoladamente. Não escolher pela ordem de IDs, nomes ou primeiro login; sem conversão da beta nesta tarefa. | Cada mapeamento real e cutover continuam a exigir aprovação do responsável; membros adicionais sem política aprovada bloqueiam o contexto. |
 | D03 | Saída, desativação e eliminação da conta do proprietário | Separar bloqueio de autenticação, gestão, consulta e eliminação de dados. Recomenda-se congelar escrita pendente de sucessão, sem promoção automática de convidado. | Autosserviço de encerramento/transferência e política de continuidade. |
 | D04 | Transferência de propriedade | Transferência explícita para conta verificada, aceite pelo destinatário, preservando IDs; alternativa adiar e usar suporte controlado. | Feature de transferência e cenários de sucessão. |
@@ -74,7 +74,7 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | D06 | Conta inexistente, entrega e expiração de convite | Recomenda-se convite por email verificado e ligação ao criar conta; email complementar, não autorização por posse de link. TTL, reenvios e fornecedor por definir. | Envio externo/convites abertos. |
 | D07 | Estado de tripulação e arquivo do rali | Proposta: archiveAt separado de DRAFT/COMPLETED; tripulação arquivada suspende novas alterações sem revogar leitura. Detalhes de reabertura a aprovar. | Arquivo/gestão do histórico além dos concluídos atuais. |
 | D08 | Consulta/exportação após expiração de subscrição | Preservar dados existentes e acesso de leitura autorizado; decidir quem paga novas criações, quotas, reativação e efeitos de contas suspensas. | Paywall/entitlements, nunca autorização básica. |
-| D09 | Caderno visível ao convidado e configuração visual | Recomenda-se snapshot partilhado explícito dos estilos necessários, sem expor dicionário/modelo privado completo. Outra opção: representação neutra identificada. | Leitura/exportação coerente do caderno partilhado. |
+| D09 | Caderno visível ao convidado e configuração visual | Aprovado em 2026-11-10: versão publicada explicitamente pelo proprietário com estilos mínimos e aviso se ainda não existir publicação. | Leitura/exportação coerente do caderno partilhado. |
 | D10 | Adoção de captura sem conta e registos locais antigos | Recuperação explícita com prova/contexto de posse e consentimento; casos ambíguos preservados/quarentenados. Não mudar dono pelo próximo login. | Adoção automática proibida; recuperação assistida/MVP offline público. |
 | D11 | Uso de viaturas/imagens/sistema base entre várias tripulações | Aprovado para UAC-P02 em 2026-11-02: recursos próprios por nova tripulação, sem partilha ou cópia automática; sem biblioteca global implícita. | Migração do perfil/garagem legado continua reservada a P03; aprovação não reatribui dados antigos. |
 | D12 | Sessões, verificação de conta e abuso | Política inicial UAC-P01 aprovada em 2026-11-02: email verificado antes do primeiro login novo; passwords 12–128 caracteres; sessão única de 8h; recuperação revoga sessão; verificação 24h e recuperação 30min; 5 pedidos por email/IP em 15min, por operação. SMTP por ambiente, fluxos públicos fechados até configuração, sem envio real nesta tarefa. | Decisão inicial registada em FEAT-018; restantes fases e decisões não ficam aprovadas por esta política. |
@@ -182,7 +182,7 @@ Lista de convites enviados/recebidos é a fonte de estado operacional; notifica�
 
 ## 11. Partilha por tripulação e por rali
 
-| Critério | A — Tripulação, recomendação ainda pendente | B — Ralis específicos |
+| Critério | A — Tripulação, alternativa avaliada | B — Ralis específicos, aprovado |
 | --- | --- | --- |
 | Âmbito | Todos os ralis existentes e futuros dessa tripulação | Só ralis explicitamente indicados |
 | Benefício | Menos gestão numa dupla estável; continuidade entre provas | Menor exposição e controlo por evento |
@@ -191,7 +191,7 @@ Lista de convites enviados/recebidos é a fonte de estado operacional; notifica�
 | Revogação | Retirar concessão da tripulação afeta todos os ralis abrangidos | Retirar concessão do rali não deve afetar outros grants |
 | Arquitetura | Herança de leitura da tripulação para PECs/media/notas | Concessão no rali com herança para os seus recursos; não expor garagem/informação de outros ralis |
 
-**[PENDENTE D01]** Não abrir simultaneamente ambos os modelos por defeito. Se A for aprovado, no MVP não existirão ralis «privados» dentro de uma concessão que promete todos: seria outro contrato. Se B for aprovado, pertencer à tripulação como nome desportivo não dá acesso a todos os ralis.
+**[APROVADO D01]** A concessão abrange apenas um rali. Pertencer à tripulação como nome desportivo não dá acesso aos ralis.
 
 **[PROPOSTA para evolução futura]** Concessões positivas sem ACL de exceções no MVP. Se A e B coexistirem no futuro, revogar uma concessão não elimina outra que ainda permite leitura: mostrar origem e acesso efetivo. «Remover todo acesso» deve revogar todas as origens selecionadas pelo proprietário de forma explícita. Mover rali para outra tripulação fica fora do MVP: mudaria âmbito, destinatários futuros e referências offline e requer feature própria, nunca um simples edit de crewId.
 
@@ -319,7 +319,8 @@ Não foi localizado um documento autónomo geral de arquitetura na pasta docs in
 | `POST /api/invitations/{id}/accept`, `/decline`, `/revoke` | Destinatário aceita/recusa próprio convite; owner cancela pendente. Transições idempotentes/autorizadas. |
 | `GET /api/crews/{id}/access` ou rali, `POST /api/access-grants/{id}/revoke` | Gestão owner; revogar grant não exige apagar projeto/conta ou reescrever convite aceite. |
 | `GET /api/notifications`, `PATCH /api/notifications/{id}/read` | Só inbox da conta; leitura não aceita nem autoriza projeto. |
-| `GET /api/pecs/{id}/book-publication` | DTO de caderno partilhado se D09; sem dependência da API de preferências privadas de outro user. |
+| `GET /api/shared-rallies`, `GET /api/shared-rallies/{rallyId}` e `GET /api/shared-rallies/{rallyId}/pecs/{pecId}` | Implementado na P04. Consulta READ sem selecionar uma tripulação como contexto de escrita. |
+| `GET /api/shared-rallies/{rallyId}/pecs/{pecId}/book-publication`, `PUT /api/pecs/{pecId}/book-publication` | Implementado na P04. Leitor obtém a publicação ou 204. Proprietário da tripulação gerida publica uma versão nova. |
 | Operações atuais `/api/pecs/{id}/...` e media | Preservar caminhos quando possível; resolver owner/grant/estado pelo recurso, não por equipa ativa enviada. |
 | `POST /api/offline-recces/sync` e upload de áudio | Owner autorizado no destino em cada fase; binding/idempotência/versionamento explícitos. |
 | Operações futuras de arquivo/transferência/eliminação | Apenas após D03–D05/D07, com reautenticação e contratos próprios; não incluir já num PATCH livre. |
@@ -332,7 +333,7 @@ Códigos e payloads finais serão definidos por feature. Princípios: 401 para a
 
 Para leitura B, só expor metadados mínimos da tripulação/carro relevantes para o rali, sem acesso ao diretório completo de viaturas/participantes nem outros projetos. Queries de listagem, estatísticas e GPS também são fronteiras de acesso, não apenas GET por ID.
 
-**[PENDENTE D09, recomendação]** Preparação do caderno partilhado produz publicação explícita de página, estilos necessários, capas contextuais e versão. É um snapshot limitado do projeto, não partilha de todas as regras pessoais/frases de voz. O owner controla atualização; convidados veem/exportam essa versão e sobreposições da PEC, sem escrever no modelo. Se não existir publicação, informar indisponibilidade/necessidade de preparação ou aplicar representação neutra previamente aprovada; não exportar silenciosamente o modelo privado do convidado como sendo o caderno do proprietário. GET nunca cria publicação com efeitos persistentes. Não é coedição.
+**[APROVADO D09]** O proprietário publica uma versão com página, apresentação das notas e capas contextuais. O leitor vê e exporta essa versão. Se não existir publicação, a interface indica a indisponibilidade. A consulta e a exportação não gravam dados nem consultam modelos privados.
 
 ## 16. Segurança, privacidade e autorização
 
@@ -505,6 +506,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** órfãos, colunas ausentes, media ausente, colisões de email/IDs, interrupção em lotes, cliente antigo e divergência entre schemas. **Testes de autorização:** matriz antes/depois com terceiros e antigos membros, isolamento de preferências, segurança do adapter/v1 e revogações após rollback. **Conclusão:** manifesto assinado/aceite operacionalmente, reconciliação sem perdas injustificadas, restauro ensaiado em ambiente representativo e cutover limitado aprovado. Não bastam testes só em H2 para afirmar prontidão de produção diferente.
 
 ### UAC-P04 — Consulta READ e publicação do caderno
+
+**Implementação:** [FEAT-021](../features/FEAT-021-consulta-read-caderno-publicado.md). A consulta usa concessões por rali e uma versão de caderno publicada por PEC. A atribuição de concessões continua limitada aos dados de teste.
 
 **Objetivo/descrição:** consultar trabalho partilhado com resultado coerente sem acesso aos modelos privados. **Pré-requisitos:** P02 e contexto migrado P03; D01/D09 aprovadas. Grants podem ser preparados apenas em fixtures até convites/revogação estarem prontos.
 

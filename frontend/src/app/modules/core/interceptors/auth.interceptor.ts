@@ -17,7 +17,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }
 
   const crew = getCrewContext();
-  const workspaceRequest = !/^\/api\/(auth|crews)(\/|$)/.test(path);
+  const workspaceRequest = !/^\/api\/(auth|crews|shared-rallies)(\/|$)/.test(path);
   if (workspaceRequest && hasStaleCrewContext()) return throwError(() => new HttpErrorResponse({ status: 409, error: { message: 'A sessão mudou. Escolhe novamente a tripulação na tua conta.' } }));
   const contextHeaders: Record<string, string> = crew && workspaceRequest ? { 'X-Crew-Id': crew.id } : {};
   return next(

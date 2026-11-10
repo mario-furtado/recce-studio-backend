@@ -22,6 +22,9 @@ export const routes: Routes = [
     canActivateChild: [authGuard],
     children: [
       { path: 'account', loadComponent: () => import('./modules/core/components/account-access/personal-account.component').then(m => m.PersonalAccountComponent) },
+      ...['shared-rallies/:rallyId/pecs/:pecId', 'shared-rallies/:rallyId', 'shared-rallies'].map(path => ({
+        path, loadComponent: () => import('./modules/features/pecs/shared-rallies/shared-rallies.component').then(m => m.SharedRalliesComponent),
+      })),
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
       { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent) }, // Lista de PECs/Ralis
       { path: 'new-recce', loadComponent: () => import('./modules/features/recce-mode/new-recce.component').then(m => m.NewRecceComponent) },
