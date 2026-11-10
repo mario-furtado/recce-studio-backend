@@ -50,12 +50,118 @@ class SharedRallyIntegrationTest {
     private String crew, rally, pec, sibling, siblingPec, shared, ownerPec, noteId;
 
     @Test
+    void accessChecksUseTheExactGrantAndPecWithoutReturningContent() throws Exception {
+        String sharedRally = "/api/shared-rallies/" + rally;
+        for (String path : Arrays.asList(sharedRally, shared)) {
+            reader(head(path).header("X-Crew-Id", crew)).andExpect(status().isNoContent())
+                    .andExpect(header().string("Cache-Control", "no-store")).andExpect(content().string(""));
+            call(head(path), "stranger", null).andExpect(status().isNotFound());
+            http.perform(head(path)).andExpect(status().isUnauthorized());
+        }
+        reader(head(sharedRally + "/pecs/" + siblingPec)).andExpect(status().isNotFound());
+    }
+
+    @Test
     void invitationFlagDefaultsOffWhileExistingReadGrantsStillWork() throws Exception {
         reader(get("/api/invitations/options")).andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
         reader(get("/api/notifications")).andExpect(status().isForbidden());
         owner(payload(post("/api/rallies/" + rally + "/invitations"), "{\"email\":\"reader@sharing.invalid\"}"))
                 .andExpect(status().isForbidden());
         reader(get("/api/shared-rallies/" + rally)).andExpect(status().isOk());
+    }
+
+    @Test
+    void revocationDeniesEveryRemoteReadWithoutRevokingAnotherRallyOrTheSession() throws Exception {
+        org.example.entity.RallyReadGrantEntity target = grants.findByRecipientIdAndRallyId("reader", rally).get();
+        grants.delete(grants.findByRecipientIdAndRallyId("reader", sibling).get());
+        grants.save(new RallyReadGrantEntity(users.findById("reader").get(), rallies.findById(sibling).get(), true));
+        String access = "/api/rallies/" + rally + "/access";
+        String revoke = access + "/" + target.getId() + "/revoke";
+        String reason = "{\"reason\":\"COLLABORATION_ENDED\"}";
+        byte[] bytes = {1, 2, 3, 4};
+        for (String kind : Arrays.asList("audio", "video")) {
+            owner(multipart(ownerPec + "/" + kind).file(new MockMultipartFile("file", "test.webm", kind + "/webm", bytes)))
+                    .andExpect(status().isOk());
+            reader(get(shared + "/" + kind).header("Range", "bytes=1-2")).andExpect(status().isPartialContent());
+        }
+        owner(payload(put(ownerPec + "/book-publication"), snapshot().toString())).andExpect(status().isOk());
+        http.perform(options(shared + "/book-publication").header("Origin", "http://localhost:4200")
+                .header("Access-Control-Request-Method", "HEAD")
+                .header("Access-Control-Request-Headers", "authorization"))
+                .andExpect(status().isOk()).andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("HEAD")));
+        reader(head(shared + "/book-publication")).andExpect(status().isOk());
+        String denied = reader(get(access)).andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        reader(get("/api/rallies/nonexistent/access")).andExpect(status().isNotFound()).andExpect(content().string(denied));
+        reader(get(access + "/history")).andExpect(status().isNotFound());
+        reader(payload(post(revoke), reason).header("X-Crew-Id", crew)).andExpect(status().isNotFound());
+        call(payload(post(revoke), reason), "stranger", crew).andExpect(status().isNotFound());
+        owner(payload(post("/api/rallies/" + sibling + "/access/" + target.getId() + "/revoke"), reason))
+                .andExpect(status().isNotFound());
+        owner(payload(post(revoke), "{\"reason\":\"invalid\"}")).andExpect(status().isBadRequest());
+        owner(get(access)).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.items[0].active").value(true));
+        owner(payload(post(revoke), reason)).andExpect(status().isNoContent());
+        owner(payload(post(revoke), "{\"reason\":\"OTHER\"}")).andExpect(status().isNoContent());
+        owner(get(access)).andExpect(jsonPath("$.items[0].active").value(false))
+                .andExpect(jsonPath("$.items[0].revocationReason").value("COLLABORATION_ENDED"));
+        owner(get(access + "/history")).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].action").value("REVOKED"))
+                .andExpect(jsonPath("$.items[0].actorId").value("owner"))
+                .andExpect(jsonPath("$.items[0].recipientId").value("reader"))
+                .andExpect(jsonPath("$.items[0].occurredAt").isNumber())
+                .andExpect(jsonPath("$.items[0].reason").value("COLLABORATION_ENDED"));
+
+        for (String path : Arrays.asList("/api/shared-rallies/" + rally, shared, shared + "/gps/track",
+                shared + "/book-publication", shared + "/audio", shared + "/video")) {
+            reader(get(path).header("If-None-Match", "\"old\"")).andExpect(status().isNotFound())
+                    .andExpect(header().string("Cache-Control", "no-store"));
+            reader(head(path)).andExpect(status().isNotFound());
+        }
+        for (String kind : Arrays.asList("audio", "video")) {
+            reader(get(shared + "/" + kind).header("Range", "bytes=1-2"))
+                    .andExpect(status().isNotFound()).andExpect(header().doesNotExist("Content-Range"));
+            reader(get(ownerPec + "/" + kind)).andExpect(status().isForbidden());
+            reader(get(ownerPec + "/" + kind).header("X-Crew-Id", crew)).andExpect(status().isNotFound());
+            owner(get(ownerPec + "/" + kind)).andExpect(content().bytes(bytes));
+        }
+        reader(get("/api/shared-rallies")).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(sibling));
+        reader(get("/api/shared-rallies/" + sibling)).andExpect(status().isOk());
+        reader(get("/api/auth/validate")).andExpect(status().isOk());
+        for (int retry = 0; retry < 2; retry++) {
+            reader(payload(post("/api/offline-recces/sync"), "{\"sessionId\":\"old-session\",\"pecId\":\"" + pec + "\"}"))
+                    .andExpect(status().isForbidden());
+            reader(multipart(ownerPec + "/audio").file(new MockMultipartFile("file", bytes)).header("X-Crew-Id", crew))
+                    .andExpect(status().isNotFound());
+        }
+        assertEquals("E3", notes.findById(Long.valueOf(noteId)).get().getText());
+        assertTrue(books.existsById(pec));
+    }
+
+    @Test
+    void concurrentRevocationWritesOneEvent() throws Exception {
+        long grantId = grants.findByRecipientIdAndRallyId("reader", rally).get().getId();
+        String access = "/api/rallies/" + rally + "/access";
+        String revoke = access + "/" + grantId + "/revoke";
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<Void> action = () -> {
+            start.await();
+            owner(payload(post(revoke), "{\"reason\":\"OTHER\"}")).andExpect(status().isNoContent());
+            return null;
+        };
+        try {
+            Future<Void> first = executor.submit(action);
+            Future<Void> second = executor.submit(action);
+            start.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+        owner(get(access + "/history")).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].grantId").value(grantId));
+        assertFalse(grants.findById(grantId).get().isActive());
     }
 
     @BeforeEach

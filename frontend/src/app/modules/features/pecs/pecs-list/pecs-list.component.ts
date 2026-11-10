@@ -1,5 +1,6 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, NavigationEnd } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
@@ -11,17 +12,22 @@ import {
 } from '../../../core/services/team-profile.service';
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { SharedProperties } from '../../../core/shared/shared-properties';
+import { API_BASE_URL } from '../../../core/services/api.config';
+import { AuthService } from '../../../core/services/auth.service';
+import { CrewContext, getCrewContext } from '../../../core/services/crew-context';
+import { RallyAreaNavComponent } from '../rally-area-nav.component';
 
 type Surface = 'TERRA' | 'ASFALTO' | 'NEVE' | 'MISTO';
 
 @Component({
   selector: 'app-pecs-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, RallyAreaNavComponent],
   templateUrl: './pecs-list.component.html',
   styleUrl: '../rally-management.css',
 })
 export class PecsListComponent implements OnInit, OnDestroy {
+  @Input() demonstration = false;
   @ViewChild('rallyName') private rallyName?: ElementRef<HTMLInputElement>;
   private formInvoker?: HTMLElement;
   searchTerm = '';
@@ -33,6 +39,12 @@ export class PecsListComponent implements OnInit, OnDestroy {
   areFiltersOpen = false;
   isLoading = false;
   hasLoadError = false;
+  crewsEnabled = false;
+  crew: CrewContext | null = null;
+  private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
+  private session?: string | null;
+  saving = false;
 
   isCreatingRally = false;
   editingRallyId: string | null = null;
@@ -68,6 +80,16 @@ export class PecsListComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    if (!this.demonstration) {
+      this.session = this.auth.getToken();
+      this.crew = getCrewContext();
+    }
+    if (!this.demonstration && this.isOnlineMode) {
+      this.subscriptions.add(this.http.get<{ crewsEnabled?: boolean }>(`${API_BASE_URL}/api/auth/me`).subscribe({
+        next: account => { this.crewsEnabled = account.crewsEnabled === true; },
+        error: () => { this.crewsEnabled = !!this.crew; },
+      }));
+    }
     this.subscriptions.add(
       this.shared.connectionMode$.subscribe(() =>
         this.syncRemoteDataWithConnectionMode(),
@@ -148,6 +170,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
   }
 
   openCreateRallyForm(): void {
+    if (this.isCreatingRally) return;
     if (!this.ensureOnlineAction()) return;
     this.editingRallyId = null;
     this.resetForm();
@@ -181,6 +204,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
   }
 
   cancelForm(): void {
+    if (this.saving) return;
     this.isCreatingRally = false;
     const invoker = this.formInvoker;
     requestAnimationFrame(() => { if (invoker?.isConnected) invoker.focus(); });
@@ -189,7 +213,21 @@ export class PecsListComponent implements OnInit, OnDestroy {
     this.clearLogoSelection();
   }
 
+  canDeactivate(): boolean | Promise<boolean> {
+    if (this.sessionChanged || !this.isOnlineMode) return true;
+    if (this.saving) return false;
+    if (!this.isCreatingRally) return true;
+    return this.confirmDialog.confirm({
+      title: 'Sair do formulário do rali?',
+      message: 'As alterações por guardar serão descartadas.',
+      confirmText: 'Descartar e sair',
+      cancelText: 'Continuar a editar',
+      tone: 'danger',
+    });
+  }
+
   saveRally(): void {
+    if (this.saving || this.sessionChanged) return;
     if (!this.ensureOnlineAction()) return;
 
     if (!this.rallyForm.name.trim() || !this.rallyForm.location.trim()) {
@@ -197,6 +235,8 @@ export class PecsListComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.saving = true;
+    const failed = (message: string) => { this.saving = false; this.shared.error(message); };
     if (this.editingRallyId) {
       this.rallyService.updateRally(this.editingRallyId, this.rallyForm).subscribe({
         next: (updatedRally: Rally) => {
@@ -204,7 +244,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
           if (index !== -1) this.rallies[index] = updatedRally;
           this.saveLogoIfSelected(updatedRally, 'Rali atualizado');
         },
-        error: () => this.shared.error('Erro ao atualizar rali'),
+        error: () => failed('Erro ao atualizar rali'),
       });
       return;
     }
@@ -214,7 +254,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
         this.rallies.unshift(newRally);
         this.saveLogoIfSelected(newRally, 'Rali criado');
       },
-      error: () => this.shared.error('Erro ao criar rali'),
+      error: () => failed('Erro ao criar rali'),
     });
   }
 
@@ -323,7 +363,8 @@ export class PecsListComponent implements OnInit, OnDestroy {
   }
 
   private saveLogoIfSelected(rally: Rally, successTitle: string): void {
-    if (!this.selectedLogoFile) {
+    if (this.sessionChanged || !this.selectedLogoFile) {
+      this.saving = false;
       this.cancelForm();
       this.shared.success(successTitle, rally.name);
       return;
@@ -334,10 +375,12 @@ export class PecsListComponent implements OnInit, OnDestroy {
         const index = this.rallies.findIndex((r) => r.id === updatedRally.id);
         if (index !== -1) this.rallies[index] = updatedRally;
         this.loadRallyLogo(updatedRally);
+        this.saving = false;
         this.cancelForm();
         this.shared.success(successTitle, updatedRally.name);
       },
       error: () => {
+        this.saving = false;
         this.cancelForm();
         this.shared.error('Rali guardado, mas falhou a imagem');
       },
@@ -392,6 +435,10 @@ export class PecsListComponent implements OnInit, OnDestroy {
 
   private get isOnlineMode(): boolean {
     return this.shared.connectionMode$.value === 'online';
+  }
+
+  private get sessionChanged(): boolean {
+    return this.session !== undefined && this.auth.getToken() !== this.session;
   }
 
   private syncRemoteDataWithConnectionMode(): void {

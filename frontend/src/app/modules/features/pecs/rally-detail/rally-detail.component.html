@@ -15,6 +15,7 @@
       </header>
       <dl class="management-metrics" aria-label="Métricas do rali"><div><dt>PECs</dt><dd>{{ rally.pecs.length }}</dd></div><div><dt>Distância total</dt><dd>{{ totalDistance.toFixed(1) }} <span>km</span></dd></div><div><dt>Notas</dt><dd>{{ totalNotes }}</dd></div></dl>
       <app-rally-invitations *ngIf="inviteRallyId && !demoPreview" [rallyId]="inviteRallyId" />
+      <app-rally-access *ngIf="inviteRallyId && !demoPreview" [rallyId]="inviteRallyId" />
     </section>
     <section aria-labelledby="pecs-title">
       <div class="pec-toolbar flex flex-wrap items-center justify-between gap-3 mb-3">

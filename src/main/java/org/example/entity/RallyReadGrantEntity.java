@@ -31,11 +31,25 @@ public class RallyReadGrantEntity {
     @Column(updatable = false)
     private Long issuedAt;
 
+    private Long revokedAt;
+    private String revocationReason;
+
     protected RallyReadGrantEntity() {}
 
     public boolean isActive() { return active; }
     public String getSourceInvitationId() { return sourceInvitationId; }
     public Long getIssuedAt() { return issuedAt; }
+    public Long getId() { return id; }
+    public String getRecipientEmail() { return recipient.getEmail(); }
+    public String getRecipientId() { return recipient.getId(); }
+    public Long getRevokedAt() { return revokedAt; }
+    public String getRevocationReason() { return revocationReason; }
+
+    public void revoke(String reason, long now) {
+        active = false;
+        revocationReason = reason;
+        revokedAt = now;
+    }
 
     public RallyReadGrantEntity(AuthUserEntity recipient, RallyEntity rally, boolean active) {
         this.recipient = recipient;

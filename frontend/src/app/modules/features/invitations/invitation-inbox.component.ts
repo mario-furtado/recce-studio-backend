@@ -31,6 +31,8 @@ import { Invitation, InvitationApi, invitationStatus } from '../../core/services
         <p class="text-sm text-slate-300">De {{ item.crewName }}</p>
         <p>Apenas este rali · Só leitura</p>
         <p role="status">{{ labels[item.state] }}</p>
+        <p *ngIf="item.accessStatus === 'REVOKED'">Acesso revogado.</p>
+        <p *ngIf="item.accessStatus === 'UNAVAILABLE'">Acesso indisponível.</p>
         <p *ngIf="item.state === 'PENDING'" class="text-sm">Válido até {{ item.expiresAt | date:'short' }}</p>
         <div class="flex flex-wrap gap-3 mt-3">
           <button *ngIf="!item.read" type="button" class="soft-button rounded-lg px-3 py-2" [disabled]="busy" (click)="act('read')">Marcar como lida</button>
@@ -38,7 +40,7 @@ import { Invitation, InvitationApi, invitationStatus } from '../../core/services
             <button type="button" class="accent-button rounded-lg px-3 py-2" [disabled]="busy" (click)="act('accept')">Aceitar convite</button>
             <button type="button" class="soft-button rounded-lg px-3 py-2" [disabled]="busy" (click)="act('decline')">Recusar convite</button>
           </ng-container>
-          <a *ngIf="item.state === 'ACCEPTED'" [routerLink]="['/shared-rallies', item.rallyId]" class="soft-button rounded-lg px-3 py-2">Consultar rali</a>
+          <a *ngIf="item.accessStatus === 'ACTIVE'" [routerLink]="['/shared-rallies', item.rallyId]" class="soft-button rounded-lg px-3 py-2">Consultar rali</a>
         </div>
       </ng-container>
       <button *ngIf="error && !busy" type="button" class="soft-button rounded-lg px-3 py-2 mt-3" (click)="load(page)">Tentar novamente</button>

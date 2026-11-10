@@ -27,6 +27,7 @@ public class RallyInvitationService {
     private final AuthUserRepository users;
     private final RallyReadGrantRepository grants;
     private final InvitationQuotaRepository quotas;
+    private final RallyAccessEventRepository events;
     private final TeamProfileRepository profiles;
     private final CrewService crews;
     private final PersonalAccountService accounts;
@@ -35,13 +36,15 @@ public class RallyInvitationService {
 
     public RallyInvitationService(RallyInvitationRepository invitations, RallyRepository rallies,
                                   AuthUserRepository users, RallyReadGrantRepository grants, InvitationQuotaRepository quotas,
-                                  TeamProfileRepository profiles, CrewService crews, PersonalAccountService accounts, Clock clock,
+                                  RallyAccessEventRepository events, TeamProfileRepository profiles, CrewService crews,
+                                  PersonalAccountService accounts, Clock clock,
                                   @Value("${recce.invitations.enabled:false}") boolean enabled) {
         this.invitations = invitations;
         this.rallies = rallies;
         this.users = users;
         this.grants = grants;
         this.quotas = quotas;
+        this.events = events;
         this.profiles = profiles;
         this.crews = crews;
         this.accounts = accounts;
@@ -72,7 +75,8 @@ public class RallyInvitationService {
         String origin = profiles.findById(rally.getTeamProfileId()).map(TeamProfileEntity::getName)
                 .filter(name -> !name.trim().isEmpty()).orElse("Tripulação do rali");
         quotas.save(quota);
-        invitations.save(new RallyInvitationEntity(rally, actor, origin, email, recipient, now, now + VALIDITY));
+        RallyInvitationEntity invitation = invitations.save(new RallyInvitationEntity(rally, actor, origin, email, recipient, now, now + VALIDITY));
+        events.save(RallyAccessEventEntity.invitation(invitation, actor, RallyAccessEventEntity.Action.INVITED, now));
     }
 
     @Transactional(readOnly = true)
@@ -106,7 +110,7 @@ public class RallyInvitationService {
         requireEnabled();
         AuthUserEntity recipient = users.findById(actor).filter(RallyInvitationService::isVerified).orElseThrow(RallyInvitationService::missing);
         long now = clock.millis();
-        return new InvitationView(receivedOne(id, recipient, now), now, false);
+        return view(receivedOne(id, recipient, now), now, false);
     }
 
     @Transactional
@@ -123,7 +127,7 @@ public class RallyInvitationService {
         } else {
             String target = action == Action.ACCEPT ? "ACCEPTED" : "DECLINED";
             String state = invitation.stateAt(now);
-            if (target.equals(state)) return new InvitationView(invitation, now, false);
+            if (target.equals(state)) return view(invitation, now, false);
             if (!"PENDING".equals(state)) throw closed();
             if ("ACCEPTED".equals(target)) {
                 users.findById(invitation.getInviterId()).filter(AuthUserEntity::isActive).orElseThrow(RallyInvitationService::missing);
@@ -136,8 +140,9 @@ public class RallyInvitationService {
             }
             invitation.markRead(actor, now);
             invitation.decide(target, now);
+            events.save(RallyAccessEventEntity.invitation(invitation, actor, RallyAccessEventEntity.Action.valueOf(target), now));
         }
-        return new InvitationView(invitation, now, false);
+        return view(invitation, now, false);
     }
 
     @Transactional
@@ -152,6 +157,7 @@ public class RallyInvitationService {
         if ("CANCELLED".equals(state)) return;
         if (!"PENDING".equals(state)) throw closed();
         invitation.decide("CANCELLED", now);
+        events.save(RallyAccessEventEntity.invitation(invitation, actor, RallyAccessEventEntity.Action.CANCELLED, now));
     }
 
     private RallyEntity ownedRally(String actor, String id, boolean lock) {
@@ -181,9 +187,18 @@ public class RallyInvitationService {
         return PageRequest.of(page, PAGE_SIZE);
     }
 
-    private static Inbox inbox(List<RallyInvitationEntity> items, long now, boolean sender, long unread) {
-        return new Inbox(items.stream().map(item -> new InvitationView(item, now, sender)).collect(Collectors.toList()),
+    private Inbox inbox(List<RallyInvitationEntity> items, long now, boolean sender, long unread) {
+        return new Inbox(items.stream().map(item -> view(item, now, sender)).collect(Collectors.toList()),
                 items.size() == PAGE_SIZE, unread);
+    }
+
+    private InvitationView view(RallyInvitationEntity invitation, long now, boolean sender) {
+        String accessStatus = null;
+        if ("ACCEPTED".equals(invitation.getState())) {
+            accessStatus = grants.findByRecipientIdAndRallyId(invitation.getRecipientId(), invitation.getRally().getId())
+                    .map(grant -> grant.isActive() ? "ACTIVE" : "REVOKED").orElse("UNAVAILABLE");
+        }
+        return new InvitationView(invitation, now, sender, accessStatus);
     }
 
     @lombok.Getter
@@ -203,17 +218,19 @@ public class RallyInvitationService {
         private final String crewName;
         private final String state;
         private final String recipientEmail;
+        private final String accessStatus;
         private final long createdAt;
         private final long expiresAt;
         private final boolean read;
 
-        InvitationView(RallyInvitationEntity invitation, long now, boolean sender) {
+        InvitationView(RallyInvitationEntity invitation, long now, boolean sender, String accessStatus) {
             id = invitation.getId();
             rallyId = invitation.getRally().getId();
             rallyName = invitation.getRally().getName();
             crewName = invitation.getCrewName();
             state = invitation.stateAt(now);
             recipientEmail = sender ? invitation.getRecipientEmail() : null;
+            this.accessStatus = accessStatus;
             createdAt = invitation.getCreatedAt();
             expiresAt = invitation.getExpiresAt();
             read = !sender && invitation.getReadAt() != null;

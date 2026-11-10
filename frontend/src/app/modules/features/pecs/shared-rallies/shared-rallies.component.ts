@@ -1,14 +1,16 @@
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { NotebookComponent, PublishedNotebook } from '../../../core/notebook/notebook.component';
 import { NotebookSettings } from '../../../core/notebook/notebook.model';
 import { API_BASE_URL } from '../../../core/services/api.config';
+import { AuthService } from '../../../core/services/auth.service';
 import { GpsPoint } from '../../../core/services/pecs.service';
 import { RecceMapComponent } from '../pecs-editor/recce-map.component';
 import { MapNote, validCoordinate } from '../pecs-editor/gps-timeline';
+import { RallyAreaNavComponent } from '../rally-area-nav.component';
 
 interface Rally {
   id: string;
@@ -42,7 +44,7 @@ interface StageView {
 
 @Component({
   selector: 'app-shared-rallies',
-  imports: [CommonModule, RouterLink, NotebookComponent, RecceMapComponent],
+  imports: [CommonModule, RouterLink, NotebookComponent, RecceMapComponent, RallyAreaNavComponent],
   templateUrl: './shared-rallies.component.html',
   styles: [`
     :host{display:block;max-width:72rem;margin:auto}
@@ -55,12 +57,16 @@ interface StageView {
 export class SharedRalliesComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
+  private readonly auth = inject(AuthService);
+  private readonly session = this.auth.getToken();
   private navigation?: Subscription;
   private requests = new Subscription();
   private endpoint = '';
   rallyId = '';
   pecId = '';
   loading = true;
+  checkingAccess = false;
+  sessionChanged = false;
   error = '';
   rallies: Rally[] = [];
   rally?: Rally & { pecs: Stage[] };
@@ -80,6 +86,7 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
   }
 
   private load(rallyId: string, pecId: string) {
+    if (!this.sessionIsCurrent()) return;
     this.reset();
     this.rallyId = rallyId;
     this.pecId = pecId;
@@ -105,13 +112,44 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
     }
   }
 
+  @HostListener('window:storage')
+  onStorageChange() { this.sessionIsCurrent(); }
+
+  @HostListener('document:visibilitychange')
+  onVisibilityChange() {
+    if (document.visibilityState !== 'visible' || !this.sessionIsCurrent() || this.loading || this.error) return;
+    if (this.rallyId) this.checkAccess();
+    else this.retry();
+  }
+
+  checkAccess() {
+    if (!this.sessionIsCurrent() || this.checkingAccess || (!this.rally && !this.stage)) return;
+    this.checkingAccess = true;
+    this.requests.add(this.http.head(this.endpoint).subscribe({
+      next: () => { this.checkingAccess = false; },
+      error: error => {
+        this.reset();
+        this.fail(error);
+      },
+    }));
+  }
+
+  private sessionIsCurrent(): boolean {
+    if (this.auth.getToken() === this.session) return true;
+    this.reset();
+    this.loading = false;
+    this.sessionChanged = true;
+    this.error = 'A sessão mudou. Atualiza esta página antes de continuar.';
+    return false;
+  }
+
   private loadStageResources(view: StageView) {
     this.mapNotes = view.notes.filter(note => validCoordinate(note.latitude, note.longitude)).map(note => ({
       id: String(note.id), lat: note.latitude!, lng: note.longitude!, text: note.text, timestamp: note.originalTimestamp,
     }));
     this.requests.add(this.http.get<GpsPoint[]>(this.endpoint + '/gps/track').subscribe({
       next: track => { this.track = track; },
-      error: () => { this.track = []; this.mapError = true; },
+      error: error => { if (!this.clearIfDenied(error)) { this.track = []; this.mapError = true; } },
     }));
     if (view.hasVideo) this.loadMedia('video');
     if (view.hasAudio) this.loadMedia('audio');
@@ -124,12 +162,12 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
         if (kind === 'video') this.videoUrl = url;
         else this.audioUrl = url;
       },
-      error: () => { this.mediaError = true; },
+      error: error => { if (error.status === 404 || !this.clearIfDenied(error)) this.mediaError = true; },
     }));
   }
 
   openBook() {
-    if (!this.stage || this.bookStatus === 'loading') return;
+    if (!this.sessionIsCurrent() || !this.stage || this.bookStatus === 'loading') return;
     this.bookStatus = 'loading';
     this.book = undefined;
     this.bookSettings = undefined;
@@ -141,13 +179,34 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
           this.bookSettings = { version: 1, page: book.snapshot.page, rules: [] };
         }
       },
-      error: () => { this.bookStatus = 'error'; },
+      error: error => { if (!this.clearIfDenied(error)) this.bookStatus = 'error'; },
     }));
+  }
+
+  readonly authorizePrint = async (): Promise<boolean> => {
+    if (!this.sessionIsCurrent()) return false;
+    const endpoint = this.endpoint;
+    const book = this.book;
+    if (!book) return false;
+    try {
+      const response = await firstValueFrom(this.http.head(endpoint + '/book-publication', { observe: 'response' }));
+      return response.status === 200 && this.sessionIsCurrent() && this.endpoint === endpoint && this.book === book;
+    } catch (error) {
+      if (this.endpoint === endpoint && this.book === book && error instanceof HttpErrorResponse) this.clearIfDenied(error);
+      return false;
+    }
+  };
+
+  private clearIfDenied(error: HttpErrorResponse): boolean {
+    if (![401, 403, 404].includes(error.status)) return false;
+    this.reset();
+    this.fail(error);
+    return true;
   }
 
   private fail(error: HttpErrorResponse) {
     this.loading = false;
-    this.error = error.status === 403 || error.status === 404
+    this.error = [401, 403, 404].includes(error.status)
       ? 'Este conteúdo partilhado não está disponível para a tua conta.'
       : 'Não foi possível carregar os ralis partilhados.';
   }
@@ -162,6 +221,7 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
     this.stage = this.rally = this.track = this.book = this.bookSettings = undefined;
     this.rallies = [];
     this.mapNotes = [];
+    this.checkingAccess = false;
     this.mapError = this.mediaError = false;
     this.bookStatus = 'idle';
   }

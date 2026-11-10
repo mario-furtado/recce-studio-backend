@@ -53,7 +53,9 @@ import { InvitationBellComponent } from '../invitation-bell.component';
   `,
 })
 export class MainLayoutComponent {
-  get activeCrewName(): string { return getCrewContext()?.name ?? ''; }
+  get activeCrewName(): string {
+    return this.route.firstChild?.snapshot.data['sharedRallies'] ? '' : getCrewContext()?.name ?? '';
+  }
   get demonstration(): boolean { return this.route.firstChild?.snapshot.data['demonstration'] === true; }
   constructor(public shared: SharedProperties, private route: ActivatedRoute) {}
 }

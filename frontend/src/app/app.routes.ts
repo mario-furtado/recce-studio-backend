@@ -27,9 +27,10 @@ export const routes: Routes = [
       })),
       ...['shared-rallies/:rallyId/pecs/:pecId', 'shared-rallies/:rallyId', 'shared-rallies'].map(path => ({
         path, loadComponent: () => import('./modules/features/pecs/shared-rallies/shared-rallies.component').then(m => m.SharedRalliesComponent),
+        data: { sharedRallies: true },
       })),
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
-      { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent) }, // Lista de PECs/Ralis
+      { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent), canDeactivate: [recceExitGuard] },
       { path: 'new-recce', loadComponent: () => import('./modules/features/recce-mode/new-recce.component').then(m => m.NewRecceComponent) },
       { path: 'recce/:id', loadComponent: () => import('./modules/features/pecs/pec-detail/pec-detail.component').then(m => m.PecDetailComponent), canDeactivate: [recceExitGuard] }, // Editor com Player + Mapa (trocar pelo teu comp)
       { path: 'rally/:id', loadComponent: () => import('./modules/features/pecs/rally-detail/rally-detail.component').then(m => m.RallyDetailComponent) },

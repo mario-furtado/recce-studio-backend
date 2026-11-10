@@ -30,7 +30,7 @@ ${blockStyles}
       <p *ngIf="error" role="alert">{{ error }}</p>
       <p *ngIf="!(publishedNotes ?? notes).length">Sem notas. O ficheiro inclui a capa e a contracapa.</p>
       <p>Pré-visualização à escala real. As sequências longas continuam nas linhas seguintes.</p>
-      <button type="button" class="soft-button px-3 py-2 rounded" (click)="print()" [disabled]="!!error || pending || exportBlocked">Imprimir / Guardar PDF</button>
+      <button type="button" class="soft-button px-3 py-2 rounded" (click)="print()" [disabled]="!!error || pending || exportBlocked || checkingPrint">Imprimir / Guardar PDF</button>
       <p *ngIf="printError" role="alert">{{ printError }}</p>
     </div>
     <div class="notebook-scroll" tabindex="0" role="region" aria-label="Pré-visualização do caderno; usa as setas para deslocar">
@@ -54,6 +54,7 @@ ${blockStyles}
 export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy {
   @Input() cover: BookCover = defaultBookCover();
   @Input() exportBlocked = false;
+  @Input() authorizePrint?: () => Promise<boolean>;
   @Input() active = true;
   @Output() coverValidated = new EventEmitter<string | null>(true);
   coverLayoutError: string | null = null;
@@ -68,6 +69,8 @@ export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy
   rowHeight = 0;
   error: string | null = null;
   printError = '';
+  checkingPrint = false;
+  private destroyed = false;
   pending = true;
   private frame?: HTMLIFrameElement;
   constructor(private change: ChangeDetectorRef) {}
@@ -150,7 +153,17 @@ export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy
   }
 
   async print() {
-    if (!this.active || this.error || this.pending || this.exportBlocked || !this.pagesElement) return;
+    if (!this.active || this.error || this.pending || this.exportBlocked || this.checkingPrint || !this.pagesElement) return;
+    if (this.authorizePrint) {
+      this.checkingPrint = true;
+      this.printError = '';
+      let allowed = false;
+      try { allowed = await this.authorizePrint(); }
+      catch { allowed = false; }
+      finally { this.checkingPrint = false; }
+      if (this.destroyed || !this.active || this.error || this.pending || this.exportBlocked) return;
+      if (!allowed) { this.printError = 'Não foi possível confirmar o acesso à publicação.'; return; }
+    }
     this.frame?.remove();
     this.printError = '';
     const frame = document.createElement('iframe');
@@ -167,10 +180,10 @@ export class NotebookComponent implements OnChanges, AfterViewChecked, OnDestroy
     try {
       await doc.fonts.ready;
       await Promise.all(Array.from(doc.images).map(img => img.decode()));
-      if (this.frame !== frame) return;
+      if (this.destroyed || this.frame !== frame) return;
       frame.contentWindow!.focus(); frame.contentWindow!.print();
     } catch { if (this.frame === frame) this.printError = 'Não foi possível preparar a impressão ou o logótipo. Verifica a ligação/permissões e tenta novamente.'; }
   }
 
-  ngOnDestroy() { this.frame?.remove(); }
+  ngOnDestroy() { this.destroyed = true; this.frame?.remove(); }
 }

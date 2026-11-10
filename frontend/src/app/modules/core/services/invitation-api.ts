@@ -18,7 +18,30 @@ export interface Invitation {
   state: InvitationState;
   expiresAt: number;
   read: boolean;
+  accessStatus?: 'ACTIVE' | 'REVOKED' | 'UNAVAILABLE';
 }
+
+export type RevocationReason = 'COLLABORATION_ENDED' | 'SHARING_ERROR' | 'OTHER';
+export interface RallyGrant {
+  id: number;
+  recipientEmail: string;
+  active: boolean;
+  revokedAt: number | null;
+  revocationReason: RevocationReason | null;
+}
+
+export interface AccessEvent {
+  id: number;
+  actorId: string;
+  recipientId: string | null;
+  invitationId: string | null;
+  grantId: number | null;
+  action: 'INVITED' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED' | 'REVOKED';
+  occurredAt: number;
+  reason: RevocationReason | null;
+}
+
+interface AccessPage<T> { items: T[]; hasMore: boolean; }
 
 export interface InvitationPage {
   items: Invitation[];
@@ -33,6 +56,7 @@ export class InvitationApi {
   readonly refresh = new Subject<void>();
 
   private rally(id: string) { return this.base + '/rallies/' + encodeURIComponent(id) + '/invitations'; }
+  private access(id: string) { return this.base + '/rallies/' + encodeURIComponent(id) + '/access'; }
   private invitation(id: string) { return this.base + '/invitations/' + encodeURIComponent(id); }
 
   options() { return this.http.get<{ enabled: boolean }>(this.base + '/invitations/options'); }
@@ -43,6 +67,11 @@ export class InvitationApi {
   send(id: string, email: string) { return this.http.post<{ message: string }>(this.rally(id), { email }); }
   cancel(rally: string, id: string) {
     return this.http.post<void>(this.rally(rally) + '/' + encodeURIComponent(id) + '/cancel', null);
+  }
+  grants(rally: string, page: number) { return this.http.get<AccessPage<RallyGrant>>(this.access(rally), { params: { page } }); }
+  history(rally: string, page: number) { return this.http.get<AccessPage<AccessEvent>>(this.access(rally) + '/history', { params: { page } }); }
+  revoke(rally: string, id: number, reason: RevocationReason) {
+    return this.http.post<void>(this.access(rally) + '/' + id + '/revoke', { reason });
   }
   markRead(id: string) {
     return this.http.patch<Invitation>(this.base + '/notifications/' + encodeURIComponent(id) + '/read', null);

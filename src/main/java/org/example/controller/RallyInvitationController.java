@@ -2,6 +2,8 @@ package org.example.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.example.service.RallyInvitationService;
+import org.example.service.RallyAccessService;
+import org.example.entity.RallyAccessEventEntity;
 import org.example.service.RallyInvitationService.Inbox;
 import org.example.service.RallyInvitationService.InvitationView;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +18,36 @@ import java.util.Map;
 public class RallyInvitationController {
     private final RallyInvitationService invitations;
     private final TenantContext tenant;
+    private final RallyAccessService access;
 
-    public RallyInvitationController(RallyInvitationService invitations, TenantContext tenant) {
+    public RallyInvitationController(RallyInvitationService invitations, TenantContext tenant, RallyAccessService access) {
         this.invitations = invitations;
         this.tenant = tenant;
+        this.access = access;
+    }
+
+    @GetMapping("/rallies/{rallyId}/access")
+    public RallyAccessService.AccessPage<RallyAccessService.GrantView> accesses(@PathVariable String rallyId,
+                                                                                @RequestParam(defaultValue = "0") int page) {
+        return access.list(tenant.requireAccountId(), rallyId, page);
+    }
+
+    @GetMapping("/rallies/{rallyId}/access/history")
+    public RallyAccessService.AccessPage<RallyAccessEventEntity> history(@PathVariable String rallyId,
+                                                                         @RequestParam(defaultValue = "0") int page) {
+        return access.history(tenant.requireAccountId(), rallyId, page);
+    }
+
+    @PostMapping("/rallies/{rallyId}/access/{grantId}/revoke")
+    public ResponseEntity<Void> revoke(@PathVariable String rallyId, @PathVariable long grantId, @RequestBody JsonNode request) {
+        if (!request.isObject() || request.size() != 1 || !request.path("reason").isTextual()) {
+            throw new IllegalArgumentException("Seleciona um motivo válido.");
+        }
+        RallyAccessService.Reason reason;
+        try { reason = RallyAccessService.Reason.valueOf(request.path("reason").asText()); }
+        catch (IllegalArgumentException ex) { throw new IllegalArgumentException("Seleciona um motivo válido."); }
+        access.revoke(tenant.requireAccountId(), rallyId, grantId, reason);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/invitations/options")

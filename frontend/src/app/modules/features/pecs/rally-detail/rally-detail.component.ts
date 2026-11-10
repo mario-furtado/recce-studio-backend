@@ -13,11 +13,12 @@ import { ConfirmDialogService } from '../../../core/shared/components/confirm-di
 import { FocusPanelComponent } from '../../../core/shared/components/focus-panel.component';
 import { SharedProperties } from '../../../core/shared/shared-properties';
 import { RallyInvitationsComponent } from '../../invitations/rally-invitations.component';
+import { RallyAccessComponent } from '../../invitations/rally-access.component';
 
 @Component({
   selector: 'app-rally-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, FocusPanelComponent, RallyInvitationsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, FocusPanelComponent, RallyInvitationsComponent, RallyAccessComponent],
   templateUrl: './rally-detail.component.html',
   styleUrl: './rally-detail.component.css',
 })

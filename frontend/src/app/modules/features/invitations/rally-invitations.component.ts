@@ -4,6 +4,7 @@ import { Component, DestroyRef, Input, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Invitation, InvitationApi, invitationStatus } from '../../core/services/invitation-api';
+import { ConfirmDialogService } from '../../core/shared/components/confirm-dialog/confirm-dialog.service';
 
 @Component({
   selector: 'app-rally-invitations',
@@ -26,6 +27,7 @@ import { Invitation, InvitationApi, invitationStatus } from '../../core/services
           <div class="min-w-0 break-all">
             <strong>{{ item.recipientEmail }}</strong>
             <p class="text-sm">{{ labels[item.state] }}<span *ngIf="item.state === 'PENDING'"> · Até {{ item.expiresAt | date:'short' }}</span></p>
+            <p *ngIf="item.accessStatus === 'REVOKED'" class="text-sm">Acesso revogado.</p>
           </div>
           <button *ngIf="item.state === 'PENDING'" type="button" class="soft-button rounded-lg min-h-11 px-3 py-2"
             [attr.aria-label]="'Cancelar convite para ' + item.recipientEmail" [disabled]="busy" (click)="cancel(item)">Cancelar convite</button>
@@ -41,6 +43,7 @@ export class RallyInvitationsComponent implements OnInit {
   @Input({ required: true }) rallyId!: string;
   private readonly api = inject(InvitationApi);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dialog = inject(ConfirmDialogService);
   readonly labels = invitationStatus;
   available = false;
   busy = false;
@@ -80,10 +83,17 @@ export class RallyInvitationsComponent implements OnInit {
     });
   }
 
-  cancel(item: Invitation) {
+  async cancel(item: Invitation) {
     if (this.busy) return;
     this.busy = true;
     this.error = this.status = '';
+    const confirmed = await this.dialog.confirm({
+      title: 'Cancelar convite de leitura?',
+      message: `O convite para ${item.recipientEmail} deixará de poder ser aceite neste rali.`,
+      confirmText: 'Cancelar convite',
+      cancelText: 'Manter convite',
+    });
+    if (!confirmed || this.destroyRef.destroyed) { this.busy = false; return; }
     this.api.cancel(this.rallyId, item.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => { this.status = 'Convite cancelado.'; this.load(this.page); },
       error: error => { this.fail(error); if (error.status === 409) this.load(this.page); },

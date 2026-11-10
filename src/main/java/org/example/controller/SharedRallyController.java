@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/shared-rallies")
-@CrossOrigin
+@CrossOrigin(methods = {RequestMethod.GET, RequestMethod.HEAD})
 public class SharedRallyController {
     private final RallyReadGrantRepository grants;
     private final PecRepository pecs;
@@ -68,6 +68,18 @@ public class SharedRallyController {
         PecAssetDTO media = assets.getAssets(pecId);
         return new PecView(pecService.getPecOverview(pecId), media,
                 notes.getNotesByPecId(pecId).stream().map(NoteView::new).collect(Collectors.toList()));
+    }
+
+    @RequestMapping(path = "/{rallyId}", method = RequestMethod.HEAD)
+    public ResponseEntity<Void> checkRallyAccess(@PathVariable String rallyId) {
+        requireRally(rallyId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @RequestMapping(path = "/{rallyId}/pecs/{pecId}", method = RequestMethod.HEAD)
+    public ResponseEntity<Void> checkPecAccess(@PathVariable String rallyId, @PathVariable String pecId) {
+        requirePec(rallyId, pecId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{rallyId}/pecs/{pecId}/gps/track")

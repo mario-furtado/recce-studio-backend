@@ -145,6 +145,10 @@ class RallyInvitationIntegrationTest {
         call(get("/api/invitations/" + expiring), READER).andExpect(jsonPath("$.state").value("EXPIRED"));
         call(post("/api/invitations/" + expiring + "/accept"), READER).andExpect(status().isConflict());
         assertEquals(0, grants.count());
+        call(get("/api/rallies/" + rally + "/access/history"), OWNER)
+                .andExpect(jsonPath("$.items.length()").value(4))
+                .andExpect(jsonPath("$.items[0].action").value("CANCELLED"))
+                .andExpect(jsonPath("$.items[2].action").value("DECLINED"));
     }
 
     @Test
@@ -236,6 +240,33 @@ class RallyInvitationIntegrationTest {
         call(get("/api/notifications"), "token-unverified").andExpect(status().isUnauthorized());
         call(post("/api/invitations/" + id + "/accept"), "token-unverified").andExpect(status().isUnauthorized());
         assertEquals(0, grants.count());
+    }
+
+    @Test
+    void acceptedInvitationRemainsHistoricalAfterRevocationAndCannotRestoreTheGrant() throws Exception {
+        send(rally, "reader@invites.invalid", OWNER).andExpect(status().isAccepted());
+        String id = invitationId(rally);
+        call(post("/api/invitations/" + id + "/accept"), READER).andExpect(jsonPath("$.accessStatus").value("ACTIVE"));
+        Long grant = grants.findByRecipientIdAndRallyId("reader", rally).get().getId();
+        String access = "/api/rallies/" + rally + "/access";
+        String revoke = access + "/" + grant + "/revoke";
+        for (int attempt = 0; attempt < 2; attempt++) {
+            call(post(revoke).contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"SHARING_ERROR\"}"), OWNER)
+                    .andExpect(status().isNoContent());
+        }
+        for (MockHttpServletRequestBuilder request : java.util.Arrays.asList(get("/api/invitations/" + id),
+                post("/api/invitations/" + id + "/accept"), patch("/api/notifications/" + id + "/read"))) {
+            call(request, READER).andExpect(status().isOk()).andExpect(jsonPath("$.state").value("ACCEPTED"))
+                    .andExpect(jsonPath("$.accessStatus").value("REVOKED"));
+        }
+        send(rally, "reader@invites.invalid", OWNER).andExpect(status().isAccepted());
+        assertEquals(1, invitations.count());
+        assertFalse(grants.findByRecipientIdAndRallyId("reader", rally).get().isActive());
+        call(get(access + "/history"), OWNER).andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].action").value("REVOKED"))
+                .andExpect(jsonPath("$.items[0].invitationId").value(id))
+                .andExpect(jsonPath("$.items[1].action").value("ACCEPTED"))
+                .andExpect(jsonPath("$.items[2].action").value("INVITED"));
     }
 
     private void user(String id, String email, String token, boolean verified) {

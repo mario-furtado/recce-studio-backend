@@ -1,17 +1,17 @@
-<nav class="flex gap-3 flex-wrap mb-4" aria-label="Navegação de ralis partilhados">
-  <a class="soft-button px-3 py-2 rounded-lg" routerLink="/account">A minha conta</a>
-  <a *ngIf="rallyId" class="soft-button px-3 py-2 rounded-lg" routerLink="/shared-rallies">Ralis partilhados</a>
-  <a *ngIf="pecId" class="soft-button px-3 py-2 rounded-lg" [routerLink]="['/shared-rallies', rallyId]">Voltar ao rali</a>
-</nav>
-<header class="mb-4">
-  <p class="read-meta">Partilhado comigo · Só leitura</p>
+<app-rally-area-nav [area]="rallyId ? 'shared-detail' : 'shared'" />
+<a *ngIf="pecId" class="inline-block soft-button px-3 py-2 rounded-lg mt-3" [routerLink]="['/shared-rallies', rallyId]">Voltar ao rali</a>
+<header class="my-4">
+  <p class="text-sm font-semibold text-slate-300">Partilhado comigo · Só leitura</p>
   <h1 class="text-2xl font-black">{{ stage?.pec?.name ?? rally?.name ?? 'Ralis partilhados comigo' }}</h1>
 </header>
 <p *ngIf="loading" role="status">A carregar…</p>
 <div *ngIf="error" class="read-card" role="alert">
   <p>{{ error }}</p>
-  <button type="button" class="soft-button px-3 py-2 rounded-lg mt-2" (click)="retry()">Tentar novamente</button>
+  <button *ngIf="!sessionChanged" type="button" class="soft-button px-3 py-2 rounded-lg mt-2" (click)="retry()">Tentar novamente</button>
 </div>
+<button *ngIf="rally || stage" type="button" class="soft-button px-3 py-2 rounded-lg mb-4" [disabled]="checkingAccess" (click)="checkAccess()">
+  {{ checkingAccess ? 'A verificar acesso…' : 'Verificar acesso' }}
+</button>
 <section *ngIf="!rallyId && !loading && !error" aria-label="Ralis concedidos" class="read-grid">
   <p *ngIf="!rallies.length">Ainda não tens ralis partilhados.</p>
   <article *ngFor="let item of rallies" class="read-card">
@@ -55,7 +55,7 @@
     <p *ngIf="bookStatus === 'error'" role="alert">O caderno publicado não está disponível.</p>
     <ng-container *ngIf="book as version">
       <p>Versão publicada {{ version.revision }}</p>
-      <app-notebook *ngIf="bookSettings as settings" [settings]="settings" [cover]="version.snapshot.cover" [publishedNotes]="version.snapshot.notes" />
+      <app-notebook *ngIf="bookSettings as settings" [settings]="settings" [cover]="version.snapshot.cover" [publishedNotes]="version.snapshot.notes" [authorizePrint]="authorizePrint" />
     </ng-container>
   </section>
 </div>

@@ -23,6 +23,8 @@ class CrewFeatureDisabledIntegrationTest {
         http.perform(post("/api/crews").header("Authorization","Bearer off-token").header("Idempotency-Key","fixed-request-key").contentType("application/json").content("{\"name\":\"Closed\"}")).andExpect(status().isForbidden());
         http.perform(get("/api/crews").header("Authorization","Bearer off-token")).andExpect(status().isForbidden());
         http.perform(get("/api/rallies").header("Authorization","Bearer off-token").header("X-Crew-Id","forged")).andExpect(status().isForbidden());
+        http.perform(get("/api/rallies/unknown/access").header("Authorization","Bearer off-token"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.message").value("A gestão de acessos está indisponível."));
         assertEquals(0,crews.count());
     }
 }

@@ -317,7 +317,7 @@ Não foi localizado um documento autónomo geral de arquitetura na pasta docs in
 | `GET/POST /api/rallies/{id}/invitations` | P05. O proprietário lista os próprios envios e convida para READ apenas neste rali. |
 | `GET /api/invitations/{id}`, `POST /api/invitations/{id}/accept` ou `/decline` | P05. O destinatário verificado consulta e decide sobre o próprio convite. |
 | `POST /api/rallies/{rallyId}/invitations/{id}/cancel` | P05. O proprietário cancela um convite pendente que enviou para o rali. |
-| `GET /api/crews/{id}/access` ou rali, `POST /api/access-grants/{id}/revoke` | Gestão owner; revogar grant não exige apagar projeto/conta ou reescrever convite aceite. |
+| `GET /api/rallies/{id}/access`, `GET /api/rallies/{id}/access/history`, `POST /api/rallies/{id}/access/{grantId}/revoke` | P06. Gestão e auditoria do proprietário por rali. A revogação conserva a aceitação do convite. |
 | `GET /api/notifications`, `GET /api/notifications/unread`, `PATCH /api/notifications/{id}/read` | P05. Caixa e contagem pessoais. Ler o alerta não concede acesso ao rali. |
 | `GET /api/shared-rallies`, `GET /api/shared-rallies/{rallyId}` e `GET /api/shared-rallies/{rallyId}/pecs/{pecId}` | Implementado na P04. Consulta READ sem selecionar uma tripulação como contexto de escrita. |
 | `GET /api/shared-rallies/{rallyId}/pecs/{pecId}/book-publication`, `PUT /api/pecs/{pecId}/book-publication` | Implementado na P04. Leitor obtém a publicação ou 204. Proprietário da tripulação gerida publica uma versão nova. |
@@ -532,6 +532,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 
 ### UAC-P06 — Gestão e revogação de acessos
 
+**Implementação:** [FEAT-023](../features/FEAT-023-gestao-revogacao-acessos.md). O proprietário gere a concessão no rali e consulta eventos mínimos. O destinatário vê o acesso revogado junto do convite aceite. A exposição continua controlada pelas flags existentes.
+
 **Objetivo/descrição:** distinguir cancelar convite e retirar concessão ativa, com rastreio. **Pré-requisitos:** P04/P05, origem de grants definida; contratos de cache/URLs e auditoria.
 
 - **P06-AC1 — Given** pendente, **When** owner cancela, **Then** não pode ser aceite depois e o histórico distingue cancelamento de recusa.
@@ -541,6 +543,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** múltiplas origens futuras, pedido concorrente, cache/URL já emitido, media já entregue e grant removido. **Testes de autorização:** convidado/terceiro não revoga outro acesso; owner só no seu âmbito; aceitar/cancelar concorrentes, replay offline e fase áudio após revogação. **Conclusão:** fronteira remota efetivamente revogada, limites de bytes já recebidos comunicados, eventos mínimos presentes e sem restauração de grants por rollback/reenvio.
 
 ### UAC-P07 — Ralis próprios, partilhados e seleção de tripulação
+
+**Implementação:** [FEAT-024](../features/FEAT-024-ralis-proprios-partilhados.md), **COMPLETED**. A navegação separa os ralis de trabalho da consulta READ, com preparação da primeira tripulação e revalidação do acesso em vistas partilhadas. TICKET_GATE **PASS** após reexecução dos checks afetados. RELEASE_GATE **BLOCKED** pela baseline. A ativação de destinos offline multi-contexto depende da P09.
 
 **Objetivo/descrição:** tornar contexto/origem/capacidade claros sem adicionar complexidade de organização. **Pré-requisitos:** P02/P04/P05 e contextos migrados; P09 antes de ativar destinos multi-contexto.
 

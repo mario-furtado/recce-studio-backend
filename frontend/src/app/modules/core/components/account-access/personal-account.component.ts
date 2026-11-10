@@ -5,7 +5,7 @@ import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { API_BASE_URL } from '../../services/api.config';
 import { CrewManagerComponent } from './crew-manager.component';
-import { clearCrewContext, hasStaleCrewContext } from '../../services/crew-context';
+import { clearCrewContext, getCrewContext, hasStaleCrewContext } from '../../services/crew-context';
 
 @Component({
   selector: 'app-personal-account', standalone: true, imports: [CommonModule, RouterLink, CrewManagerComponent],
@@ -17,7 +17,7 @@ import { clearCrewContext, hasStaleCrewContext } from '../../services/crew-conte
     <p *ngIf="!hasWorkspace && !crewsEnabled" class="mt-4">Ainda não tens uma tripulação associada.</p>
     <p *ngIf="crewsEnabled" class="mt-4">Escolhe uma tripulação para abrir os teus ralis.</p>
     <div class="flex flex-wrap gap-3 mt-4">
-      <a *ngIf="hasWorkspace" routerLink="/pecs" class="soft-button px-4 py-3 rounded-lg">Abrir os meus ralis</a>
+      <a *ngIf="hasWorkspace || crewSelected" routerLink="/pecs" class="soft-button px-4 py-3 rounded-lg">Abrir os meus ralis</a>
       <a *ngIf="crewsEnabled" routerLink="/shared-rallies" class="soft-button px-4 py-3 rounded-lg">Ralis partilhados comigo</a>
     </div></ng-container>
     <div *ngIf="staleSelection" class="mt-4"><p role="alert">A sessão mudou. Limpa a seleção anterior ou escolhe uma tripulação.</p><button type="button" class="soft-button rounded-lg px-4 py-3 mt-2" (click)="clearSelection()">Limpar seleção anterior</button></div>
@@ -29,6 +29,7 @@ import { clearCrewContext, hasStaleCrewContext } from '../../services/crew-conte
 export class PersonalAccountComponent implements OnInit, OnDestroy {
   email = ''; verified = false; hasWorkspace = false; loaded = false; error = '';
   crewsEnabled = false;
+  readonly crewSelected = !!getCrewContext();
   staleSelection = hasStaleCrewContext();
   clearSelection() { clearCrewContext(); location.assign('/account'); }
   private request?: Subscription;

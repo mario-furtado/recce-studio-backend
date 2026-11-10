@@ -1,8 +1,12 @@
 <div class="rally-workspace text-white">
   <header class="rs-page-header management-header glass-panel rounded-xl p-4">
-    <div><p class="text-xs uppercase tracking-widest text-slate-300">Gestão de ralis</p><h1 class="text-2xl font-extrabold">Ralis &amp; PECs</h1></div>
-    <button type="button" (click)="openCreateRallyForm()" class="accent-button rounded-lg px-4 py-2">Criar novo rali</button>
+    <div>
+      <p class="text-xs uppercase tracking-widest text-slate-300">{{ crew ? 'Ralis próprios · Proprietário' : 'Ralis da equipa' }}</p>
+      <h1 class="text-2xl font-extrabold">Ralis &amp; PECs</h1>
+    </div>
+    <button type="button" (click)="openCreateRallyForm()" [disabled]="isCreatingRally" class="accent-button rounded-lg px-4 py-2">Criar novo rali</button>
   </header>
+  <app-rally-area-nav *ngIf="crewsEnabled" area="own" />
   <section aria-label="Pesquisa e filtros" class="filter-section">
     <div class="flex flex-wrap gap-3 items-end">
       <label class="management-field grow">Pesquisa<input aria-label="Pesquisar ralis" type="search" [(ngModel)]="searchTerm" placeholder="Nome ou localização" class="themed-input rounded-lg px-3 py-2" /></label>
@@ -28,12 +32,12 @@
       <h2 class="text-lg font-bold text-white">
         {{ editingRallyId ? "Editar Rali" : "Criar Novo Rali" }}
       </h2>
-      <button type="button" (click)="cancelForm()" aria-label="Fechar formulário do rali" class="soft-button rounded-lg px-3 py-2">
+      <button type="button" (click)="cancelForm()" [disabled]="saving" aria-label="Fechar formulário do rali" class="soft-button rounded-lg px-3 py-2">
         x
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+    <fieldset [disabled]="saving" aria-label="Dados do rali" class="min-w-0 grid grid-cols-1 md:grid-cols-12 gap-3">
       <div class="md:col-span-12 flex flex-col gap-2">
         <label class="text-xs font-bold text-slate-400">LOGO DO RALI</label>
         <div class="flex flex-wrap items-center gap-3">
@@ -141,17 +145,20 @@
           Classe bloqueada pelo carro selecionado.
         </span>
       </div>
-    </div>
+    </fieldset>
 
     <div class="flex justify-end gap-3 pt-4 border-t border-slate-800">
+      <p *ngIf="saving" role="status" class="self-center text-sm">A guardar…</p>
       <button
         (click)="cancelForm()"
+        [disabled]="saving"
         class="soft-button px-5 py-2.5 rounded-xl text-slate-400 text-xs font-bold"
       >
         Cancelar
       </button>
       <button
         (click)="saveRally()"
+        [disabled]="saving"
         class="accent-button px-6 py-2.5 rounded-xl text-xs font-bold"
       >
         {{ editingRallyId ? "Guardar Alterações" : "Criar Rali" }}

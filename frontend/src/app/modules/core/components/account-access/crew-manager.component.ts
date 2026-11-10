@@ -16,7 +16,7 @@ import { clearCrewContext, CrewContext, getCrewContext, setCrewContext } from '.
     <p *ngIf="loading" role="status" class="mt-3">A carregar tripulações…</p>
     <p *ngIf="error" role="alert" class="text-red-300 mt-3">{{ error }}</p>
     <button *ngIf="loadFailed" type="button" class="soft-button rounded-lg px-4 py-3 mt-2" (click)="load()">Tentar carregar tripulações</button>
-    <p *ngIf="!loading && !loadFailed && !crews.length" class="mt-3">Cria a tua primeira tripulação. Não precisas de enviar convites.</p>
+    <p *ngIf="!loading && !loadFailed && !crews.length" class="mt-3">Para criares o teu primeiro rali, cria e abre a tua primeira tripulação. Não precisas de enviar convites.</p>
     <ul class="mt-3 space-y-2"><li *ngFor="let crew of crews" class="flex flex-wrap items-center justify-between gap-3 py-2">
       <span class="break-all">{{ crew.name }} <span class="text-sm text-slate-300">· Proprietário</span></span>
       <button type="button" class="soft-button rounded-lg px-4 py-3" (click)="open(crew)" [attr.aria-label]="'Abrir tripulação ' + crew.name">Abrir</button>

@@ -65,6 +65,27 @@ describe('FEAT-016 rally management', () => {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     expect(results.hidden).toBeFalse(); expect(document.activeElement).toBe(trigger); expect(view.rallies[0].location).toBe('Guarda');
   });
+  it('asks before leaving a draft and waits for a single save before allowing navigation', async () => {
+    const view = list().componentInstance;
+    view.openCreateRallyForm();
+    view.rallyForm.name = 'Rascunho';
+    view.rallyForm.location = 'Serra';
+    confirm.confirm.and.resolveTo(false);
+    expect(await view.canDeactivate()).toBeFalse();
+    expect(view.rallyForm.name).toBe('Rascunho');
+    expect(confirm.confirm).toHaveBeenCalledTimes(1);
+    view.saveRally();
+    view.saveRally();
+    view.cancelForm();
+    expect(await view.canDeactivate()).toBeFalse();
+    expect(view.isCreatingRally).toBeTrue();
+    const connection = TestBed.inject(SharedProperties).connectionMode$;
+    connection.next('offline');
+    expect(await view.canDeactivate()).toBeTrue();
+    connection.next('online');
+    http.expectOne({ method: 'POST', url: `${API_BASE_URL}/api/rallies` }).flush(rally);
+    expect(await view.canDeactivate()).toBeTrue();
+  });
   it('keeps offline reads/actions restricted and redirects to offline sessions', () => {
     const fixture = list(), view = fixture.componentInstance, shared = TestBed.inject(SharedProperties);
     const navigate = spyOn(TestBed.inject(Router), 'navigate'); shared.connectionMode$.next('offline'); view.loadRalliesFromApi(); view.openCreateRallyForm();
@@ -100,7 +121,11 @@ describe('FEAT-016 rally management', () => {
     const invitations = http.expectOne(`${API_BASE_URL}/api/rallies/r1/invitations?page=0`);
     expect(invitations.request.method).toBe('GET');
     invitations.flush({ message: 'Os convites estão indisponíveis.' }, { status: 403, statusText: 'Forbidden' });
+    const access = http.expectOne(`${API_BASE_URL}/api/rallies/r1/access?page=0`);
+    expect(access.request.method).toBe('GET');
+    access.flush({ message: 'Rali ou acesso indisponível.' }, { status: 404, statusText: 'Not Found' });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('Convites de leitura');
+    expect(fixture.nativeElement.textContent).not.toContain('Acessos ao rali');
   });
 });
