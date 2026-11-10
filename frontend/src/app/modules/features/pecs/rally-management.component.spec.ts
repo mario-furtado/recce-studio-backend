@@ -97,5 +97,10 @@ describe('FEAT-016 rally management', () => {
     const fixture = detail(), view = fixture.componentInstance; view.getRally(); http.expectOne(`${API_BASE_URL}/api/rallies/r1`).flush(rally); expect(view.isLoading).toBeTrue();
     http.expectOne(`${API_BASE_URL}/api/rallies/r1/pecs`).flush('failed', { status: 500, statusText: 'error' }); fixture.detectChanges(); expect(view.loadError).toBe('pecs'); expect(fixture.nativeElement.querySelector('.management-metrics')).toBeNull();
     view.getRally(); http.expectOne(`${API_BASE_URL}/api/rallies/r1`).flush(rally); http.expectOne(`${API_BASE_URL}/api/rallies/r1/pecs`).flush([]); fixture.detectChanges(); expect(view.isLoading).toBeFalse(); expect(fixture.nativeElement.textContent).toContain('Este rali ainda não tem PECs');
+    const invitations = http.expectOne(`${API_BASE_URL}/api/rallies/r1/invitations?page=0`);
+    expect(invitations.request.method).toBe('GET');
+    invitations.flush({ message: 'Os convites estão indisponíveis.' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Convites de leitura');
   });
 });

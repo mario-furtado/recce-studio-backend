@@ -49,6 +49,15 @@ class SharedRallyIntegrationTest {
 
     private String crew, rally, pec, sibling, siblingPec, shared, ownerPec, noteId;
 
+    @Test
+    void invitationFlagDefaultsOffWhileExistingReadGrantsStillWork() throws Exception {
+        reader(get("/api/invitations/options")).andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+        reader(get("/api/notifications")).andExpect(status().isForbidden());
+        owner(payload(post("/api/rallies/" + rally + "/invitations"), "{\"email\":\"reader@sharing.invalid\"}"))
+                .andExpect(status().isForbidden());
+        reader(get("/api/shared-rallies/" + rally)).andExpect(status().isOk());
+    }
+
     @BeforeEach
     void seed() throws Exception {
         grants.deleteAll();

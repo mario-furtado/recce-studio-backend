@@ -1,20 +1,22 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { ActivatedRoute, RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { SharedProperties } from '../../shared-properties';
 import { getCrewContext } from '../../../services/crew-context';
+import { InvitationBellComponent } from '../invitation-bell.component';
 
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, SidebarComponent],
+  imports: [CommonModule, RouterOutlet, SidebarComponent, InvitationBellComponent],
   template: `
     <div class="app-shell flex min-h-screen text-slate-100 font-sans">
       <app-sidebar></app-sidebar>
 
       <main class="flex-1 p-6 md:p-8 overflow-y-auto">
         <p *ngIf="activeCrewName" class="mb-3 text-sm text-slate-300 break-all">Tripulação: {{ activeCrewName }}</p>
+        <app-invitation-bell *ngIf="!demonstration && (shared.connectionMode$ | async) === 'online'" class="flex justify-end" />
         <router-outlet></router-outlet>
       </main>
 
@@ -52,5 +54,6 @@ import { getCrewContext } from '../../../services/crew-context';
 })
 export class MainLayoutComponent {
   get activeCrewName(): string { return getCrewContext()?.name ?? ''; }
-  constructor(public shared: SharedProperties) {}
+  get demonstration(): boolean { return this.route.firstChild?.snapshot.data['demonstration'] === true; }
+  constructor(public shared: SharedProperties, private route: ActivatedRoute) {}
 }

@@ -52,6 +52,7 @@ public final class E2eServer {
                 "--recce.test-user.enabled=false", "--recce.storage.type=local",
                 "--recce.account.enabled=true", "--recce.account.rate-limit.limit=1000",
                 "--recce.crews.enabled=true",
+                "--recce.invitations.enabled=true",
                 "--recce.upload-dir=" + uploads, "--recce.auth.token-ttl-seconds=3600");
     }
 

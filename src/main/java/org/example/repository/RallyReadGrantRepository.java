@@ -19,4 +19,6 @@ public interface RallyReadGrantRepository extends JpaRepository<RallyReadGrantEn
 
     @Query(VISIBLE + " and g.rally.id = :rally")
     Optional<RallyEntity> findVisible(@Param("account") String account, @Param("rally") String rally);
+
+    Optional<RallyReadGrantEntity> findByRecipientIdAndRallyId(String account, String rally);
 }

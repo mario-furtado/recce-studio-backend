@@ -13,4 +13,8 @@ public interface RallyRepository extends JpaRepository<RallyEntity, String> {
     java.util.Optional<RallyEntity> findByIdAndTeamProfileId(String id, String teamProfileId);
     List<RallyEntity> findByTeamProfileId(String teamProfileId);
     List<RallyEntity> findByTeamProfileIdIsNull();
+
+    @org.springframework.data.jpa.repository.Lock(javax.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select r from RallyEntity r where r.id = :id")
+    java.util.Optional<RallyEntity> lockById(@org.springframework.data.repository.query.Param("id") String id);
 }

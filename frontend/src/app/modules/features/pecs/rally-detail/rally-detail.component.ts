@@ -12,11 +12,12 @@ import {
 import { ConfirmDialogService } from '../../../core/shared/components/confirm-dialog/confirm-dialog.service';
 import { FocusPanelComponent } from '../../../core/shared/components/focus-panel.component';
 import { SharedProperties } from '../../../core/shared/shared-properties';
+import { RallyInvitationsComponent } from '../../invitations/rally-invitations.component';
 
 @Component({
   selector: 'app-rally-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, FocusPanelComponent],
+  imports: [CommonModule, FormsModule, RouterLink, FocusPanelComponent, RallyInvitationsComponent],
   templateUrl: './rally-detail.component.html',
   styleUrl: './rally-detail.component.css',
 })
@@ -25,6 +26,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
   isLoading = false;
   loadError: 'rally' | 'pecs' | null = null;
   rallyId: string | null = null;
+  inviteRallyId: string | null = null;
   searchTerm = '';
   rallyLogoObjectUrl: string | null = null;
 
@@ -88,6 +90,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
     this.isLoading = true; this.loadError = null;
     this.rallyService.getRallyById(this.rallyId).subscribe({
       next: (data: Rally) => {
+        this.inviteRallyId = data.id;
         this.rally = {
           ...this.rally,
           id: data.id,

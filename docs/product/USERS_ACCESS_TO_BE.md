@@ -71,7 +71,7 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | D03 | Saída, desativação e eliminação da conta do proprietário | Separar bloqueio de autenticação, gestão, consulta e eliminação de dados. Recomenda-se congelar escrita pendente de sucessão, sem promoção automática de convidado. | Autosserviço de encerramento/transferência e política de continuidade. |
 | D04 | Transferência de propriedade | Transferência explícita para conta verificada, aceite pelo destinatário, preservando IDs; alternativa adiar e usar suporte controlado. | Feature de transferência e cenários de sucessão. |
 | D05 | Retenção, período de recuperação e exportação | Duração, âmbito dos backups e eliminação física a definir; proibir limpeza automática por simples conclusão/expiração comercial. | Eliminação definitiva e fecho de conta/tripulação. |
-| D06 | Conta inexistente, entrega e expiração de convite | Recomenda-se convite por email verificado e ligação ao criar conta; email complementar, não autorização por posse de link. TTL, reenvios e fornecedor por definir. | Envio externo/convites abertos. |
+| D06 | Conta inexistente, entrega e expiração de convite | Aprovado em 2026-11-10: entrega na aplicação após verificação do endereço, validade de 7 dias, um pendente por rali e endereço, e 10 novos convites por proprietário em 24 horas. | Flag desligada por omissão até à P06. |
 | D07 | Estado de tripulação e arquivo do rali | Proposta: archiveAt separado de DRAFT/COMPLETED; tripulação arquivada suspende novas alterações sem revogar leitura. Detalhes de reabertura a aprovar. | Arquivo/gestão do histórico além dos concluídos atuais. |
 | D08 | Consulta/exportação após expiração de subscrição | Preservar dados existentes e acesso de leitura autorizado; decidir quem paga novas criações, quotas, reativação e efeitos de contas suspensas. | Paywall/entitlements, nunca autorização básica. |
 | D09 | Caderno visível ao convidado e configuração visual | Aprovado em 2026-11-10: versão publicada explicitamente pelo proprietário com estilos mínimos e aviso se ainda não existir publicação. | Leitura/exportação coerente do caderno partilhado. |
@@ -149,7 +149,7 @@ stateDiagram-v2
 
 **[PROPOSTA]** No máximo um convite pendente equivalente por proprietário/âmbito/destinatário normalizado. Novo pedido equivalente reutiliza o pendente ou informa estado; não envia mensagens em cascata. Se já existe acesso, não o alarga silenciosamente por «reenviar». Trocar email/âmbito exige novo convite e cancelamento explícito do antigo.
 
-**[PENDENTE D06]** Para pessoa ainda sem conta: conservar convite associado ao email normalizado; se houver entrega por email, link só orienta a registar/verificar e aceitar, não abre dados. Depois da verificação, associar em operação segura ao ID da conta correta. Sem transporte aprovado não prometer notificação in-app a uma pessoa inexistente: mostrar pendente de registo e instrução adequada ao remetente. Não criar conta em nome do destinatário. Respostas de envio não devem revelar se email já tem conta.
+**[APROVADO D06]** O convite fica associado ao endereço normalizado e o alerta aparece na aplicação quando a conta verifica esse endereço. A resposta de envio é a mesma para destinatários com ou sem conta. O proprietário pode indicar ao destinatário que deve abrir as notificações na aplicação. O envio de convites não usa email.
 
 ### 9.4 Notificações versus histórico
 
@@ -314,11 +314,11 @@ Não foi localizado um documento autónomo geral de arquitetura na pasta docs in
 | `GET/POST /api/crews`, `GET/PATCH /api/crews/{id}` | Listar só próprias/acessíveis, criar crew própria, consulta/gestão conforme owner ou leitura aprovada. |
 | `GET /api/crews/{id}/rallies`, `POST /api/crews/{id}/rallies` | Ler ralis abrangidos; criar só owner. Se B, não listar irmãos não partilhados. |
 | `GET /api/rallies?relation=owned/shared&history=...` | Filtros de UI sempre subordinados à autorização, inclusive contagens/pesquisa/paginação. |
-| `POST /api/crews/{id}/invitations` ou `/api/rallies/{id}/invitations` | Só endpoint do âmbito aprovado; owner envia READ, sem parametrizar papel de escrita. |
-| `GET /api/invitations?direction=received/sent`, `GET /api/invitations/{id}` | Apenas destinatário/remetente autorizado, dados mínimos antes da aceitação. |
-| `POST /api/invitations/{id}/accept`, `/decline`, `/revoke` | Destinatário aceita/recusa próprio convite; owner cancela pendente. Transições idempotentes/autorizadas. |
+| `GET/POST /api/rallies/{id}/invitations` | P05. O proprietário lista os próprios envios e convida para READ apenas neste rali. |
+| `GET /api/invitations/{id}`, `POST /api/invitations/{id}/accept` ou `/decline` | P05. O destinatário verificado consulta e decide sobre o próprio convite. |
+| `POST /api/rallies/{rallyId}/invitations/{id}/cancel` | P05. O proprietário cancela um convite pendente que enviou para o rali. |
 | `GET /api/crews/{id}/access` ou rali, `POST /api/access-grants/{id}/revoke` | Gestão owner; revogar grant não exige apagar projeto/conta ou reescrever convite aceite. |
-| `GET /api/notifications`, `PATCH /api/notifications/{id}/read` | Só inbox da conta; leitura não aceita nem autoriza projeto. |
+| `GET /api/notifications`, `GET /api/notifications/unread`, `PATCH /api/notifications/{id}/read` | P05. Caixa e contagem pessoais. Ler o alerta não concede acesso ao rali. |
 | `GET /api/shared-rallies`, `GET /api/shared-rallies/{rallyId}` e `GET /api/shared-rallies/{rallyId}/pecs/{pecId}` | Implementado na P04. Consulta READ sem selecionar uma tripulação como contexto de escrita. |
 | `GET /api/shared-rallies/{rallyId}/pecs/{pecId}/book-publication`, `PUT /api/pecs/{pecId}/book-publication` | Implementado na P04. Leitor obtém a publicação ou 204. Proprietário da tripulação gerida publica uma versão nova. |
 | Operações atuais `/api/pecs/{id}/...` e media | Preservar caminhos quando possível; resolver owner/grant/estado pelo recurso, não por equipa ativa enviada. |
@@ -518,6 +518,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** publicação inexistente/desatualizada, recurso eliminado, ficheiro/intervalo indisponível, grant de rali sem grant de crew e scope falso. **Testes de autorização:** owner, leitor A e leitor/estranho B; assinaturas/media URL/ranges, listagens/estatísticas e efeitos secundários de GET. **Conclusão:** leitura/PDF cobrem percurso real e negativos de todas as escritas relacionadas, nenhuma fuga de configurações pessoais; role READ não depende de UI.
 
 ### UAC-P05 — Convites e notificações
+
+**Implementação:** [FEAT-022](../features/FEAT-022-convites-notificacoes.md). Envio e cancelamento de pendentes no rali, caixa pessoal e aceitação READ. A entrega é na aplicação e a flag permanece desligada por omissão.
 
 **Objetivo/descrição:** convidar, receber alerta e decidir sobre leitura num âmbito explicitado. **Pré-requisitos:** P01/P04, D01/D06, operação de revogação P06 pronta antes do rollout público.
 

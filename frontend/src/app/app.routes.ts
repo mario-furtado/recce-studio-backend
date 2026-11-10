@@ -22,6 +22,9 @@ export const routes: Routes = [
     canActivateChild: [authGuard],
     children: [
       { path: 'account', loadComponent: () => import('./modules/core/components/account-access/personal-account.component').then(m => m.PersonalAccountComponent) },
+      ...['notifications/:id', 'notifications'].map(path => ({
+        path, loadComponent: () => import('./modules/features/invitations/invitation-inbox.component').then(m => m.InvitationInboxComponent),
+      })),
       ...['shared-rallies/:rallyId/pecs/:pecId', 'shared-rallies/:rallyId', 'shared-rallies'].map(path => ({
         path, loadComponent: () => import('./modules/features/pecs/shared-rallies/shared-rallies.component').then(m => m.SharedRalliesComponent),
       })),
@@ -32,9 +35,9 @@ export const routes: Routes = [
       { path: 'rally/:id', loadComponent: () => import('./modules/features/pecs/rally-detail/rally-detail.component').then(m => m.RallyDetailComponent) },
       { path: 'recce-mode', loadComponent: () => import('./modules/features/recce-mode/recce-mode.component').then(m => m.RecceModeComponent), canDeactivate: [recceExitGuard] },
       { path: 'offline-recces', loadComponent: () => import('./modules/features/offline-recces/offline-recces.component').then(m => m.OfflineReccesComponent) },
-      { path: 'notes/learn', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
-      { path: 'tutorial/notes', loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
-      { path: 'tutorial/learn/:workflow', loadComponent: () => import('./modules/features/tutorial/workflow-tour.component').then(m => m.WorkflowTourComponent) },
+      { path: 'notes/learn', data: { demonstration: true }, loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
+      { path: 'tutorial/notes', data: { demonstration: true }, loadComponent: () => import('./modules/features/tutorial/notes-tour.component').then(m => m.NotesTourComponent) },
+      { path: 'tutorial/learn/:workflow', data: { demonstration: true }, loadComponent: () => import('./modules/features/tutorial/workflow-tour.component').then(m => m.WorkflowTourComponent) },
       { path: 'notes', loadComponent: () => import('./modules/features/notes/notes.component').then(m => m.NotesComponent), canDeactivate: [recceExitGuard] },
       { path: 'team-profile', loadComponent: () => import('./modules/features/team-profile/team-profile.component').then(m => m.TeamProfileComponent) },
       { path: 'settings', loadComponent: () => import('./modules/features/settings/settings.component').then(m => m.SettingsComponent) },

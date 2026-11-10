@@ -12,7 +12,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(org.example.service.AccountFlowException.class)
     public ResponseEntity<ErrorResponseDTO> handleAccountFlow(org.example.service.AccountFlowException exception) {
         org.springframework.http.ResponseEntity.BodyBuilder builder = ResponseEntity.status(exception.status).cacheControl(org.springframework.http.CacheControl.noStore());
-        if (exception.status == HttpStatus.TOO_MANY_REQUESTS) builder.header("Retry-After", "900");
+        if (exception.status == HttpStatus.TOO_MANY_REQUESTS) builder.header("Retry-After", Long.toString(exception.retryAfterSeconds));
         return builder.body(new ErrorResponseDTO(exception.getMessage()));
     }
     @ExceptionHandler(ResourceNotFoundException.class)

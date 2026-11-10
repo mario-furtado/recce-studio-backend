@@ -39,7 +39,8 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
             Class<?> controller=handler instanceof org.springframework.web.method.HandlerMethod
                 ? ((org.springframework.web.method.HandlerMethod)handler).getBeanType() : null;
             if (controller != null && (CrewController.class.isAssignableFrom(controller)
-                    || SharedRallyController.class.isAssignableFrom(controller))) {
+                    || SharedRallyController.class.isAssignableFrom(controller)
+                    || RallyInvitationController.class.isAssignableFrom(controller))) {
                 if (!authService.isTokenValid(token)) { response.sendError(401); return false; }
                 response.setHeader("Cache-Control", "no-store");
                 return true;
