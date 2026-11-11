@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { NewPec, Pec, Rally } from '../models/rally';
+import { NewPec, Pec, Rally, RallySummary } from '../models/rally';
 import { API_BASE_URL } from './api.config';
 
 @Injectable({
@@ -14,6 +14,15 @@ export class RallyService {
 
   getRallies(): Observable<Rally[]> {
     return this.http.get<Rally[]>(this.apiUrl);
+  }
+
+  getSharedRallies(): Observable<RallySummary[]> {
+    return this.http.get<RallySummary[]>(`${API_BASE_URL}/api/shared-rallies`);
+  }
+
+  setArchive(rallyId: string, archived: boolean): Observable<Rally> {
+    const url = `${this.apiUrl}/${encodeURIComponent(rallyId)}/archive`;
+    return archived ? this.http.put<Rally>(url, null) : this.http.delete<Rally>(url);
   }
 
   getRallyById(id: string): Observable<Rally> {

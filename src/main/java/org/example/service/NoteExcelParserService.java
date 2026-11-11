@@ -29,13 +29,15 @@ public class NoteExcelParserService {
     private final PecRepository pecRepository;
     private final TeamCarRepository teamCarRepository;
     private final TenantContext tenantContext;
+    private final RallyWriteGuard writes;
 
     public NoteExcelParserService(NoteRepository noteRepository, PecRepository pecRepository,
-                                  TeamCarRepository teamCarRepository, TenantContext tenantContext) {
+                                  TeamCarRepository teamCarRepository, TenantContext tenantContext, RallyWriteGuard writes) {
         this.noteRepository = noteRepository;
         this.pecRepository = pecRepository;
         this.teamCarRepository = teamCarRepository;
         this.tenantContext = tenantContext;
+        this.writes = writes;
     }
 
     public byte[] generateCleanExcelTemplate() {
@@ -382,6 +384,7 @@ public class NoteExcelParserService {
         return noteRepository.findByPecIdOrderByIdAsc(pecId);
     }
 
+    @Transactional
     public NoteEntity saveNote(String pecId, NoteEntity note) {
         ensurePecCanBeEdited(pecId);
         validateCoordinates(note.getLatitude(), note.getLongitude());
@@ -391,6 +394,7 @@ public class NoteExcelParserService {
         return noteRepository.save(note);
     }
 
+    @Transactional
     public NoteEntity updateNote(String pecId, Long noteId, NoteEntity note) {
         ensurePecCanBeEdited(pecId);
         NoteEntity existing = noteRepository.findByIdAndPecId(noteId,pecId)
@@ -446,6 +450,7 @@ public class NoteExcelParserService {
         return noteRepository.saveAll(notes);
     }
 
+    @Transactional
     public void deleteNote(String pecId, Long noteId) {
         ensurePecCanBeEdited(pecId);
         NoteEntity note = noteRepository.findById(noteId)
@@ -581,6 +586,7 @@ public class NoteExcelParserService {
 
     private void ensurePecCanBeEdited(String pecId) {
         PecEntity pec = requirePec(pecId);
+        if (pec.getRally() != null) writes.requireWritable(pec.getRally());
         boolean completed = "COMPLETED".equalsIgnoreCase(pec.getStatus())
                 || (pec.getRally() != null && "COMPLETED".equalsIgnoreCase(pec.getRally().getStatus()));
         if (completed) {

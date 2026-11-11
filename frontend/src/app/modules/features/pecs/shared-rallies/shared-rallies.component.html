@@ -16,11 +16,11 @@
   <p *ngIf="!rallies.length">Ainda não tens ralis partilhados.</p>
   <article *ngFor="let item of rallies" class="read-card">
     <h2><a class="font-bold underline" [routerLink]="['/shared-rallies', item.id]">{{ item.name }}</a></h2>
-    <p class="read-meta">{{ item.surface }} · {{ item.status === 'COMPLETED' ? 'Concluído' : 'Em preparação' }}</p>
+    <p class="read-meta">{{ item.surface }} · {{ rallyStateLabel(item) }}</p>
   </article>
 </section>
 <section *ngIf="rally" aria-label="PECs do rali" class="read-grid">
-  <p class="read-meta">{{ rally.surface }} · {{ rally.status === 'COMPLETED' ? 'Concluído' : 'Em preparação' }}</p>
+  <p class="read-meta">{{ rally.surface }} · {{ rallyStateLabel(rally) }}</p>
   <p *ngIf="!rally.pecs.length">Este rali ainda não tem PECs.</p>
   <article *ngFor="let item of rally.pecs" class="read-card">
     <h2><a class="font-bold underline" [routerLink]="['/shared-rallies', rallyId, 'pecs', item.id]">PEC {{ item.number }} · {{ item.name }}</a></h2>

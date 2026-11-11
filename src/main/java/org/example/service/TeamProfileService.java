@@ -304,7 +304,7 @@ public class TeamProfileService {
                     .sum();
             long activeEvents = rallyRepository.findByTeamProfileId(teamProfileId)
                     .stream()
-                    .filter(rally -> !"COMPLETED".equalsIgnoreCase(rally.getStatus()))
+                    .filter(rally -> rally.getArchivedAt() == null && !"COMPLETED".equalsIgnoreCase(rally.getStatus()))
                     .count();
             return new TeamStatsDTO(pecRepository.findByRallyTeamProfileId(teamProfileId).size(), totalKm, activeEvents);
         }
@@ -326,7 +326,7 @@ public class TeamProfileService {
         }
 
         long activeEvents = carRallies.stream()
-                .filter(rally -> !"COMPLETED".equalsIgnoreCase(rally.getStatus()))
+                .filter(rally -> rally.getArchivedAt() == null && !"COMPLETED".equalsIgnoreCase(rally.getStatus()))
                 .count();
 
         return new TeamStatsDTO(totalPecs, totalKm, activeEvents);

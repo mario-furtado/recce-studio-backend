@@ -12,14 +12,16 @@ import { AuthService } from '../../core/services/auth.service';
            [attr.aria-current]="area() === 'own' ? 'page' : null">Os meus ralis</a>
       }
       <a class="soft-button px-3 py-2 rounded-lg" routerLink="/shared-rallies"
-         [attr.aria-current]="area() === 'own' ? null : area() === 'shared' ? 'page' : 'location'">Ralis partilhados</a>
+         [attr.aria-current]="area() === 'shared' ? 'page' : area() === 'shared-detail' ? 'location' : null">Ralis partilhados</a>
+      <a class="soft-button px-3 py-2 rounded-lg" routerLink="/rally-history"
+         [attr.aria-current]="area() === 'history' ? 'page' : null">Histórico</a>
       <a class="soft-button px-3 py-2 rounded-lg" routerLink="/account">Escolher tripulação</a>
     </nav>
   `,
   styles: [`[aria-current] { border-color: currentColor; font-weight: 700; }`],
 })
 export class RallyAreaNavComponent {
-  readonly area = input.required<'own' | 'shared' | 'shared-detail'>();
+  readonly area = input.required<'own' | 'shared' | 'shared-detail' | 'history'>();
   private readonly auth = inject(AuthService);
 
   get personalAccount(): boolean { return this.auth.isPersonalAccount(); }

@@ -17,7 +17,7 @@ export const authGuard: CanActivateFn = (_route, state) => {
   }
 
   const path = state.url.split('?')[0];
-  const accountScoped = /^\/(shared-rallies|notifications)(?:\/|$)/.test(path);
+  const accountScoped = /^\/(shared-rallies|notifications|rally-history)(?:\/|$)/.test(path);
   if (hasStaleCrewContext() && path !== '/account' && !accountScoped) return router.createUrlTree(['/account']);
   // Offline ownership has no crew dimension until P09. Never adopt old local data.
   if (getCrewContext() && (['/new-recce', '/recce-mode', '/offline-recces'].some(p => path === p || path.startsWith(p + '/')) || shared.connectionMode$.value === 'offline')) {

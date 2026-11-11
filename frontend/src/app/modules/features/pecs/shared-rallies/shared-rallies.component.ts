@@ -5,19 +5,14 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { NotebookComponent, PublishedNotebook } from '../../../core/notebook/notebook.component';
 import { NotebookSettings } from '../../../core/notebook/notebook.model';
+import { RallySummary, rallyStateLabel } from '../../../core/models/rally';
 import { API_BASE_URL } from '../../../core/services/api.config';
 import { AuthService } from '../../../core/services/auth.service';
+import { RallyService } from '../../../core/services/rally.service';
 import { GpsPoint } from '../../../core/services/pecs.service';
 import { RecceMapComponent } from '../pecs-editor/recce-map.component';
 import { MapNote, validCoordinate } from '../pecs-editor/gps-timeline';
 import { RallyAreaNavComponent } from '../rally-area-nav.component';
-
-interface Rally {
-  id: string;
-  name: string;
-  status: string;
-  surface: string;
-}
 
 interface Stage {
   id: string;
@@ -58,6 +53,7 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
+  private readonly rallyService = inject(RallyService);
   private readonly session = this.auth.getToken();
   private navigation?: Subscription;
   private requests = new Subscription();
@@ -68,8 +64,9 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
   checkingAccess = false;
   sessionChanged = false;
   error = '';
-  rallies: Rally[] = [];
-  rally?: Rally & { pecs: Stage[] };
+  rallies: RallySummary[] = [];
+  rally?: RallySummary & { pecs: Stage[] };
+  readonly rallyStateLabel = rallyStateLabel;
   stage?: StageView;
   track?: GpsPoint[];
   mapNotes: MapNote[] = [];
@@ -100,12 +97,12 @@ export class SharedRalliesComponent implements OnInit, OnDestroy {
         error: error => this.fail(error),
       }));
     } else if (rallyId) {
-      this.requests.add(this.http.get<Rally & { pecs: Stage[] }>(this.endpoint).subscribe({
+      this.requests.add(this.http.get<RallySummary & { pecs: Stage[] }>(this.endpoint).subscribe({
         next: rally => { this.rally = rally; this.loading = false; },
         error: error => this.fail(error),
       }));
     } else {
-      this.requests.add(this.http.get<Rally[]>(this.endpoint).subscribe({
+      this.requests.add(this.rallyService.getSharedRallies().subscribe({
         next: rallies => { this.rallies = rallies; this.loading = false; },
         error: error => this.fail(error),
       }));

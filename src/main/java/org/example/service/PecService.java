@@ -11,6 +11,7 @@ import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.controller.TenantContext;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,13 +25,15 @@ public class PecService {
     private final RallyRepository rallyRepository;
     private final NoteRepository noteRepository;
     private final TenantContext tenantContext;
+    private final RallyWriteGuard writes;
 
     public PecService(PecRepository pecRepository, RallyRepository rallyRepository, NoteRepository noteRepository,
-                      TenantContext tenantContext) {
+                      TenantContext tenantContext, RallyWriteGuard writes) {
         this.pecRepository = pecRepository;
         this.rallyRepository = rallyRepository;
         this.noteRepository = noteRepository;
         this.tenantContext = tenantContext;
+        this.writes = writes;
     }
 
     public List<PecDTO> getPecsByRally(String rallyId) {
@@ -45,6 +48,7 @@ public class PecService {
         return toDTO(entity);
     }
 
+    @Transactional
     public PecDTO createPec(String rallyId, NewPecDTO newPecDTO) {
         RallyEntity rally = rallyRepository.findByIdAndTeamProfileId(rallyId, tenantContext.requireTeamProfileId())
                 .orElseThrow(() -> new ResourceNotFoundException("Rally nao encontrado com ID: " + rallyId));
@@ -63,6 +67,7 @@ public class PecService {
         return toDTO(pecRepository.save(entity));
     }
 
+    @Transactional
     public PecDTO patchPec(String id, PecPatchDTO patchDTO) {
         PecEntity entity = requirePec(id);
         ensureRallyCanBeEdited(entity.getRally());
@@ -106,6 +111,7 @@ public class PecService {
                 || patchDTO.getRecceVideoOffsetSeconds() != null;
     }
 
+    @Transactional
     public void deletePec(String id) {
         PecEntity entity = requirePec(id);
         ensureRallyCanBeEdited(entity.getRally());
@@ -130,6 +136,7 @@ public class PecService {
                 count
         );
         overview.setRecceVideoOffsetSeconds(pec.getRecceVideoOffsetSeconds());
+        overview.setRallyArchived(pec.getRally() != null && pec.getRally().getArchivedAt() != null);
         return overview;
     }
 
@@ -155,6 +162,7 @@ public class PecService {
     }
 
     private void ensureRallyCanBeEdited(RallyEntity rally) {
+        if (rally != null) writes.requireWritable(rally);
         if (rally != null && "COMPLETED".equalsIgnoreCase(rally.getStatus())) {
             throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar PECs.");
         }

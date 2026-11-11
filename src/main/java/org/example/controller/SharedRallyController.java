@@ -157,12 +157,14 @@ public class SharedRallyController {
         private final String id;
         private final String name;
         private final String status;
+        private final Long archivedAt;
         private final String surface;
 
         RallyView(RallyEntity rally) {
             id = rally.getId();
             name = rally.getName();
             status = rally.getStatus();
+            archivedAt = rally.getArchivedAt();
             surface = rally.getSurface();
         }
     }

@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -304,10 +305,10 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       .getRallies()
       .pipe(
         switchMap((rallies: Rally[]) => {
-          this.rallies = rallies;
-          if (rallies.length === 0) return of([]);
+          this.rallies = rallies.filter(rally => rally.archivedAt == null);
+          if (this.rallies.length === 0) return of([]);
           return forkJoin(
-            rallies.map((rally) =>
+            this.rallies.map((rally) =>
               this.rallyService.getRallyPecs(rally.id).pipe(
                 map((pecs: Pec[]) =>
                   pecs.map((pec) => ({
@@ -389,11 +390,13 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
           );
         } catch (error) {
           console.error('Erro ao sincronizar reconhecimento offline:', error);
+          const conflict = error instanceof HttpErrorResponse && error.status === 409 && typeof error.error?.message === 'string';
+          const message = conflict ? error.error.message : 'Falha ao enviar para o backend.';
           const updated = await this.offlineStore.markSessionReadyToSync(
-            session.id, 'Falha ao enviar para o backend.',
+            session.id, message,
           );
           this.replaceSession(updated);
-          this.shared.error('Erro ao sincronizar', 'Confirma a ligacao ao backend e tenta novamente.');
+          this.shared.error('Erro ao sincronizar', conflict ? message : 'Confirma a ligacao ao backend e tenta novamente.');
         }
       });
       if (!started) await this.loadSessions();
@@ -423,6 +426,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       );
       return true;
     } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 409) throw error;
       console.error('Erro ao sincronizar audio offline:', error);
       return false;
     }

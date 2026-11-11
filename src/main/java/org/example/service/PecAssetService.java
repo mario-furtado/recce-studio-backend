@@ -41,18 +41,21 @@ public class PecAssetService {
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
     private final TenantContext tenantContext;
+    private final RallyWriteGuard writes;
 
     public PecAssetService(
             PecRepository pecRepository,
             OfflineRecceSyncRepository offlineRecceSyncRepository,
             ObjectMapper objectMapper,
             FileStorageService fileStorageService,
-            TenantContext tenantContext) {
+            TenantContext tenantContext,
+            RallyWriteGuard writes) {
         this.pecRepository = pecRepository;
         this.offlineRecceSyncRepository = offlineRecceSyncRepository;
         this.objectMapper = objectMapper;
         this.fileStorageService = fileStorageService;
         this.tenantContext = tenantContext;
+        this.writes = writes;
     }
 
     @Transactional
@@ -207,6 +210,7 @@ public class PecAssetService {
     }
 
     private void ensureCanEdit(PecEntity pec) {
+        if (pec.getRally() != null) writes.requireWritable(pec.getRally());
         if ("COMPLETED".equalsIgnoreCase(pec.getStatus())
                 || (pec.getRally() != null && "COMPLETED".equalsIgnoreCase(pec.getRally().getStatus()))) {
             throw new IllegalStateException("PEC ou rali concluido. Volte a colocar em rascunho para alterar.");

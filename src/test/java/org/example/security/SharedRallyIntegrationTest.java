@@ -17,6 +17,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Arrays;
 import java.util.UUID;
@@ -24,6 +25,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -46,8 +49,131 @@ class SharedRallyIntegrationTest {
     @Autowired NoteRepository notes;
     @Autowired PecRepository pecs;
     @Autowired NotebookPreferencesRepository preferences;
+    @Autowired TransactionTemplate transactions;
 
     private String crew, rally, pec, sibling, siblingPec, shared, ownerPec, noteId;
+
+    @Test
+    void archiveKeepsGrantPublicationAndPreviousStatusAcrossRetriesAndRestoration() throws Exception {
+        String ownRally = "/api/rallies/" + rally;
+        String archive = ownRally + "/archive";
+        String pdf = shared + "/book-publication";
+        String publication = snapshot().toString();
+        owner(payload(put(ownerPec + "/book-publication"), publication)).andExpect(status().isOk());
+        long grantId = grants.findByRecipientIdAndRallyId("reader", rally).get().getId();
+        call(put(archive), "reader", crew).andExpect(status().isNotFound());
+        call(delete(archive), "stranger", crew).andExpect(status().isNotFound());
+        reader(put(archive)).andExpect(status().isForbidden());
+        owner(payload(put(ownRally), "{\"status\":\"COMPLETED\",\"archivedAt\":1}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.archivedAt").isEmpty());
+        String archivedAt = field(owner(put(archive)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED")).andExpect(jsonPath("$.archivedAt").isNumber()), "archivedAt");
+        assertEquals(archivedAt, field(owner(put(archive)).andExpect(status().isOk()), "archivedAt"));
+        reader(get("/api/shared-rallies")).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].archivedAt").isNumber());
+        reader(get(shared)).andExpect(status().isOk()).andExpect(jsonPath("$.notes[0].text").value("E3"));
+        reader(get(pdf)).andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(1));
+        reader(head(pdf)).andExpect(status().isOk());
+        assertEquals(publication, books.findById(pec).get().getSnapshot());
+        assertTrue(grants.findById(grantId).get().isActive());
+        owner(delete(archive)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.archivedAt").isEmpty());
+        owner(delete(archive)).andExpect(status().isOk());
+        owner(payload(put(ownRally), "{\"status\":\"DRAFT\"}")).andExpect(status().isOk());
+        reader(head(pdf)).andExpect(status().isOk());
+        owner(put(archive)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DRAFT"));
+        owner(payload(post(ownRally + "/access/" + grantId + "/revoke"), "{\"reason\":\"OTHER\"}"))
+                .andExpect(status().isNoContent());
+        reader(get("/api/shared-rallies")).andExpect(jsonPath("$.length()").value(0));
+        reader(head(pdf)).andExpect(status().isNotFound());
+        owner(delete(archive)).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
+    void historyLinkStopsResolvingAfterDeletionWithAnActiveGrant() throws Exception {
+        String ownRally = "/api/rallies/" + rally;
+        owner(put(ownRally + "/archive")).andExpect(status().isOk());
+        reader(get("/api/shared-rallies/" + rally)).andExpect(status().isOk());
+        owner(delete(ownRally + "/archive")).andExpect(status().isOk());
+        owner(delete(ownerPec)).andExpect(status().isNoContent());
+        owner(delete(ownRally)).andExpect(status().isNoContent());
+        reader(get("/api/shared-rallies/" + rally)).andExpect(status().isNotFound());
+        reader(head(shared + "/book-publication")).andExpect(status().isNotFound());
+        reader(get("/api/shared-rallies")).andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void archivedRallyRejectsOwnerWritesBeforePersistingAnything() throws Exception {
+        String ownRally = "/api/rallies/" + rally;
+        owner(put(ownRally + "/archive")).andExpect(status().isOk());
+        for (MockHttpServletRequestBuilder write : Arrays.asList(
+                payload(put(ownRally), "{\"status\":\"DRAFT\",\"archivedAt\":null}"), delete(ownRally),
+                payload(post(ownRally + "/pecs"), "{\"name\":\"Blocked PEC\"}"),
+                payload(patch(ownerPec), "{\"name\":\"Blocked change\"}"), delete(ownerPec),
+                payload(patch(ownerPec + "/notes/" + noteId), "{\"text\":\"Blocked note\"}"),
+                payload(post(ownerPec + "/sync-timestamps"), "[]"), delete(ownerPec + "/audio"),
+                payload(put(ownerPec + "/reccebook-cover"), "{}"), payload(put(ownerPec + "/book-publication"), "{}"),
+                multipart(ownerPec + "/video").file(new MockMultipartFile("file", new byte[]{1})),
+                multipart(ownRally + "/logo").file(new MockMultipartFile("file", new byte[]{1})))) {
+            owner(write).andExpect(status().isConflict());
+        }
+        owner(get(ownerPec)).andExpect(jsonPath("$.rallyArchived").value(true));
+        owner(get(ownerPec + "/reccebook-cover")).andExpect(jsonPath("$.editable").value(false));
+        assertEquals(2, pecs.count());
+        assertEquals("E3", notes.findById(Long.valueOf(noteId)).get().getText());
+        assertFalse(books.existsById(pec));
+        owner(payload(patch("/api/pecs/" + siblingPec), "{\"name\":\"Sibling still editable\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void archiveBlocksNewOfflineWritesAndReceiptReplayUntilRestore() throws Exception {
+        AuthUserEntity actor = users.findById("owner").get();
+        actor.setTeamProfileId(crew);
+        users.save(actor);
+        String sync = "/api/offline-recces/sync";
+        String newSession = UUID.randomUUID().toString();
+        String existing = "{\"sessionId\":\"" + newSession + "\",\"pecId\":\"" + pec + "\"}";
+        String receipt = field(call(payload(post(sync), existing), "owner", null).andExpect(status().isOk()), "syncId");
+        String archive = "/api/rallies/" + rally + "/archive";
+        owner(put(archive)).andExpect(status().isOk());
+        call(payload(post(sync), existing), "owner", null).andExpect(status().isConflict());
+        call(payload(post(sync), existing.replace(newSession, UUID.randomUUID().toString())), "owner", null)
+                .andExpect(status().isConflict());
+        String create = "{\"sessionId\":\"" + UUID.randomUUID() + "\",\"rallyId\":\"" + rally + "\",\"newPec\":{\"name\":\"Offline PEC\"}}";
+        call(payload(post(sync), create), "owner", null).andExpect(status().isConflict());
+        assertEquals(2, pecs.count());
+        owner(delete(archive)).andExpect(status().isOk());
+        assertEquals(receipt, field(call(payload(post(sync), existing), "owner", null).andExpect(status().isOk()), "syncId"));
+        call(payload(post(sync), create), "owner", null).andExpect(status().isOk());
+        assertEquals(3, pecs.count());
+    }
+
+    @Test
+    void writerWaitsForArchiveAndChecksCommittedState() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch started = new CountDownLatch(1);
+        try {
+            Future<ResultActions> pending = transactions.execute(status -> {
+                rallies.lockById(rally).get().setArchivedAt(1L);
+                Future<ResultActions> writer = executor.submit(() -> {
+                    started.countDown();
+                    return owner(payload(put("/api/rallies/" + rally), "{\"name\":\"Blocked\"}"));
+                });
+                try {
+                    assertTrue(started.await(5, TimeUnit.SECONDS));
+                    assertThrows(TimeoutException.class, () -> writer.get(250, TimeUnit.MILLISECONDS));
+                } catch (InterruptedException ex) {
+                    throw new AssertionError(ex);
+                }
+                return writer;
+            });
+            pending.get(10, TimeUnit.SECONDS).andExpect(status().isConflict());
+            assertEquals("Rali concedido", rallies.findById(rally).get().getName());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
 
     @Test
     void accessChecksUseTheExactGrantAndPecWithoutReturningContent() throws Exception {

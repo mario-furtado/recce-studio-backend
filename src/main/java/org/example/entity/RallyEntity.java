@@ -50,6 +50,13 @@ public class RallyEntity {
 
     private String status;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long archivedAt;
+
+    @Transient
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private boolean archiveManageable;
+
     @Column(name = "team_profile_id")
     @JsonIgnore
     private String teamProfileId;

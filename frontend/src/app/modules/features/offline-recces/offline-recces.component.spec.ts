@@ -1,4 +1,5 @@
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
 import { OfflineRecceSession, OfflineRecceStoreService } from '../../core/services/offline-recce-store.service';
 import { OfflineRecceSyncResponse, PecService } from '../../core/services/pecs.service';
@@ -516,6 +517,22 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     await component(store, pec).syncSession(session!);
     expect(pec.uploadAudio).not.toHaveBeenCalled();
     expect(await store.getSession(draft.id)).toBeNull();
+  });
+
+  it('FEAT-025 keeps pending audio and metadata when the destination is archived before audio upload', async () => {
+    const session = await ready();
+    const pec = remote(session.id);
+    const message = 'Rali arquivado. Restaura-o antes de fazer alterações ou sincronizar.';
+    pec.uploadAudio.and.returnValue(throwError(() => new HttpErrorResponse({ status: 409, error: { message } })));
+    const page = component(store, pec);
+    await page.syncSession(session);
+    const retained = await store.getSession(session.id);
+    expect(retained?.status).toBe('ready_to_sync');
+    expect(retained?.syncError).toBe(message);
+    expect(retained?.markers).toEqual(session.markers);
+    expect(retained?.gpsTrack).toEqual(session.gpsTrack);
+    expect(await (await store.getAudioBlob(session.audioBlobId!))!.text()).toBe('audio');
+    expect(page.syncingSessionId).toBeNull();
   });
 
   it('AUD-OFF-002 preserves the recording and retry state when reading IndexedDB fails', async () => {

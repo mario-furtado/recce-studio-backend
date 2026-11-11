@@ -45,6 +45,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
 
   showCreateModal = false;
   editingPecId: string | null = null;
+  updatingArchive = false;
   pecDraft: Pick<Pec, 'number' | 'name' | 'distanceKm'> = {
     number: 1,
     name: '',
@@ -106,6 +107,8 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
           carClass: data.carClass,
           pecsCount: data.pecsCount,
           status: data.status || 'DRAFT',
+          archivedAt: data.archivedAt,
+          archiveManageable: data.archiveManageable,
         };
         this.loadRallyLogo(data);
         this.getRallyPecs();
@@ -128,7 +131,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
   }
 
   openCreateModal(): void {
-    if (this.isCompleted) return;
+    if (this.isReadOnly) return;
     const nextNumber = (this.rally.pecs?.length || 0) + 1;
     this.newPec = {
       number: nextNumber,
@@ -141,7 +144,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
   }
 
   savePec(): void {
-    if (!this.rallyId || !this.newPec.name || this.isCompleted) return;
+    if (!this.rallyId || !this.newPec.name || this.isReadOnly) return;
 
     this.rallyService.postRallyPec(this.rallyId, this.newPec).subscribe({
       next: (createdPec) => {
@@ -178,7 +181,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
 
   async deletePec(pecId: string, pecName: string, event: Event): Promise<void> {
     event.stopPropagation();
-    if (this.isCompleted) return;
+    if (this.isReadOnly) return;
     const confirmed = await this.confirmDialog.confirm({
       title: 'Eliminar PEC',
       message: `Queres mesmo eliminar "${pecName}"?`,
@@ -200,7 +203,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
 
   startEditPec(pec: Pec, event: Event): void {
     event.stopPropagation();
-    if (this.isCompleted || pec.status === 'COMPLETED') return;
+    if (this.isReadOnly || pec.status === 'COMPLETED') return;
     this.editingPecId = pec.id;
     this.pecDraft = {
       number: pec.number,
@@ -216,7 +219,7 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
 
   saveEditedPec(pec: Pec, event: Event): void {
     event.stopPropagation();
-    if (this.isCompleted || pec.status === 'COMPLETED') return;
+    if (this.isReadOnly || pec.status === 'COMPLETED') return;
     if (!this.pecDraft.name.trim()) {
       this.shared.error('Nome obrigatorio', 'A PEC precisa de um nome.');
       return;
@@ -244,6 +247,35 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
     return this.rally.status === 'COMPLETED';
   }
 
+  get isArchived(): boolean { return this.rally.archivedAt != null; }
+  get isReadOnly(): boolean { return this.isArchived || this.isCompleted; }
+
+  async changeArchive(): Promise<void> {
+    if (!this.rally.archiveManageable || this.updatingArchive || this.editingPecId || this.showCreateModal) return;
+    const archive = !this.isArchived;
+    this.updatingArchive = true;
+    const title = archive ? 'Arquivar rali' : 'Restaurar rali';
+    const confirmed = await this.confirmDialog.confirm({
+      title,
+      message: archive
+        ? 'O rali ficará em consulta. A edição e a sincronização ficam suspensas, e os leitores mantêm o acesso.'
+        : 'O rali volta ao estado que tinha antes do arquivo.',
+      confirmText: title,
+    });
+    if (!confirmed) { this.updatingArchive = false; return; }
+    this.rallyService.setArchive(this.rally.id, archive).subscribe({
+      next: rally => {
+        this.rally = { ...this.rally, ...rally };
+        this.updatingArchive = false;
+        this.shared.success(archive ? 'Rali arquivado' : 'Rali restaurado', this.rally.name);
+      },
+      error: () => {
+        this.updatingArchive = false;
+        this.shared.error(archive ? 'Não foi possível arquivar o rali' : 'Não foi possível restaurar o rali');
+      },
+    });
+  }
+
   get rallyCarName(): string {
     return this.cars.find((car) => car.id === this.rally.carId)?.name || '';
   }
@@ -261,12 +293,13 @@ export class RallyDetailComponent implements OnInit, OnDestroy {
   }
 
   async confirmFinishRally(): Promise<void> {
-    if (this.isCompleted) return;
+    if (this.isReadOnly || this.updatingArchive) return;
     const confirmed = await this.confirmDialog.confirm({ title: 'Terminar Rali', message: `Queres terminar ${this.rally.name}?`, detail: 'A criação e a gestão das PECs ficarão bloqueadas até voltares a rascunho.', confirmText: 'Terminar Rali' });
     if (confirmed) this.updateRallyStatus('COMPLETED');
   }
 
   updateRallyStatus(status: 'DRAFT' | 'COMPLETED'): void {
+    if (this.isArchived || this.updatingArchive) return;
     this.rallyService.updateRally(this.rally.id, { status }).subscribe({
       next: (updated) => {
         this.rally = { ...this.rally, ...updated };

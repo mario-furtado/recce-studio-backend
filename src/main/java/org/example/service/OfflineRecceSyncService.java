@@ -30,6 +30,7 @@ public class OfflineRecceSyncService {
     private final NoteExcelParserService noteService;
     private final ObjectMapper objectMapper;
     private final TenantContext tenantContext;
+    private final RallyWriteGuard writes;
 
     public OfflineRecceSyncService(
             OfflineRecceSyncRepository syncRepository,
@@ -37,13 +38,15 @@ public class OfflineRecceSyncService {
             PecService pecService,
             NoteExcelParserService noteService,
             ObjectMapper objectMapper,
-            TenantContext tenantContext) {
+            TenantContext tenantContext,
+            RallyWriteGuard writes) {
         this.syncRepository = syncRepository;
         this.pecRepository = pecRepository;
         this.pecService = pecService;
         this.noteService = noteService;
         this.objectMapper = objectMapper;
         this.tenantContext = tenantContext;
+        this.writes = writes;
     }
 
     @Transactional
@@ -54,6 +57,8 @@ public class OfflineRecceSyncService {
                 .findByOfflineSessionIdAndTeamProfileId(request.getSessionId(), teamProfileId)
                 .orElse(null);
         if (existingSync != null) {
+            pecRepository.findByIdAndRallyTeamProfileId(existingSync.getPecId(), teamProfileId)
+                    .ifPresent(pec -> writes.requireWritable(pec.getRally()));
             return toResponse(existingSync);
         }
 

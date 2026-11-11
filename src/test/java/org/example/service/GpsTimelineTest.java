@@ -14,7 +14,7 @@ class GpsTimelineTest {
     private List<GpsPointDTO> parse(String xml) throws Exception {
         Method method = PecAssetService.class.getDeclaredMethod("parseGpx", java.io.InputStream.class);
         method.setAccessible(true);
-        return (List<GpsPointDTO>) method.invoke(new PecAssetService(null, null, new ObjectMapper(), null, null),
+        return (List<GpsPointDTO>) method.invoke(new PecAssetService(null, null, new ObjectMapper(), null, null, null),
                 new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
     }
 

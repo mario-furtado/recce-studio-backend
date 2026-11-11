@@ -43,6 +43,16 @@ describe('FEAT-016 rally management', () => {
     view.loadRalliesFromApi(); http.expectOne(`${API_BASE_URL}/api/rallies`).flush([]); fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('Ainda não tens ralis');
     view.rallies = [rally]; view.searchTerm = 'missing'; fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('Nenhum rali corresponde');
   });
+  it('separates archived rallies from active and completed filters', () => {
+    const view = list().componentInstance;
+    view.rallies = [rally, { ...rally, id: 'finished', status: 'COMPLETED' },
+      { ...rally, id: 'archive', status: 'COMPLETED', archivedAt: 1 }];
+    expect(view.filteredRallies.map(item => item.id)).toEqual(['r1']);
+    view.statusFilter = 'COMPLETED';
+    expect(view.filteredRallies.map(item => item.id)).toEqual(['finished']);
+    view.statusFilter = 'ARCHIVED';
+    expect(view.filteredRallies.map(item => item.id)).toEqual(['archive']);
+  });
   it('never navigates when editing or cancelling rally deletion; explicit access keeps its destination', async () => {
     const fixture = list(), view = fixture.componentInstance, navigate = spyOn(TestBed.inject(Router), 'navigate');
     fixture.nativeElement.querySelector('button[aria-label="Editar Serra"]').click(); expect(view.editingRallyId).toBe('r1'); expect(navigate).not.toHaveBeenCalled();

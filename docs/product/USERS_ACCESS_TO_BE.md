@@ -72,7 +72,7 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | D04 | Transferência de propriedade | Transferência explícita para conta verificada, aceite pelo destinatário, preservando IDs; alternativa adiar e usar suporte controlado. | Feature de transferência e cenários de sucessão. |
 | D05 | Retenção, período de recuperação e exportação | Duração, âmbito dos backups e eliminação física a definir; proibir limpeza automática por simples conclusão/expiração comercial. | Eliminação definitiva e fecho de conta/tripulação. |
 | D06 | Conta inexistente, entrega e expiração de convite | Aprovado em 2026-11-10: entrega na aplicação após verificação do endereço, validade de 7 dias, um pendente por rali e endereço, e 10 novos convites por proprietário em 24 horas. | Flag desligada por omissão até à P06. |
-| D07 | Estado de tripulação e arquivo do rali | Proposta: archiveAt separado de DRAFT/COMPLETED; tripulação arquivada suspende novas alterações sem revogar leitura. Detalhes de reabertura a aprovar. | Arquivo/gestão do histórico além dos concluídos atuais. |
+| D07 | Estado de tripulação e arquivo do rali | Aprovado para P08 em 2026-11-10: só o proprietário arquiva ou restaura o rali. O arquivo bloqueia edição e sincronização remota, conserva a sessão local e mantém READ/PDF. Restaurar mantém o estado de trabalho anterior. | A aprovação cobre ralis. A decisão sobre arquivo de tripulações continua pendente. |
 | D08 | Consulta/exportação após expiração de subscrição | Preservar dados existentes e acesso de leitura autorizado; decidir quem paga novas criações, quotas, reativação e efeitos de contas suspensas. | Paywall/entitlements, nunca autorização básica. |
 | D09 | Caderno visível ao convidado e configuração visual | Aprovado em 2026-11-10: versão publicada explicitamente pelo proprietário com estilos mínimos e aviso se ainda não existir publicação. | Leitura/exportação coerente do caderno partilhado. |
 | D10 | Adoção de captura sem conta e registos locais antigos | Recuperação explícita com prova/contexto de posse e consentimento; casos ambíguos preservados/quarentenados. Não mudar dono pelo próximo login. | Adoção automática proibida; recuperação assistida/MVP offline público. |
@@ -99,7 +99,7 @@ Ciclo sugerido: registo → verificação de email → conta ativa; recuperaçã
 
 Criar primeira tripulação deve ser leve: nome e dados desportivos opcionais, com possibilidade de criar primeiro rali no mesmo percurso. Não criar uma segunda conta por cada dupla. D11 foi aprovada para novas tripulações: perfil associado próprio com recursos independentes, sem biblioteca global implícita. A transformação dos perfis/garagens legados continua reservada à P03; esta aprovação não reatribui dados antigos.
 
-**[PENDENTE D07]** Estado de tripulação não é estado do convite ou rali. Arquivar não significa apagar, expulsar leitores ou mover ralis de origem. Uma alteração de nome não deve alterar IDs nem confundir autoria histórica; datas e contexto da passagem podem ser conservados em snapshots de exportação.
+**[PENDENTE D07 PARA TRIPULAÇÕES]** Estado de tripulação é independente do estado do convite e do rali. A aprovação da P08 aplica-se ao arquivo de ralis. Uma alteração de nome não deve alterar IDs nem confundir autoria histórica; datas e contexto da passagem podem ser conservados em snapshots de exportação.
 
 ## 8. Modelo de propriedade
 
@@ -323,7 +323,8 @@ Não foi localizado um documento autónomo geral de arquitetura na pasta docs in
 | `GET /api/shared-rallies/{rallyId}/pecs/{pecId}/book-publication`, `PUT /api/pecs/{pecId}/book-publication` | Implementado na P04. Leitor obtém a publicação ou 204. Proprietário da tripulação gerida publica uma versão nova. |
 | Operações atuais `/api/pecs/{id}/...` e media | Preservar caminhos quando possível; resolver owner/grant/estado pelo recurso, não por equipa ativa enviada. |
 | `POST /api/offline-recces/sync` e upload de áudio | Owner autorizado no destino em cada fase; binding/idempotência/versionamento explícitos. |
-| Operações futuras de arquivo/transferência/eliminação | Apenas após D03–D05/D07, com reautenticação e contratos próprios; não incluir já num PATCH livre. |
+| `PUT/DELETE /api/rallies/{id}/archive` | P08. Arquivo reversível com sessão ativa, autorização do proprietário e confirmação contextual na aplicação. |
+| Operações futuras de transferência/eliminação | Após D03–D05, com reautenticação e contratos próprios. |
 
 Códigos e payloads finais serão definidos por feature. Princípios: 401 para autenticação, 403/404 conforme política consistente para acesso negado sem enumeração, conflito/estado antigo para transições inválidas, limites antiabuso explícitos. Não devolver detalhes de existência de recursos estrangeiros em erro.
 
@@ -555,6 +556,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** lista vazia, grant revogado com ecrã aberto, load parcial, guardar troca de contexto, desktop/móvel/teclado. **Testes de autorização:** filtros/contagens/rotas não revelam terceiros, alterações forçadas por API continuam negadas, perfis pessoais isolados. **Conclusão:** percursos owner/leitor/primeiro uso e recuperação disponíveis, acessibilidade/responsividade verificadas proporcionalmente; nenhuma permissão depende apenas do filtro da UI.
 
 ### UAC-P08 — Histórico, arquivo e persistência da leitura
+
+**Implementação:** [FEAT-025](../features/FEAT-025-historico-arquivo-ralis.md), **COMPLETED**. O histórico reúne os ralis autorizados por origem. Arquivo e restauração preservam o estado de trabalho e a concessão READ, e o servidor bloqueia novas escritas enquanto o rali estiver arquivado. TICKET_GATE **PASS** após verificações complementares. RELEASE_GATE **BLOCKED** pela baseline.
 
 **Objetivo/descrição:** concluir/arquivar não termina colaboração, com consulta do passado. **Pré-requisitos:** P04/P07, D07 aprovado; critérios de retenção não confundidos com arquivo.
 

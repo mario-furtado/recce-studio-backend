@@ -5,15 +5,20 @@ import org.example.repository.PecRepository;
 import org.example.repository.RallyRepository;
 import org.example.service.FileStorageService;
 import org.example.service.TeamProfileService;
+import org.example.service.CrewService;
+import org.example.service.RallyWriteGuard;
+import org.example.service.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.time.Clock;
 
 @RestController
 @RequestMapping("/api/rallies")
@@ -35,6 +40,10 @@ public class RallyController {
     @Autowired
     private TenantContext tenantContext;
 
+    @Autowired private CrewService crews;
+    @Autowired private RallyWriteGuard writes;
+    @Autowired private Clock clock;
+
     // 1. GET ALL
     @GetMapping
     public ResponseEntity<List<RallyEntity>> getAllRallies() {
@@ -49,6 +58,7 @@ public class RallyController {
     public ResponseEntity<RallyEntity> getRallyById(@PathVariable String id) {
         return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId())
                 .map(this::attachPecsCount)
+                .map(this::attachArchiveCapability)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -70,11 +80,13 @@ public class RallyController {
 
     // 4. PUT / PATCH (Atualizar Rali existente)
     @PutMapping("/{id}")
+    @Transactional
     public ResponseEntity<RallyEntity> updateRally(
             @PathVariable String id,
             @RequestBody RallyEntity updatedData) {
 
         return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(existingRally -> {
+            writes.requireWritable(existingRally);
             if ("COMPLETED".equalsIgnoreCase(existingRally.getStatus()) && hasNonStatusChanges(updatedData)) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar.");
             }
@@ -95,8 +107,44 @@ public class RallyController {
             syncSelectedCar(existingRally);
             RallyEntity saved = rallyRepository.save(existingRally);
             attachPecsCount(saved);
-            return ResponseEntity.ok(saved);
+            return ResponseEntity.ok(attachArchiveCapability(saved));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/archive")
+    @Transactional
+    public ResponseEntity<RallyEntity> archive(@PathVariable String id) {
+        return setArchive(id, true);
+    }
+
+    @DeleteMapping("/{id}/archive")
+    @Transactional
+    public ResponseEntity<RallyEntity> restore(@PathVariable String id) {
+        return setArchive(id, false);
+    }
+
+    private ResponseEntity<RallyEntity> setArchive(String id, boolean archive) {
+        String team = tenantContext.requireTeamProfileId();
+        RallyEntity rally = rallyRepository.findByIdAndTeamProfileId(id, team)
+                .orElseThrow(() -> new ResourceNotFoundException("Rali indisponível."));
+        crews.requireOwned(tenantContext.requireAccountId(), team);
+        writes.lock(rally);
+        if (!archive) rally.setArchivedAt(null);
+        else if (rally.getArchivedAt() == null) rally.setArchivedAt(clock.millis());
+        rally.setArchiveManageable(true);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(attachPecsCount(rally));
+    }
+
+    private RallyEntity attachArchiveCapability(RallyEntity rally) {
+        if (crews.enabled()) {
+            try {
+                crews.requireOwned(tenantContext.requireAccountId(), rally.getTeamProfileId());
+                rally.setArchiveManageable(true);
+            } catch (ResourceNotFoundException ignored) {
+                // Unmigrated teams retain their previous rally capabilities.
+            }
+        }
+        return rally;
     }
 
     private RallyEntity attachPecsCount(RallyEntity rally) {
@@ -131,8 +179,10 @@ public class RallyController {
     }
 
     @PostMapping("/{id}/logo")
+    @Transactional
     public ResponseEntity<RallyEntity> uploadLogo(@PathVariable String id, @RequestParam("file") MultipartFile file) {
         return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(rally -> {
+            writes.requireWritable(rally);
             if ("COMPLETED".equalsIgnoreCase(rally.getStatus())) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para alterar.");
             }
@@ -175,8 +225,10 @@ public class RallyController {
 
     // 5. DELETE
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<Void> deleteRally(@PathVariable String id) {
         return rallyRepository.findByIdAndTeamProfileId(id, tenantContext.requireTeamProfileId()).map(rally -> {
+            writes.requireWritable(rally);
             if ("COMPLETED".equalsIgnoreCase(rally.getStatus())) {
                 throw new IllegalStateException("Rali concluido. Volte a colocar em rascunho para eliminar.");
             }

@@ -31,7 +31,7 @@ class PecAssetServiceXmlSecurityAuditTest {
             String gpx = "<?xml version=\"1.0\"?>"
                     + "<!DOCTYPE gpx [<!ENTITY xxe SYSTEM \"" + externalFile.toUri() + "\">]>"
                     + "<gpx><metadata><name>&xxe;</name></metadata></gpx>";
-            PecAssetService service = new PecAssetService(null, null, new ObjectMapper(), null, null);
+            PecAssetService service = new PecAssetService(null, null, new ObjectMapper(), null, null, null);
             Method parseGpx = PecAssetService.class.getDeclaredMethod("parseGpx", java.io.InputStream.class);
             parseGpx.setAccessible(true);
 
@@ -128,7 +128,7 @@ class PecAssetServiceXmlSecurityAuditTest {
     }
 
     private List<?> parse(byte[] xml) throws Exception {
-        PecAssetService service = new PecAssetService(null, null, new ObjectMapper(), null, null);
+        PecAssetService service = new PecAssetService(null, null, new ObjectMapper(), null, null, null);
         Method parser = PecAssetService.class.getDeclaredMethod("parseGpx", java.io.InputStream.class);
         parser.setAccessible(true);
         return (List<?>) parser.invoke(service, new ByteArrayInputStream(xml));

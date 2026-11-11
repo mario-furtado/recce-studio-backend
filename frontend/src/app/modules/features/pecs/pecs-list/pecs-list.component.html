@@ -10,7 +10,7 @@
   <section aria-label="Pesquisa e filtros" class="filter-section">
     <div class="flex flex-wrap gap-3 items-end">
       <label class="management-field grow">Pesquisa<input aria-label="Pesquisar ralis" type="search" [(ngModel)]="searchTerm" placeholder="Nome ou localização" class="themed-input rounded-lg px-3 py-2" /></label>
-      <label class="management-field">Estado<select aria-label="Filtrar ralis por estado" [(ngModel)]="statusFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todos os estados</option><option value="ACTIVE">Ralis ativos</option><option value="COMPLETED">Ralis terminados</option></select></label>
+      <label class="management-field">Estado<select aria-label="Filtrar ralis por estado" [(ngModel)]="statusFilter" class="themed-input rounded-lg px-3 py-2"><option value="">Todos os estados</option><option value="ACTIVE">Ralis ativos</option><option value="COMPLETED">Ralis terminados</option><option value="ARCHIVED">Ralis arquivados</option></select></label>
       <button type="button" (click)="toggleFilters()" [attr.aria-expanded]="areFiltersOpen" aria-controls="rallyFilters" class="soft-button rounded-lg px-3 py-2">Filtros avançados<span *ngIf="activeFiltersCount"> · {{ activeFiltersCount }}</span></button>
       <button type="button" (click)="clearFilters()" class="soft-button rounded-lg px-3 py-2">Limpar filtros</button>
     </div>
@@ -176,14 +176,14 @@
       <article *ngFor="let rally of filteredRallies; trackBy: trackRallyId" class="interactive-card management-row glass-panel rounded-xl p-4" [attr.aria-label]="rally.name">
         <div class="management-logo rally-logo-tile flex items-center justify-center rounded-lg overflow-hidden" aria-hidden="true"><img *ngIf="getRallyLogoUrl(rally); else cardInitials" [src]="getRallyLogoUrl(rally)!" alt="" class="w-full h-full object-cover" /><ng-template #cardInitials>{{ getRallyInitials(rally.name) }}</ng-template></div>
         <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><h2 class="text-lg font-bold"><a [routerLink]="['/rally', rally.id]">{{ rally.name }}</a></h2><span class="text-sm text-slate-300">{{ rally.year }}</span><span class="status-badge" [class.status-badge-success]="rally.status === 'COMPLETED'" [class.status-badge-warning]="rally.status !== 'COMPLETED'">{{ rally.status === 'COMPLETED' ? 'Concluído' : 'Ativo' }}</span></div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><h2 class="text-lg font-bold"><a [routerLink]="['/rally', rally.id]">{{ rally.name }}</a></h2><span class="text-sm text-slate-300">{{ rally.year }}</span><span class="status-badge" [class.status-badge-success]="rally.status === 'COMPLETED'" [class.status-badge-warning]="rally.status !== 'COMPLETED'">{{ rally.archivedAt != null ? 'Arquivado' : rally.status === 'COMPLETED' ? 'Concluído' : 'Ativo' }}</span></div>
           <p class="text-sm text-slate-300">{{ rally.location }} · {{ rally.surface }}</p>
           <p class="text-sm text-slate-300 mt-1">{{ getCarName(rally.carId) || 'Sem carro associado' }}<span *ngIf="rally.carClass"> · {{ rally.carClass }}</span> · <strong>{{ getPecsCount(rally) }} PECs</strong></p>
         </div>
         <div class="management-actions flex flex-wrap items-center gap-2">
           <button type="button" (click)="viewRallyDetails(rally.id)" class="soft-button rounded-lg px-3 py-2">Ver Rali e PECs<span aria-hidden="true"> →</span></button>
-          <button type="button" (click)="openEditRallyForm(rally, $event)" [attr.aria-label]="'Editar ' + rally.name" class="soft-button rounded-lg px-3 py-2">Editar</button>
-          <button type="button" (click)="deleteRally(rally.id, rally.name, $event)" [attr.aria-label]="'Eliminar ' + rally.name" class="danger-button rounded-lg px-3 py-2">Eliminar</button>
+          <button type="button" *ngIf="rally.archivedAt == null" (click)="openEditRallyForm(rally, $event)" [attr.aria-label]="'Editar ' + rally.name" class="soft-button rounded-lg px-3 py-2">Editar</button>
+          <button type="button" *ngIf="rally.archivedAt == null" (click)="deleteRally(rally.id, rally.name, $event)" [attr.aria-label]="'Eliminar ' + rally.name" class="danger-button rounded-lg px-3 py-2">Eliminar</button>
         </div>
       </article>
     </div>

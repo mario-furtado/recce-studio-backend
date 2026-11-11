@@ -151,8 +151,10 @@ export class PecsListComponent implements OnInit, OnDestroy {
       const matchesClass = !this.classFilter || rally.carClass === this.classFilter;
       const matchesStatus =
         !this.statusFilter ||
-        (this.statusFilter === 'ACTIVE' && rally.status !== 'COMPLETED') ||
-        (this.statusFilter === 'COMPLETED' && rally.status === 'COMPLETED');
+        (this.statusFilter === 'ARCHIVED' && rally.archivedAt != null) ||
+        (rally.archivedAt == null && (
+          (this.statusFilter === 'ACTIVE' && rally.status !== 'COMPLETED') ||
+          (this.statusFilter === 'COMPLETED' && rally.status === 'COMPLETED')));
       return matchesSearch && matchesSurface && matchesYear && matchesCar && matchesClass && matchesStatus;
     });
   }
@@ -181,6 +183,7 @@ export class PecsListComponent implements OnInit, OnDestroy {
 
   openEditRallyForm(rally: Rally, event: Event): void {
     event.stopPropagation();
+    if (rally.archivedAt != null) return;
     if (!this.ensureOnlineAction()) return;
     this.editingRallyId = rally.id;
     this.rallyForm = {

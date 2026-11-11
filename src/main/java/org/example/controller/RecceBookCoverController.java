@@ -12,6 +12,7 @@ import org.example.repository.TeamProfileRepository;
 import org.example.repository.AuthUserRepository;
 import org.example.repository.RecceBookTemplateRepository;
 import org.example.service.RecceBookCoverValidator;
+import org.example.service.RallyWriteGuard;
 import org.example.service.ResourceNotFoundException;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -31,16 +32,19 @@ public class RecceBookCoverController {
     private final AuthUserRepository users;
     private final RecceBookTemplateRepository templates;
     private final org.example.service.BookPublicationService books;
-    public RecceBookCoverController(PecRepository pecs, TeamProfileRepository teams, TeamCarRepository cars, TenantContext tenant, ObjectMapper json, AuthUserRepository users, RecceBookTemplateRepository templates, org.example.service.BookPublicationService books) {
+    private final RallyWriteGuard writes;
+    public RecceBookCoverController(PecRepository pecs, TeamProfileRepository teams, TeamCarRepository cars, TenantContext tenant, ObjectMapper json, AuthUserRepository users, RecceBookTemplateRepository templates, org.example.service.BookPublicationService books, RallyWriteGuard writes) {
         this.pecs = pecs; this.teams = teams; this.cars = cars; this.tenant = tenant; this.json = json;
         this.users = users; this.templates = templates; this.books = books;
+        this.writes = writes;
     }
     private PecEntity require(String id) {
         return pecs.findByIdAndRallyTeamProfileId(id, tenant.requireTeamProfileId())
             .orElseThrow(() -> new ResourceNotFoundException("PEC não encontrada."));
     }
     private boolean editable(PecEntity pec) {
-        return !"COMPLETED".equalsIgnoreCase(pec.getStatus()) && !"COMPLETED".equalsIgnoreCase(pec.getRally().getStatus());
+        return pec.getRally().getArchivedAt() == null
+                && !"COMPLETED".equalsIgnoreCase(pec.getStatus()) && !"COMPLETED".equalsIgnoreCase(pec.getRally().getStatus());
     }
     @GetMapping
     @Transactional(readOnly = true)
@@ -49,6 +53,7 @@ public class RecceBookCoverController {
         ObjectNode response = json.createObjectNode();
         response.set("cover", pec.getRecceBookCover() == null ? initial(pec) : json.readTree(pec.getRecceBookCover()));
         response.put("editable", editable(pec));
+        response.put("archived", pec.getRally().getArchivedAt() != null);
         books.ownerRevision(pec).ifPresent(revision -> response.put("publicationRevision", revision));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
     }
@@ -56,6 +61,7 @@ public class RecceBookCoverController {
     @Transactional
     public ResponseEntity<JsonNode> save(@PathVariable String pecId, @RequestBody JsonNode value) {
         PecEntity pec = require(pecId);
+        writes.requireWritable(pec.getRally());
         if (!editable(pec)) throw new IllegalStateException("PEC ou rali concluído. Volta a rascunho para editar a capa.");
         RecceBookCoverValidator.validate(value);
         pec.setRecceBookCover(value.toString()); pecs.save(pec);

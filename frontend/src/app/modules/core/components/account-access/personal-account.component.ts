@@ -19,6 +19,7 @@ import { clearCrewContext, getCrewContext, hasStaleCrewContext } from '../../ser
     <div class="flex flex-wrap gap-3 mt-4">
       <a *ngIf="hasWorkspace || crewSelected" routerLink="/pecs" class="soft-button px-4 py-3 rounded-lg">Abrir os meus ralis</a>
       <a *ngIf="crewsEnabled" routerLink="/shared-rallies" class="soft-button px-4 py-3 rounded-lg">Ralis partilhados comigo</a>
+      <a *ngIf="crewsEnabled" routerLink="/rally-history" class="soft-button px-4 py-3 rounded-lg">Histórico de ralis</a>
     </div></ng-container>
     <div *ngIf="staleSelection" class="mt-4"><p role="alert">A sessão mudou. Limpa a seleção anterior ou escolhe uma tripulação.</p><button type="button" class="soft-button rounded-lg px-4 py-3 mt-2" (click)="clearSelection()">Limpar seleção anterior</button></div>
     <app-crew-manager *ngIf="loaded && crewsEnabled"></app-crew-manager>

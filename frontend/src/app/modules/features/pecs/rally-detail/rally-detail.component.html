@@ -8,10 +8,11 @@
       <header class="rally-identity flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
           <div class="management-logo rally-logo-tile flex items-center justify-center rounded-lg overflow-hidden" aria-hidden="true"><img *ngIf="rallyLogoUrl; else detailInitials" [src]="rallyLogoUrl" alt="" class="w-full h-full object-cover" /><ng-template #detailInitials>{{ rallyInitials }}</ng-template></div>
-          <div class="min-w-0"><div class="flex flex-wrap items-center gap-3"><h1 id="rally-title" class="text-2xl font-extrabold">{{ rally.name }} <span class="text-sm font-semibold text-slate-300">{{ rally.year }}</span></h1><span class="status-badge" [class.status-badge-success]="isCompleted" [class.status-badge-warning]="!isCompleted">{{ isCompleted ? 'Concluído' : 'Ativo' }}</span></div><p class="text-sm text-slate-300 mt-1">{{ rally.location }} · {{ rally.surface }}</p><p class="text-sm text-slate-300">{{ rallyCarName || 'Sem carro associado' }}<span *ngIf="rally.carClass"> · {{ rally.carClass }}</span></p></div>
+          <div class="min-w-0"><div class="flex flex-wrap items-center gap-3"><h1 id="rally-title" class="text-2xl font-extrabold">{{ rally.name }} <span class="text-sm font-semibold text-slate-300">{{ rally.year }}</span></h1><span class="status-badge" [class.status-badge-success]="isCompleted" [class.status-badge-warning]="!isCompleted">{{ isArchived ? 'Arquivado' : isCompleted ? 'Concluído' : 'Ativo' }}</span></div><p class="text-sm text-slate-300 mt-1">{{ rally.location }} · {{ rally.surface }}</p><p class="text-sm text-slate-300">{{ rallyCarName || 'Sem carro associado' }}<span *ngIf="rally.carClass"> · {{ rally.carClass }}</span></p></div>
         </div>
-        <button *ngIf="!isCompleted" type="button" (click)="confirmFinishRally()" class="soft-button rounded-lg px-3 py-2">Terminar Rali</button>
-        <button *ngIf="isCompleted" type="button" (click)="updateRallyStatus('DRAFT')" class="soft-button rounded-lg px-3 py-2">Voltar a Rascunho</button>
+        <button *ngIf="!isReadOnly" type="button" [disabled]="updatingArchive" (click)="confirmFinishRally()" class="soft-button rounded-lg px-3 py-2">Terminar Rali</button>
+        <button *ngIf="isCompleted && !isArchived" type="button" [disabled]="updatingArchive" (click)="updateRallyStatus('DRAFT')" class="soft-button rounded-lg px-3 py-2">Voltar a Rascunho</button>
+        <button *ngIf="rally.archiveManageable" type="button" (click)="changeArchive()" [disabled]="updatingArchive || !!editingPecId || showCreateModal" class="soft-button rounded-lg px-3 py-2">{{ isArchived ? "Restaurar rali" : "Arquivar rali" }}</button>
       </header>
       <dl class="management-metrics" aria-label="Métricas do rali"><div><dt>PECs</dt><dd>{{ rally.pecs.length }}</dd></div><div><dt>Distância total</dt><dd>{{ totalDistance.toFixed(1) }} <span>km</span></dd></div><div><dt>Notas</dt><dd>{{ totalNotes }}</dd></div></dl>
       <app-rally-invitations *ngIf="inviteRallyId && !demoPreview" [rallyId]="inviteRallyId" />
@@ -19,10 +20,10 @@
     </section>
     <section aria-labelledby="pecs-title">
       <div class="pec-toolbar flex flex-wrap items-center justify-between gap-3 mb-3">
-        <div><h2 id="pecs-title" class="text-lg font-bold">Troços do Rali (PECs)</h2><p *ngIf="isCompleted" class="text-sm text-slate-300">Rali concluído · consulta disponível.</p></div>
-        <div class="flex flex-wrap items-end gap-3"><label class="management-field pec-search">Pesquisa<input aria-label="Pesquisar PECs" type="search" [(ngModel)]="searchTerm" placeholder="Número ou nome da PEC" class="themed-input rounded-lg px-3 py-2" /></label><button type="button" (click)="openCreateModal()" [disabled]="isCompleted" class="accent-button rounded-lg px-4 py-2 disabled:opacity-50">Adicionar Nova PEC</button></div>
+        <div><h2 id="pecs-title" class="text-lg font-bold">Troços do Rali (PECs)</h2><p *ngIf="isReadOnly" class="text-sm text-slate-300">Rali {{ isArchived ? "arquivado" : "concluído" }} · consulta disponível.</p></div>
+        <div class="flex flex-wrap items-end gap-3"><label class="management-field pec-search">Pesquisa<input aria-label="Pesquisar PECs" type="search" [(ngModel)]="searchTerm" placeholder="Número ou nome da PEC" class="themed-input rounded-lg px-3 py-2" /></label><button type="button" (click)="openCreateModal()" [disabled]="isReadOnly || updatingArchive" class="accent-button rounded-lg px-4 py-2 disabled:opacity-50">Adicionar Nova PEC</button></div>
       </div>
-      <div *ngIf="!rally.pecs.length" class="management-empty glass-panel rounded-xl p-5"><h3 class="font-bold">Este rali ainda não tem PECs</h3><p class="text-sm text-slate-300 mt-1">{{ isCompleted ? 'Volta a rascunho para gerir os troços.' : 'Usa Adicionar Nova PEC para criar o primeiro troço.' }}</p></div>
+      <div *ngIf="!rally.pecs.length" class="management-empty glass-panel rounded-xl p-5"><h3 class="font-bold">Este rali ainda não tem PECs</h3><p class="text-sm text-slate-300 mt-1">{{ isArchived ? 'Restaura o rali para voltar a gerir os troços.' : isCompleted ? 'Volta a rascunho para gerir os troços.' : 'Usa Adicionar Nova PEC para criar o primeiro troço.' }}</p></div>
       <div *ngIf="rally.pecs.length && !filteredPecs.length" class="management-empty glass-panel rounded-xl p-5"><h3 class="font-bold">Nenhuma PEC corresponde à pesquisa</h3><button type="button" (click)="searchTerm = ''" class="soft-button rounded-lg px-3 py-2 mt-3">Limpar pesquisa</button></div>
       <div class="management-list pec-grid">
         <article *ngFor="let pec of filteredPecs" class="interactive-card pec-card glass-panel rounded-xl p-4" [attr.aria-label]="pec.name">
@@ -38,9 +39,9 @@
             </ng-template>
           </div>
           <div class="pec-actions">
-            <a *ngIf="editingPecId !== pec.id" [routerLink]="['/recce', pec.id]" class="accent-button rounded-lg px-3 py-2">{{ pec.status === 'DRAFT' ? 'Continuar reconhecimento' : 'Abrir Studio' }}</a>
-            <button *ngIf="!isCompleted && pec.status !== 'COMPLETED'" type="button" (click)="startEditPec(pec, $event)" [attr.aria-label]="'Editar ' + pec.name" title="Editar PEC" class="pec-secondary soft-button rounded-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16zM13 7l4 4" /></svg></button>
-            <button *ngIf="!isCompleted" type="button" (click)="deletePec(pec.id, pec.name, $event)" [attr.aria-label]="'Eliminar ' + pec.name" title="Eliminar PEC" class="pec-secondary danger-button rounded-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg></button>
+            <a *ngIf="editingPecId !== pec.id" [routerLink]="['/recce', pec.id]" class="accent-button rounded-lg px-3 py-2">{{ isArchived ? 'Consultar PEC' : pec.status === 'DRAFT' ? 'Continuar reconhecimento' : 'Abrir Studio' }}</a>
+            <button *ngIf="!isReadOnly && pec.status !== 'COMPLETED'" type="button" (click)="startEditPec(pec, $event)" [attr.aria-label]="'Editar ' + pec.name" title="Editar PEC" class="pec-secondary soft-button rounded-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 20h4l11-11-4-4L4 16zM13 7l4 4" /></svg></button>
+            <button *ngIf="!isReadOnly" type="button" (click)="deletePec(pec.id, pec.name, $event)" [attr.aria-label]="'Eliminar ' + pec.name" title="Eliminar PEC" class="pec-secondary danger-button rounded-lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" /></svg></button>
           </div>
         </article>
       </div>

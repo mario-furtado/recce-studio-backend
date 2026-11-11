@@ -88,14 +88,14 @@ export class PecDetailComponent implements OnInit {
       if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.discardDrafts(); this.setMode(mode); } }); return; }
       if (!allowed) return;
     }
-    if (this.pec.status === 'COMPLETED' && mode === 'RECONNAISSANCE') {
+    if ((this.pec.rallyArchived || this.pec.status === 'COMPLETED') && mode === 'RECONNAISSANCE') {
       return;
     }
     this.currentMode = mode;
   }
 
   updateStatus(status: 'COMPLETED' | 'DRAFT'): void {
-    if (this.isLoadingPec || this.pecUnavailable || !this.pecId) return;
+    if (this.isLoadingPec || this.pecUnavailable || !this.pecId || this.pec.rallyArchived) return;
     const allowed = this.canDeactivate();
     if (allowed instanceof Promise) { void allowed.then(ok => { if (ok) { this.studio?.discardDrafts(); this.updateStatus(status); } }); return; }
     if (!allowed) return;
@@ -115,7 +115,7 @@ export class PecDetailComponent implements OnInit {
   }
 
   startEditPec(): void {
-    if (this.pec.status === 'COMPLETED') return;
+    if (this.pec.rallyArchived || this.pec.status === 'COMPLETED') return;
     this.pecDraft = {
       number: this.pec.number || 1,
       name: this.pec.name || '',
@@ -129,7 +129,7 @@ export class PecDetailComponent implements OnInit {
   }
 
   savePecDetails(): void {
-    if (this.isLoadingPec || this.pecUnavailable || !this.pecId) return;
+    if (this.isLoadingPec || this.pecUnavailable || !this.pecId || this.pec.rallyArchived) return;
     if (!this.pecDraft.name.trim()) {
       this.shared.error('Nome obrigatorio', 'A PEC precisa de um nome.');
       return;

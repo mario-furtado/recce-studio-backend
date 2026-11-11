@@ -22,14 +22,16 @@ public class BookPublicationService {
     private final CrewService crews;
     private final TenantContext tenant;
     private final ObjectMapper json;
+    private final RallyWriteGuard writes;
 
     public BookPublicationService(BookPublicationRepository publications, PecRepository pecs,
-                                  CrewService crews, TenantContext tenant, ObjectMapper json) {
+                                  CrewService crews, TenantContext tenant, ObjectMapper json, RallyWriteGuard writes) {
         this.publications = publications;
         this.pecs = pecs;
         this.crews = crews;
         this.tenant = tenant;
         this.json = json;
+        this.writes = writes;
     }
 
     @Transactional(readOnly = true)
@@ -47,6 +49,8 @@ public class BookPublicationService {
     @Transactional
     public long publish(String pecId, JsonNode snapshot) {
         String team = requireOwner();
+        PecEntity owned = pecs.findByIdAndRallyTeamProfileId(pecId, team).orElseThrow(BookPublicationService::missingPec);
+        writes.requireWritable(owned.getRally());
         PecEntity pec = pecs.lockOwnedPec(pecId, team).orElseThrow(BookPublicationService::missingPec);
         validate(snapshot);
         BookPublicationEntity publication = publications.findById(pecId).orElseGet(() -> new BookPublicationEntity(pec));

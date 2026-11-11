@@ -2,6 +2,10 @@ package org.example.dto;
 
 public class PecOverviewDTO {
     private double recceVideoOffsetSeconds;
+    private boolean rallyArchived;
+
+    public boolean isRallyArchived() { return rallyArchived; }
+    public void setRallyArchived(boolean rallyArchived) { this.rallyArchived = rallyArchived; }
 
     public double getRecceVideoOffsetSeconds() { return recceVideoOffsetSeconds; }
     public void setRecceVideoOffsetSeconds(double value) { recceVideoOffsetSeconds = value; }

@@ -32,6 +32,7 @@ export class RecceBookComponent implements OnChanges, OnDestroy {
   publicationError = '';
   publicationStatus = '';
   private publicationReady = false;
+  archived = false;
   constructor(private http: HttpClient) {}
   ngOnChanges(changes: SimpleChanges) { if (changes['pecId'] || changes['personal']) this.load(); }
   get endpoint() { return this.personal ? `${API_BASE_URL}/api/reccebook-template` : `${API_BASE_URL}/api/pecs/${encodeURIComponent(this.pecId)}/reccebook-cover`; }
@@ -44,12 +45,14 @@ export class RecceBookComponent implements OnChanges, OnDestroy {
     this.request?.unsubscribe(); this.loaded = false; this.editable = false; this.editing = false; this.error = ''; this.saving = false;
     this.publicationRequest?.unsubscribe(); this.revision = null; this.publishing = false; this.publicationError = ''; this.publicationStatus = '';
     this.publicationReady = false;
+    this.archived = false;
     this.cover = defaultBookCover(); this.draft = defaultBookCover();
     if (!this.personal && !this.pecId) return;
-    this.request = this.http.get<{ cover: BookCover; editable: boolean; publicationRevision?: number }>(this.endpoint).subscribe({
+    this.request = this.http.get<{ cover: BookCover; editable: boolean; archived?: boolean; publicationRevision?: number }>(this.endpoint).subscribe({
       next: value => {
         if (coverError(value.cover)) { this.error = 'A configuração da capa não é válida. Tenta carregar novamente.'; return; }
         this.cover = value.cover; this.draft = structuredClone(value.cover); this.editable = value.editable; this.loaded = true;
+        this.archived = value.archived === true;
         if (!this.personal) this.revision = value.publicationRevision ?? null;
       },
       error: () => { this.error = 'Não foi possível carregar a capa. Tenta novamente antes de guardar ou exportar.'; },
@@ -74,7 +77,7 @@ export class RecceBookComponent implements OnChanges, OnDestroy {
     this.publicationReady = !!this.preview && !this.preview.pending && !this.preview.error;
   }
 
-  get canPublish() { return this.revision !== null && this.publicationReady && !this.publishing && !this.editing && this.active; }
+  get canPublish() { return !this.archived && this.revision !== null && this.publicationReady && !this.publishing && !this.editing && this.active; }
 
   publish() {
     if (!this.canPublish) return;

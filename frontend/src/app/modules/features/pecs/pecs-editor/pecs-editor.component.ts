@@ -48,6 +48,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   @Input() pecId: string = '';
   @Input() pecName: string = '';
   @Input() pecStatus: string = 'DRAFT';
+  @Input() rallyArchived = false;
 
   pecTitle: string = 'PEC Studio';
   targetMissing = false;
@@ -150,7 +151,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       `recce_timestamps_${this.pecId}`,
     );
 
-    if (localRecceData) {
+    if (localRecceData && !this.rallyArchived) {
       try {
         this.syncRecceMarkersToBackend(JSON.parse(localRecceData));
       } catch (e) {
@@ -174,7 +175,7 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
   }
 
   get isLocked(): boolean {
-    return !this.pecId || this.targetMissing || this.pecStatus === 'COMPLETED';
+    return !this.pecId || this.targetMissing || this.rallyArchived || this.pecStatus === 'COMPLETED';
   }
 
   async syncRecceMarkersToBackend(markers: any[]): Promise<void> {

@@ -31,9 +31,17 @@ export interface Rally {
   carClass?: string;
   pecsCount?: number;
   status?: 'DRAFT' | 'COMPLETED';
+  archivedAt?: number | null;
+  archiveManageable?: boolean;
   startDate?: string;
   isExpanded?: boolean;
   pecs?: Pec[];
+}
+
+export type RallySummary = Pick<Rally, 'id' | 'name' | 'surface' | 'status' | 'archivedAt'>;
+
+export function rallyStateLabel(rally: RallySummary): string {
+  return rally.archivedAt != null ? 'Arquivado' : rally.status === 'COMPLETED' ? 'Concluído' : 'Em preparação';
 }
 
 export interface Note {
@@ -60,5 +68,7 @@ export interface RallyDetail {
   carClass?: string;
   pecsCount?: number;
   status?: 'DRAFT' | 'COMPLETED';
+  archivedAt?: number | null;
+  archiveManageable?: boolean;
   pecs: Pec[];
 }

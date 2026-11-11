@@ -29,6 +29,7 @@ export const routes: Routes = [
         path, loadComponent: () => import('./modules/features/pecs/shared-rallies/shared-rallies.component').then(m => m.SharedRalliesComponent),
         data: { sharedRallies: true },
       })),
+      { path: 'rally-history', loadComponent: () => import('./modules/features/pecs/rally-history.component').then(m => m.RallyHistoryComponent) },
       { path: '', redirectTo: 'pecs', pathMatch: 'full' },
       { path: 'pecs', loadComponent: () => import('./modules/features/pecs/pecs-list/pecs-list.component').then(m => m.PecsListComponent), canDeactivate: [recceExitGuard] },
       { path: 'new-recce', loadComponent: () => import('./modules/features/recce-mode/new-recce.component').then(m => m.NewRecceComponent) },
