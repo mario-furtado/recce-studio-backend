@@ -161,9 +161,9 @@ public class RallyInvitationService {
     }
 
     private RallyEntity ownedRally(String actor, String id, boolean lock) {
-        RallyEntity rally = rallies.findById(id).orElseThrow(RallyInvitationService::missing);
+        RallyEntity rally = (lock ? rallies.lockById(id) : rallies.findById(id)).orElseThrow(RallyInvitationService::missing);
         crews.requireOwned(actor, rally.getTeamProfileId());
-        return lock ? rallies.lockById(id).orElseThrow(RallyInvitationService::missing) : rally;
+        return rally;
     }
 
     private RallyInvitationEntity receivedOne(String id, AuthUserEntity recipient, long now) {

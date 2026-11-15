@@ -68,12 +68,12 @@ Pessoa é o indivíduo referido funcionalmente; conta é a identidade autenticad
 | --- | --- | --- | --- |
 | D01 | Partilha por tripulação ou por rali? | Aprovado em 2026-11-10: por rali, apenas o rali concedido. | P04 usa concessões de teste. |
 | D02 | Quem fica proprietário de cada equipa legada? | Processo aprovado para UAC-P03: manifesto explícito por IDs, bloquear equipas com dono/membros ambíguos e ensaiar isoladamente. Não escolher pela ordem de IDs, nomes ou primeiro login; sem conversão da beta nesta tarefa. | Cada mapeamento real e cutover continuam a exigir aprovação do responsável; membros adicionais sem política aprovada bloqueiam o contexto. |
-| D03 | Saída, desativação e eliminação da conta do proprietário | Separar bloqueio de autenticação, gestão, consulta e eliminação de dados. Recomenda-se congelar escrita pendente de sucessão, sem promoção automática de convidado. | Autosserviço de encerramento/transferência e política de continuidade. |
-| D04 | Transferência de propriedade | Transferência explícita para conta verificada, aceite pelo destinatário, preservando IDs; alternativa adiar e usar suporte controlado. | Feature de transferência e cenários de sucessão. |
-| D05 | Retenção, período de recuperação e exportação | Duração, âmbito dos backups e eliminação física a definir; proibir limpeza automática por simples conclusão/expiração comercial. | Eliminação definitiva e fecho de conta/tripulação. |
+| D03 | Saída, desativação e eliminação da conta do proprietário | Aprovado em 2026-11-11. A desativação revoga sessões e bloqueia novas alterações. Mantém as concessões de leitura já atribuídas. O titular pode reativar após comprovar a identidade. | O fecho definitivo depende de D05. |
+| D04 | Transferência de propriedade | Aprovado em 2026-11-11. Pedido e aceitação explícitos na aplicação, com reautenticação de ambas as contas e destinatário com email verificado. Mantêm-se IDs, recursos e concessões READ. O antigo proprietário perde a gestão. | A ativação depende da validação da FEAT-027. |
+| D05 | Retenção, período de recuperação e exportação | Aprovado em 2026-11-11. Exportação pelo titular e 30 dias para recuperação no fluxo de eliminação. Eliminação definitiva assistida após resolver dependências e comprovar restauro, incluindo media. Sem limpeza automática de backups. | Fecho definitivo e verificação do P10-AC3. |
 | D06 | Conta inexistente, entrega e expiração de convite | Aprovado em 2026-11-10: entrega na aplicação após verificação do endereço, validade de 7 dias, um pendente por rali e endereço, e 10 novos convites por proprietário em 24 horas. | Flag desligada por omissão até à P06. |
 | D07 | Estado de tripulação e arquivo do rali | Aprovado para P08 em 2026-11-10: só o proprietário arquiva ou restaura o rali. O arquivo bloqueia edição e sincronização remota, conserva a sessão local e mantém READ/PDF. Restaurar mantém o estado de trabalho anterior. | A aprovação cobre ralis. A decisão sobre arquivo de tripulações continua pendente. |
-| D08 | Consulta/exportação após expiração de subscrição | Preservar dados existentes e acesso de leitura autorizado; decidir quem paga novas criações, quotas, reativação e efeitos de contas suspensas. | Paywall/entitlements, nunca autorização básica. |
+| D08 | Consulta/exportação após expiração de subscrição | Aprovada para o piloto em 2026-11-11. Após expiração simulada, proprietário e leitor autorizado mantêm consulta e exportação já permitidas. Uma revogação mantém-se. | Política comercial real, quotas e novas criações continuam por definir. |
 | D09 | Caderno visível ao convidado e configuração visual | Aprovado em 2026-11-10: versão publicada explicitamente pelo proprietário com estilos mínimos e aviso se ainda não existir publicação. | Leitura/exportação coerente do caderno partilhado. |
 | D10 | Adoção de captura sem conta e registos locais antigos | Recuperação explícita com prova/contexto de posse e consentimento; casos ambíguos preservados/quarentenados. Não mudar dono pelo próximo login. | Adoção automática proibida; recuperação assistida/MVP offline público. |
 | D11 | Uso de viaturas/imagens/sistema base entre várias tripulações | Aprovado para UAC-P02 em 2026-11-02: recursos próprios por nova tripulação, sem partilha ou cópia automática; sem biblioteca global implícita. | Migração do perfil/garagem legado continua reservada a P03; aprovação não reatribui dados antigos. |
@@ -110,10 +110,10 @@ Notas, media, GPS, capas específicas e configuração visual publicada pertence
 | Evento | Regra confirmada ou proposta |
 | --- | --- |
 | Dupla deixa de colaborar | Não há perda automática de acesso por mudar nome de piloto ou concluir evento. Proprietário pode revogar; motivo e evento registados. |
-| Proprietário desativa conta | [PENDENTE D03] Sem autenticação desse utilizador. Recomenda-se preservar dados, congelar novas escritas e manter consulta dos concessores válidos conforme política de conta, sem promoção de leitores. |
-| Proprietário pede eliminação da conta | [PENDENTE D03/D05] Não executar cascata. Exigir resolver propriedade/retensão de cada tripulação; alternativa encerramento gerido com aviso e exportação. |
-| Transferência | [PENDENTE D04] Proposta de pedido e aceitação com reautenticação; um dono antes/depois, transação e histórico. Convite de leitura não serve de transferência. |
-| Rali/PEC apagados | [PENDENTE D05] Permissão de proprietário, confirmação e política de retenção explícita. Leitor perde consulta do recurso eliminado; grant não ressuscita dados. |
+| Proprietário desativa conta | [D03 APROVADA] Revogar sessão, bloquear novas escritas, preservar dados e consulta por leitores autorizados. Reativação após comprovar identidade. |
+| Proprietário pede eliminação da conta | [D05 APROVADA, ENTREGA PENDENTE] Exportação pelo titular, 30 dias de recuperação e eliminação assistida após resolução das dependências e ensaio de restauro. |
+| Transferência | [D04 APROVADA] Pedido e aceitação com reautenticação, um proprietário antes e depois, transação e histórico. Convite de leitura não serve de transferência. |
+| Rali/PEC apagados | [IMPLEMENTAÇÃO DE D05 PENDENTE] Permissão de proprietário, confirmação e política de retenção explícita. Leitor perde consulta do recurso eliminado; grant não ressuscita dados. |
 | Modelo pessoal apagado | Não deve eliminar snapshot partilhado já publicado nem notas da tripulação. Snapshot não passa a revelar outras preferências pessoais. |
 
 Não confundir autoria operacional, controlo de acesso e titularidade jurídica dos conteúdos. Este documento define controlo funcional proposto; condições de utilização e responsabilidades sobre gravações/dados pessoais exigem decisões próprias, sem prazo legal inventado.
@@ -242,7 +242,7 @@ Logout A → login B → B não vê/adota dados de A → login A permite retomar
 
 ### J08 — Sessão/compra expirada e proprietário indisponível
 
-Sessão de autenticação expira → reautenticar → revalidar recurso, sem perder gravação local. Direito comercial expira → consulta/exportação existentes mantidas segundo D08, novas escritas podem ser bloqueadas com causa clara. Conta do proprietário desativada/eliminada é outro processo: D03/D04/D05 determinam congelamento/sucessão, sem promover automaticamente leitor ou apagar todo histórico. Este último percurso não é considerado fechado enquanto essas decisões estiverem pendentes.
+Sessão de autenticação expira → reautenticar → revalidar recurso, sem perder gravação local. Direito comercial expira → consulta/exportação existentes mantidas segundo D08, novas escritas podem ser bloqueadas com causa clara. A desativação e a eliminação da conta seguem D03/D04/D05. O percurso de eliminação aguarda implementação e prova de restauro representativa.
 
 ### J09 — Migrar equipa antiga
 
@@ -569,6 +569,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 
 ### UAC-P09 — Identidades e destinos offline
 
+**Implementação:** [FEAT-026](../features/FEAT-026-identidades-destinos-offline.md), **COMPLETED**. A captura autenticada fica vinculada à conta e à tripulação. A repetição conserva o destino e revalida o recibo antes do áudio. O IndexedDB preserva gravações legadas sem atribuição automática. A recuperação assistida continua condicionada à D10. TICKET_GATE **PASS** após verificações complementares. RELEASE_GATE **BLOCKED** pela baseline.
+
 **Objetivo/descrição:** preservar reconhecimento e enviar só para contexto legítimo numa conta multi-tripulação. **Pré-requisitos:** P01/P02/P03; D10 para adoção sem conta, upgrade local/versionamento e contratos de recibos.
 
 - **P09-AC1 — Given** sessão própria vinculada a A, **When** troca para B ou outro utilizador entra, **Then** sessão/Blob não mudam de dono/destino e outro utilizador não lê, altera, envia nem elimina.
@@ -580,6 +582,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 
 ### UAC-P10 — Transferência, encerramento e retenção
 
+**Entrega:** [FEAT-027](../features/FEAT-027-transferencia-encerramento-retencao.md). Desativação, reativação e transferência implementadas e verificadas nos percursos dirigidos. P10 bloqueada até à implementação da exportação, da janela de recuperação e do fecho definitivo assistido.
+
 **Objetivo/descrição:** gerir fim de colaboração/conta sem órfãos ou eliminação inesperada. **Pré-requisitos:** P03/P06/P08; D03/D04/D05 aprovadas, inventário de dependentes e capacidade de restauro.
 
 - **P10-AC1 — Given** transferência aprovada por ambas as contas e reautenticação válida, **When** conclui, **Then** existe um único owner e recursos mantêm IDs/proveniência; não se copiam projetos para novo dono.
@@ -589,6 +593,8 @@ Todos os critérios seguintes são **planeados, não executados**. Given/When/Th
 **Erros/limites:** novo dono não aceita/perde conta, convite pendente antigo, alteração simultânea, múltiplas crews, pedidos repetidos, backups e escritas posteriores ao backup. **Testes de autorização:** só owner solicita transferência/eliminação, destinatário confirma só pedido próprio, ex-owner perde poderes conforme contrato, leitor não se autopromove; rollback não restaura owner/grants antigos. **Conclusão:** critérios testáveis baseados em política aprovada, restauro/cascatas reais ensaiados e comunicação dos limites de ficheiros descarregados; sem decisão não lançar fecho definitivo.
 
 ### UAC-P11 — Hipóteses comerciais e habilitações futuras
+
+**Piloto:** [FEAT-028](../features/FEAT-028-validacao-hipoteses-comerciais.md). [Simulador local](prototypes/p11-commercial-preview.html) para sessões moderadas com cenários fictícios. As conclusões comerciais dependem dos resultados agregados das sessões.
 
 **Objetivo/descrição:** validar compra por rali versus anual sem confundir colaboração com pagamento. **Pré-requisitos:** D08, métricas/consentimentos aplicáveis e produto de identidade/acesso estabilizado. Primeiro entregável pode ser apenas experiência de produto sem transações.
 

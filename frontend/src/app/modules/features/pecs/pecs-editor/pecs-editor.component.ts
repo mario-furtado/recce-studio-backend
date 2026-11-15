@@ -1,3 +1,4 @@
+import { offlineTransferError, sendOfflineAudio, sendOfflineNotes } from '../../../core/services/offline-recce-transfer';
 import {
   Component,
   ViewChild,
@@ -11,7 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { firstValueFrom, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { Note } from '../../../core/models/rally';
 import { ClickMarker } from '../../../core/services/tracking.service';
 import {
@@ -147,17 +148,8 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     this.pecTitle = this.pecName || `PEC ${this.pecId}`;
     this.loadNotebook();
 
-    const localRecceData = localStorage.getItem(
-      `recce_timestamps_${this.pecId}`,
-    );
-
-    if (localRecceData && !this.rallyArchived) {
-      try {
-        this.syncRecceMarkersToBackend(JSON.parse(localRecceData));
-      } catch (e) {
-        console.error('Erro ao ler dados do Recce do LocalStorage:', e);
-        this.loadNotesFromDatabase();
-      }
+    if (localStorage.getItem(`recce_session_id_${this.pecId}`) && !this.isLocked) {
+      void this.syncRecceMarkersToBackend();
     } else {
       this.loadNotesFromDatabase();
     }
@@ -178,63 +170,45 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
     return !this.pecId || this.targetMissing || this.rallyArchived || this.pecStatus === 'COMPLETED';
   }
 
-  async syncRecceMarkersToBackend(markers: any[]): Promise<void> {
-    const sessionId = localStorage.getItem(`recce_session_id_${this.pecId}`);
+  async syncRecceMarkersToBackend(_cachedMarkers?: unknown): Promise<void> {
+    const pecId = this.pecId;
+    const key = `recce_session_id_${pecId}`;
+    const sessionId = localStorage.getItem(key);
     const session = sessionId ? await this.offlineStore.getSession(sessionId).catch(() => null) : null;
-    if (!sessionId || !session || !this.offlineStore.canAccessSession(session) || session.pecId !== this.pecId) {
+    if (this.isLocked || !session || session.pecId !== pecId || !this.offlineStore.canAccessSession(session)) {
       this.loadNotesFromDatabase();
       return;
     }
-    markers = session.markers;
-    const gpsTrack = session.gpsTrack || [];
-
-    this.pecService.syncOfflineRecce({
-      sessionId: session.id,
-      deviceId: localStorage.getItem('recce_device_id') || 'browser',
-      userEmail: session.userEmail,
-      temporaryName: this.pecName || this.pecTitle,
-      pecId: this.pecId,
-      createdAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      notesCount: markers.length,
-      durationSeconds: markers[markers.length - 1]?.timestamp || 0,
-      markers,
-      gpsTrack,
-    }).subscribe({
-      next: async () => {
-        if (!this.offlineStore.canAccessSession(session)) return;
-        const audioUploaded = await this.uploadStoredAudioForSession(sessionId);
-        if (!this.offlineStore.canAccessSession(session)) return;
-        if (!audioUploaded) {
-          this.shared.error(
-            'Notas sincronizadas, mas audio falhou',
-            'O reconhecimento fica guardado localmente para tentares novamente.',
-          );
-        } else {
-          if (localStorage.getItem(`recce_session_id_${this.pecId}`) === sessionId) {
-            localStorage.removeItem(`recce_timestamps_${this.pecId}`);
-            localStorage.removeItem(`recce_gps_track_${this.pecId}`);
-            localStorage.removeItem(`recce_session_id_${this.pecId}`);
+    const target = { pecId };
+    try {
+      const token = this.offlineStore.requireSyncContext(session);
+      await this.offlineStore.runSessionSync(session.id, async current => {
+        try {
+          const receipt = await sendOfflineNotes(this.offlineStore, this.pecService, current, target, token);
+          if (!await sendOfflineAudio(this.offlineStore, this.pecService, current, receipt, token)) {
+            throw new Error('Áudio em falta ou indisponível.');
           }
-          await this.offlineStore.deleteSession(sessionId).catch(() => undefined);
+          this.offlineStore.requireSyncContext(current, token);
+          await this.offlineStore.deleteSession(session.id, { session: current, token });
+          if (localStorage.getItem(key) === sessionId) {
+            localStorage.removeItem(key);
+            localStorage.removeItem(`recce_timestamps_${pecId}`);
+            localStorage.removeItem(`recce_gps_track_${pecId}`);
+          }
+          this.loadAssets();
+          this.loadGpsTrack();
+          this.loadRecceMarkers();
+        } catch (error) {
+          await this.offlineStore.markSessionReadyToSync(session.id, offlineTransferError(error), current);
+          if (this.offlineStore.canAccessSession(session)) {
+            this.shared.error('Reconhecimento guardado offline', 'Podes repetir a sincronização na lista de reconhecimentos offline.');
+          }
         }
-        this.loadNotesFromDatabase();
-        this.loadAssets();
-        this.loadGpsTrack();
-        this.loadRecceMarkers();
-      },
-      error: (err: any) => {
-        if (!this.offlineStore.canAccessSession(session)) return;
-        console.error('Erro ao sincronizar timestamps do recce:', err);
-        this.notes = markers.map((m, idx) => ({
-          id: `local-${Date.now()}-${idx}`,
-          originalTimestamp: m.timestamp,
-          text: m.text || `Nota Marcada ${idx + 1}`,
-          speedRating: m.speedRating || m.rawText || '',
-        }));
-        this.hasNotes = true;
-      },
-    });
+      }, target);
+    } catch (error) {
+      if (this.offlineStore.canAccessSession(session)) this.shared.error('Reconhecimento guardado offline', offlineTransferError(error));
+    }
+    if (this.offlineStore.canAccessSession(session)) this.loadNotesFromDatabase();
   }
 
   loadNotesFromDatabase(): void {
@@ -825,38 +799,6 @@ export class PecsEditorComponent implements OnInit, OnDestroy {
       URL.revokeObjectURL(this.audioSrc);
       this.audioSrc = '';
     }
-  }
-
-  private async uploadStoredAudioForSession(sessionId: string): Promise<boolean> {
-    const session = await this.offlineStore.getSession(sessionId).catch(() => null);
-    if (!session || !this.offlineStore.canAccessSession(session)) return false;
-    if (!session.audioBlobId) return true;
-
-    const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
-    if (!audioBlob || !this.offlineStore.canAccessSession(session)) return false;
-
-    try {
-      await firstValueFrom(
-        this.pecService.uploadAudio(
-          this.pecId,
-          audioBlob,
-          this.audioFileNameFromMime(session.audioMimeType || audioBlob.type),
-        ),
-      );
-      return true;
-    } catch (error) {
-      console.error('Erro ao enviar audio do reconhecimento:', error);
-      return false;
-    }
-  }
-
-  private audioFileNameFromMime(mimeType?: string): string {
-    const normalized = (mimeType || '').toLowerCase();
-    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
-    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
-    if (normalized.includes('ogg')) return 'recce-audio.ogg';
-    if (normalized.includes('wav')) return 'recce-audio.wav';
-    return 'recce-audio.webm';
   }
 
 }

@@ -46,4 +46,32 @@ describe('FEAT-019 crew manager', () => {
       view.name = 'Old form'; view.create(); http.expectNone(r => r.method === 'POST');
     } finally { if (token === null) localStorage.removeItem('recce_auth_token'); else localStorage.setItem('recce_auth_token', token); fixture.destroy(); }
   });
+  it('requires reauthentication to accept a transfer and refreshes the owned crews after success', () => {
+    const fixture = TestBed.createComponent(CrewManagerComponent);
+    const view = fixture.componentInstance;
+    view.transfersEnabled = true;
+    fixture.detectChanges();
+    http.expectOne(`${API_BASE_URL}/api/crews`).flush([]);
+    const inbox = `${API_BASE_URL}/api/crews/transfers?page=0`;
+    http.expectOne(inbox).flush([{ id: 'received', crewName: 'Equipa de ensaio', expiresAt: 1800000000000 }]);
+    fixture.detectChanges();
+    const accept = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .find(button => button.textContent?.trim() === 'Aceitar transferência');
+    accept!.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('input[autocomplete="current-password"]')).not.toBeNull();
+    view.submitTransfer();
+    http.expectNone(request => request.method === 'POST');
+    view.transferPassword = 'fixture-password';
+    view.submitTransfer();
+    const decision = http.expectOne(`${API_BASE_URL}/api/crews/transfers/received/accept`);
+    expect(decision.request.body).toEqual({ password: 'fixture-password' });
+    expect(view.transferPassword).toBe('');
+    decision.flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne(`${API_BASE_URL}/api/crews`).flush([{ id: 'new', name: 'Equipa de ensaio', role: 'OWNER' }]);
+    http.expectOne(inbox).flush([]);
+    expect(view.transferMessage).toContain('concluída');
+    expect(view.crews.map(crew => crew.id)).toEqual(['new']);
+    fixture.destroy();
+  });
 });

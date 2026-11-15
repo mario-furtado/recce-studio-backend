@@ -45,11 +45,14 @@ public class CrewService {
         if (key==null || !key.matches("[a-zA-Z0-9_-]{16,64}")) throw new IllegalArgumentException("Pedido de criação inválido. Tenta novamente.");
         AuthUserEntity user=users.lockById(accountId).orElseThrow(() -> new AccountFlowException(HttpStatus.UNAUTHORIZED,"Sessão inválida."));
         if (!user.isActive()) throw new AccountFlowException(HttpStatus.UNAUTHORIZED,"Sessão inválida.");
-        CrewEntity previous=crews.findByOwnerAccountIdAndCreationKey(accountId,key).orElse(null);
+        CrewEntity previous=crews.findByCreatorAndCreationKey(accountId,key).orElse(null);
         if (previous!=null) {
-            if (!previous.name.equals(normalized)) throw new AccountFlowException(HttpStatus.CONFLICT,"O pedido já foi usado para outra tripulação. Atualiza a página.");
+            if (!previous.ownerAccountId.equals(accountId) || !previous.name.equals(normalized))
+                throw new AccountFlowException(HttpStatus.CONFLICT,"O pedido já foi usado para outra tripulação. Atualiza a página.");
             return view(previous);
         }
+        if (crews.existsByOwnerAccountIdAndCreationKey(accountId,key))
+            throw new AccountFlowException(HttpStatus.CONFLICT,"O pedido já foi usado para outra tripulação. Atualiza a página.");
         CrewEntity crew=new CrewEntity(); crew.id=UUID.randomUUID().toString(); crew.ownerAccountId=accountId; crew.creationKey=key; crew.name=normalized; crew.createdAt=clock.millis();
         TeamProfileEntity profile=new TeamProfileEntity(); profile.setId(crew.id); profile.setName(normalized); profile.setManagedCrew(true);
         profile.setNoteSystem("1-6 (1 Lento, 6 Rapido)"); profile.setDistanceUnit("Quilometros (km)");

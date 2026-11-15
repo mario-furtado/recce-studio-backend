@@ -1,5 +1,6 @@
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
+import { sendOfflineAudio } from '../../core/services/offline-recce-transfer';
 import { AuthService } from '../../core/services/auth.service';
 import { OfflineRecceSession, OfflineRecceStoreService } from '../../core/services/offline-recce-store.service';
 import { OfflineRecceSyncResponse, PecService } from '../../core/services/pecs.service';
@@ -30,6 +31,12 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     });
     auth = {
       getEmail: () => 'driver@example.test', isAuthenticated: () => true, isOfflineSession: () => false,
+      getToken: () => 'fixture-token',
+      getOfflineIdentity: () => {
+        const email = auth.getEmail()?.trim().toLowerCase();
+        if (!email || email === 'offline@recce.local') return null;
+        return { accountId: email, crewId: 'crew-fixture' };
+      },
     } as AuthService;
     store = new OfflineRecceStoreService(auth);
   });
@@ -119,10 +126,7 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
   it('AUD-OFF-002 reports a missing referenced Blob as an unsuccessful upload', async () => {
     const session = { ...await ready(), audioBlobId: 'missing-audio' };
     const pec = remote(session.id);
-    const page = component(store, pec);
-    const uploaded = await (page as unknown as {
-      uploadSessionAudio(value: OfflineRecceSession, pecId: string): Promise<boolean>;
-    }).uploadSessionAudio(session, 'pec-fixture');
+    const uploaded = await sendOfflineAudio(store, pec, session, response(session.id), 'fixture-token');
     expect(uploaded).toBeFalse();
     expect(pec.uploadAudio).not.toHaveBeenCalled();
   });
@@ -168,6 +172,54 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     expect(await store.listSessions()).toEqual([]);
   });
 
+  it('FEAT-026 keeps the recording in the original crew and survives an email change', async () => {
+    const identity = spyOn(auth, 'getOfflineIdentity').and.returnValue({ accountId: 'stable-owner', crewId: 'crew-a' });
+    const session = await ready();
+    expect(session.ownerAccountId).toBe('stable-owner');
+    expect(session.crewId).toBe('crew-a');
+    identity.and.returnValue({ accountId: 'stable-owner', crewId: 'crew-b' });
+    expect(await store.getSession(session.id)).toBeNull();
+    expect(await store.getAudioBlob(session.audioBlobId!)).toBeNull();
+    await expectAsync(store.deleteSession(session.id)).toBeRejected();
+    identity.and.returnValue({ accountId: 'another-owner', crewId: 'crew-a' });
+    expect(await store.listSessions()).toEqual([]);
+    spyOn(auth, 'getEmail').and.returnValue('renamed@example.test');
+    identity.and.returnValue({ accountId: 'stable-owner', crewId: 'crew-a' });
+    expect(await store.getSession(session.id)).toEqual(session);
+    expect(await (await store.getAudioBlob(session.audioBlobId!))!.text()).toBe('audio');
+    await store.runSessionSync(session.id, async () => { await store.markSessionReadyToSync(session.id); }, { pecId: 'pec-fixture' });
+    await expectAsync(store.runSessionSync(session.id, async () => fail('wrong target'), { pecId: 'another-pec' })).toBeRejected();
+    expect((await store.getSession(session.id))?.destination).toEqual({ pecId: 'pec-fixture' });
+  });
+
+  it('FEAT-026 upgrades a version-one database while quarantining email-only rows and preserving the Blob', async () => {
+    const oldDb = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open(databaseName, 1);
+      request.onupgradeneeded = () => {
+        const sessions = request.result.createObjectStore('recceSessions', { keyPath: 'id' });
+        sessions.put({ id: 'old-session', userEmail: 'driver@example.test', audioBlobId: 'old-blob' });
+        const audio = request.result.createObjectStore('recceAudio', { keyPath: 'id' });
+        audio.put({ id: 'old-blob', sessionId: 'old-session', blob: new Blob(['legacy audio']) });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    oldDb.close();
+    expect(await store.listSessions()).toEqual([]);
+    expect(await store.getAudioBlob('old-blob')).toBeNull();
+    const upgraded = connections.at(-1)!;
+    expect(upgraded.version).toBe(2);
+    const read = upgraded.transaction(['recceSessions', 'recceAudio'], 'readonly');
+    const row = read.objectStore('recceSessions').get('old-session');
+    const audio = read.objectStore('recceAudio').get('old-blob');
+    await new Promise<void>((resolve, reject) => {
+      read.oncomplete = () => resolve();
+      read.onabort = () => reject(read.error);
+    });
+    expect(row.result).toEqual({ id: 'old-session', userEmail: 'driver@example.test', audioBlobId: 'old-blob' });
+    expect(await audio.result.blob.text()).toBe('legacy audio');
+  });
+
   async function rawSession(session: OfflineRecceSession): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const transaction = connections[0].transaction('recceSessions', 'readwrite');
@@ -179,7 +231,7 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
 
   it('AUD-OFF-003 keeps anonymous legacy data quarantined and explicit offline data separate', async () => {
     const owned = await ready();
-    const legacy = { ...owned, id: 'anonymous-legacy', userEmail: null };
+    const legacy = { ...owned, id: 'anonymous-legacy', userEmail: null, ownerAccountId: undefined, crewId: undefined };
     await rawSession(legacy);
     expect((await store.listSessions()).map((session) => session.id)).toEqual([owned.id]);
     const email = spyOn(auth, 'getEmail').and.returnValue('offline@recce.local');
@@ -371,7 +423,9 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     const email = spyOn(auth, 'getEmail').and.returnValue('driver@example.test');
     const pec = remote(session.id);
     const reply = new Subject<OfflineRecceSyncResponse>();
-    pec.syncOfflineRecce.and.returnValue(reply);
+    let requestSent!: () => void;
+    const sent = new Promise<void>(resolve => requestSent = resolve);
+    pec.syncOfflineRecce.and.callFake(() => { requestSent(); return reply; });
     const shared = (component(store) as unknown as { shared: SharedProperties }).shared;
     const editor = new PecsEditorComponent({} as never, pec, store, shared, {} as ConfirmDialogService);
     editor.pecId = 'pec-fixture';
@@ -379,7 +433,8 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     const previous = localStorage.getItem(key);
     try {
       localStorage.setItem(key, session.id);
-      await editor.syncRecceMarkersToBackend([{ timestamp: 99, text: 'untrusted cache' }]);
+      const pending = editor.syncRecceMarkersToBackend([{ timestamp: 99, text: 'untrusted cache' }]);
+      await sent;
       const request = pec.syncOfflineRecce.calls.mostRecent().args[0];
       expect(request.sessionId).toBe(session.id);
       expect(request.markers).toEqual(session.markers);
@@ -388,10 +443,16 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
       email.and.returnValue('other@example.test');
       reply.next(response(session.id));
       reply.complete();
+      await pending;
       expect(pec.uploadAudio).not.toHaveBeenCalled();
       expect(localStorage.getItem(key)).toBe(session.id);
       email.and.returnValue('driver@example.test');
-      expect(await store.getSession(session.id)).toEqual(session);
+      await store.recoverInterruptedSyncs();
+      const retained = await store.getSession(session.id);
+      expect(retained?.status).toBe('ready_to_sync');
+      expect(retained?.markers).toEqual(session.markers);
+      expect(retained?.audioBlobId).toBe(session.audioBlobId);
+      expect(retained?.destination).toEqual({ pecId: 'pec-fixture' });
     } finally {
       if (previous === null) localStorage.removeItem(key);
       else localStorage.setItem(key, previous);
@@ -630,7 +691,7 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
     expect((await store.getSession(session.id))?.status).toBe('syncing');
   });
 
-  it('protects current-runtime progress when Web Locks are unavailable', async () => {
+  it('protects a live synchronization from another store and recovers expired progress without Web Locks', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(navigator, 'locks');
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
     try {
@@ -645,11 +706,17 @@ describe('AUD-OFF-001 persisted synchronization recovery', () => {
       await store.markSessionReadyToSync(session.id);
     });
     await began;
-    await store.recoverInterruptedSyncs();
+      const secondStore = new OfflineRecceStoreService(auth);
+      await secondStore.recoverInterruptedSyncs();
     expect((await store.getSession(session.id))?.status).toBe('syncing');
-    expect(await store.runSessionSync(session.id, async () => undefined)).toBeFalse();
+      expect(await secondStore.runSessionSync(session.id, async () => undefined)).toBeFalse();
     release();
     await pending;
+      const retained = (await store.getSession(session.id))!;
+      await rawSession({ ...retained, status: 'syncing', syncLeaseUntil: Date.now() - 1 });
+      await secondStore.recoverInterruptedSyncs();
+      expect((await secondStore.getSession(session.id))?.status).toBe('ready_to_sync');
+      expect(await (await secondStore.getAudioBlob(session.audioBlobId!))!.text()).toBe('audio');
     } finally {
       if (descriptor) Object.defineProperty(navigator, 'locks', descriptor);
       else Reflect.deleteProperty(navigator, 'locks');

@@ -3,13 +3,15 @@ package org.example.dto;
 public class AuthResponseDTO {
     private String token;
     private String email;
+    private String accountId;
     private TeamProfileDTO profile;
 
     public AuthResponseDTO() {}
 
-    public AuthResponseDTO(String token, String email, TeamProfileDTO profile) {
+    public AuthResponseDTO(String token, String email, String accountId, TeamProfileDTO profile) {
         this.token = token;
         this.email = email;
+        this.accountId = accountId;
         this.profile = profile;
     }
 
@@ -17,6 +19,7 @@ public class AuthResponseDTO {
     public void setToken(String token) { this.token = token; }
 
     public String getEmail() { return email; }
+    public String getAccountId() { return accountId; }
     public void setEmail(String email) { this.email = email; }
 
     public TeamProfileDTO getProfile() { return profile; }

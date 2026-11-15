@@ -1,9 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { firstValueFrom, forkJoin, of, Subscription } from 'rxjs';
+import { forkJoin, of, Subscription } from 'rxjs';
+import { offlineTransferError, sendOfflineAudio, sendOfflineNotes } from '../../core/services/offline-recce-transfer';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { NewPec, Pec, Rally } from '../../core/models/rally';
 import { AuthService } from '../../core/services/auth.service';
@@ -39,7 +39,10 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   syncingSessionId: string | null = null;
   isLoading = true;
   isLoadingPecs = false;
+  contextChanged = false;
+  private openedContext: string | null = null;
   private connectionModeSubscription?: Subscription;
+  private pecOptionsSubscription?: Subscription;
 
   constructor(
     private auth: AuthService,
@@ -52,6 +55,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.openedContext = this.offlineStore.captureContext();
     this.loadSessions();
     this.connectionModeSubscription = this.shared.connectionMode$.subscribe(
       () => this.syncRemoteOptionsWithConnectionMode(),
@@ -60,6 +64,17 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.connectionModeSubscription?.unsubscribe();
+    this.pecOptionsSubscription?.unsubscribe();
+  }
+
+  @HostListener('window:storage')
+  onStorageChange(): void {
+    if (this.openedContext === this.offlineStore.captureContext()) return;
+    this.contextChanged = true;
+    this.sessions = [];
+    this.selectedPecIds = {};
+    this.newPecDrafts = {};
+    this.syncRemoteOptionsWithConnectionMode();
   }
 
   get pendingCount(): number {
@@ -79,29 +94,31 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   get visibleSessions(): OfflineRecceSession[] {
-    return this.sessions.filter((session) => session.status !== 'synced' && this.offlineStore.canAccessSession(session));
+    return this.contextChanged ? [] : this.sessions.filter((session) => session.status !== 'synced' && this.offlineStore.canAccessSession(session));
   }
 
   get isOnlineMode(): boolean {
     return (
-      this.shared.connectionMode$.value === 'online' &&
+      !this.contextChanged && this.shared.connectionMode$.value === 'online' &&
       this.auth.isAuthenticated() &&
       !this.auth.isOfflineSession()
     );
   }
 
   async loadSessions(): Promise<void> {
+    if (this.contextChanged) return;
     this.isLoading = true;
     try {
       await this.offlineStore.recoverInterruptedSyncs();
       this.sessions = await this.offlineStore.listSessions();
       this.sessions.forEach((session) => {
-        if (session.pecId) this.selectedPecIds[session.id] = session.pecId;
+        const pecId = session.destination?.pecId ?? session.pecId;
+        if (pecId) this.selectedPecIds[session.id] = pecId;
       });
     } catch (error) {
       this.sessions = [];
       console.error('Erro ao carregar reconhecimentos offline:', error);
-      this.shared.error('Erro ao carregar reconhecimentos offline');
+      this.shared.error('Erro ao carregar reconhecimentos offline', error instanceof Error ? error.message : undefined);
     } finally {
       this.isLoading = false;
     }
@@ -128,6 +145,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   startNewRecce(): void {
+    if (this.contextChanged) return;
     this.router.navigate(['/recce-mode']);
   }
 
@@ -148,6 +166,10 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (session.destination) {
+      await this.syncSessionToBackend(session, session.destination);
+      return;
+    }
     const pecId = this.selectedPecIds[session.id] || session.pecId;
     if (!pecId) {
       this.shared.info(
@@ -161,6 +183,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   openCreatePec(session: OfflineRecceSession): void {
+    if (session.pecId || session.destination) return;
     if (!this.isOnlineMode) {
       this.shared.info(
         'Modo offline ativo',
@@ -188,6 +211,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   async createPecAndSync(session: OfflineRecceSession): Promise<void> {
+    if (session.pecId || session.destination) return;
     if (!this.isOnlineMode) {
       this.shared.info(
         'Modo offline ativo',
@@ -205,10 +229,10 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     }
 
     const draft = this.newPecDrafts[session.id];
-    if (!draft?.rallyId || !draft.name.trim()) {
+    if (!draft?.rallyId || !draft.name.trim() || draft.name.trim().length > 255) {
       this.shared.info(
-        'Dados em falta',
-        'Escolhe o rali e indica o nome da PEC.',
+        'Dados da PEC inválidos',
+        'Escolhe o rali e indica um nome com até 255 caracteres.',
       );
       return;
     }
@@ -293,6 +317,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
   }
 
   private loadPecOptions(): void {
+    this.pecOptionsSubscription?.unsubscribe();
     if (!this.isOnlineMode) {
       this.rallies = [];
       this.pecOptions = [];
@@ -301,17 +326,17 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingPecs = true;
-    this.rallyService
+    this.pecOptionsSubscription = this.rallyService
       .getRallies()
       .pipe(
         switchMap((rallies: Rally[]) => {
-          this.rallies = rallies.filter(rally => rally.archivedAt == null);
+          this.rallies = rallies.filter(rally => rally.archivedAt == null && rally.status !== 'COMPLETED');
           if (this.rallies.length === 0) return of([]);
           return forkJoin(
             this.rallies.map((rally) =>
               this.rallyService.getRallyPecs(rally.id).pipe(
                 map((pecs: Pec[]) =>
-                  pecs.map((pec) => ({
+                  pecs.filter(pec => pec.status !== 'COMPLETED').map((pec) => ({
                     ...pec,
                     name: `${rally.name} - ${pec.name}`,
                   })),
@@ -349,28 +374,16 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
     if (this.syncingSessionId) return;
     this.syncingSessionId = session.id;
     try {
+      const token = this.offlineStore.requireSyncContext(session);
       const started = await this.offlineStore.runSessionSync(session.id, async (current) => {
         this.replaceSession(current);
+        this.expandedCreateSessionId = null;
         try {
-          const response = await firstValueFrom(this.pecService.syncOfflineRecce({
-            sessionId: session.id,
-            deviceId: current.deviceId,
-            userEmail: current.userEmail,
-            temporaryName: current.temporaryName,
-            pecId: target.pecId,
-            rallyId: target.rallyId,
-            newPec: target.newPec,
-            createdAt: current.createdAt,
-            finishedAt: current.finishedAt,
-            notesCount: current.notesCount,
-            durationSeconds: current.durationSeconds,
-            markers: current.markers,
-            gpsTrack: current.gpsTrack || [],
-          }));
-          const audioUploaded = await this.uploadSessionAudio(current, response.pecId);
+          const response = await sendOfflineNotes(this.offlineStore, this.pecService, current, target, token);
+          const audioUploaded = await sendOfflineAudio(this.offlineStore, this.pecService, current, response, token);
           if (!audioUploaded) {
             const updated = await this.offlineStore.markSessionReadyToSync(
-              session.id, 'Notas sincronizadas, mas o áudio está em falta ou não pôde ser enviado.',
+              session.id, 'Notas sincronizadas, mas o áudio está em falta ou não pôde ser enviado.', current,
             );
             this.replaceSession(updated);
             this.shared.error(
@@ -379,7 +392,8 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
             );
             return;
           }
-          await this.offlineStore.deleteSession(session.id);
+          this.offlineStore.requireSyncContext(current, token);
+          await this.offlineStore.deleteSession(session.id, { session: current, token });
           this.sessions = this.sessions.filter((item) => item.id !== session.id);
           this.expandedCreateSessionId = null;
           delete this.selectedPecIds[session.id];
@@ -390,55 +404,21 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
           );
         } catch (error) {
           console.error('Erro ao sincronizar reconhecimento offline:', error);
-          const conflict = error instanceof HttpErrorResponse && error.status === 409 && typeof error.error?.message === 'string';
-          const message = conflict ? error.error.message : 'Falha ao enviar para o backend.';
+          const message = offlineTransferError(error);
           const updated = await this.offlineStore.markSessionReadyToSync(
-            session.id, message,
+            session.id, message, current,
           );
           this.replaceSession(updated);
-          this.shared.error('Erro ao sincronizar', conflict ? message : 'Confirma a ligacao ao backend e tenta novamente.');
+          this.shared.error('Erro ao sincronizar', message);
         }
-      });
+      }, target);
       if (!started) await this.loadSessions();
     } catch (error) {
       console.error('Erro ao preparar sincronizacao:', error);
-      this.shared.error('Erro ao preparar sincronizacao');
+      this.shared.error('Erro ao preparar sincronizacao', error instanceof Error ? error.message : undefined);
     } finally {
       this.syncingSessionId = null;
     }
-  }
-
-  private async uploadSessionAudio(
-    session: OfflineRecceSession,
-    pecId: string,
-  ): Promise<boolean> {
-    if (!session.audioBlobId) return true;
-    const audioBlob = await this.offlineStore.getAudioBlob(session.audioBlobId);
-    if (!audioBlob) return false;
-
-    try {
-      await firstValueFrom(
-        this.pecService.uploadAudio(
-          pecId,
-          audioBlob,
-          this.audioFileNameFromMime(session.audioMimeType || audioBlob.type),
-        ),
-      );
-      return true;
-    } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 409) throw error;
-      console.error('Erro ao sincronizar audio offline:', error);
-      return false;
-    }
-  }
-
-  private audioFileNameFromMime(mimeType?: string): string {
-    const normalized = (mimeType || '').toLowerCase();
-    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
-    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
-    if (normalized.includes('ogg')) return 'recce-audio.ogg';
-    if (normalized.includes('wav')) return 'recce-audio.wav';
-    return 'recce-audio.webm';
   }
 
   private nextPecNumber(rallyId?: string): number {
@@ -467,6 +447,7 @@ export class OfflineReccesComponent implements OnInit, OnDestroy {
 
   private syncRemoteOptionsWithConnectionMode(): void {
     if (!this.isOnlineMode) {
+      this.pecOptionsSubscription?.unsubscribe();
       this.rallies = [];
       this.pecOptions = [];
       this.isLoadingPecs = false;

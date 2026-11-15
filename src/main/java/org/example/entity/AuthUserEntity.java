@@ -27,6 +27,11 @@ public class AuthUserEntity {
     @Column(nullable = false)
     private boolean active = true;
 
+    private Long selfDeactivatedAt;
+
+    public Long getSelfDeactivatedAt() { return selfDeactivatedAt; }
+    public void setSelfDeactivatedAt(Long value) { selfDeactivatedAt = value; }
+
     private String teamProfileId;
     // null identifies a pre-verification legacy account; no bulk rewrite of existing users.
     private Boolean emailVerified;

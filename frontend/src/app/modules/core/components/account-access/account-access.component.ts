@@ -14,7 +14,9 @@ import { API_BASE_URL } from '../../services/api.config';
         <h1 class="text-2xl font-black mb-3">{{ title }}</h1>
         <p *ngIf="!loaded" role="status">A verificar disponibilidade…</p>
         <p *ngIf="loaded && !available" role="status">O registo e a recuperação de acesso estão temporariamente indisponíveis.</p>
-        <p *ngIf="available && !confirming" class="mb-4">Indica o teu email. Receberás instruções se o pedido puder ser aplicado. No registo, defines a password ao confirmar o endereço.</p>
+        <p *ngIf="available && !confirming" class="mb-4">{{ page === 'recover'
+          ? 'Indica o teu email para repor a password ou reativar uma conta que desativaste.'
+          : 'Indica o teu email. Defines a password ao confirmar o endereço.' }}</p>
         <p *ngIf="message" role="status" class="my-4">{{ message }}</p>
         <p *ngIf="error" role="alert" class="text-red-300 my-4">{{ error }}</p>
         <form *ngIf="available && !completed" (ngSubmit)="submit()" class="space-y-4">

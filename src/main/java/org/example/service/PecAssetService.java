@@ -14,6 +14,8 @@ import org.example.controller.TenantContext;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
@@ -88,8 +90,15 @@ public class PecAssetService {
         PecEntity pec = getOwnedPec(pecId);
         ensureCanEdit(pec);
         validateAudio(file);
+        String previous = pec.getAudioStoragePath();
         String path = fileStorageService.store(file, "pecs/" + pecId, "audio");
-        fileStorageService.delete(pec.getAudioStoragePath());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) fileStorageService.delete(previous);
+                if (status == STATUS_ROLLED_BACK) fileStorageService.delete(path);
+            }
+        });
         pec.setAudioFileName(file.getOriginalFilename());
         pec.setAudioContentType(normalizeAudioContentType(file.getContentType(), file.getOriginalFilename()));
         pec.setAudioStoragePath(path);

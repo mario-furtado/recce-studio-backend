@@ -102,6 +102,15 @@ class LegacyCrewMigrationIntegrationTest {
         try(Connection db=source.getConnection()){assertThrows(IllegalArgumentException.class,()->LegacyCrewMigrationTool.checkRollback(db,jar("old",false)));LegacyCrewMigrationTool.checkRollback(db,jar("compatible",true));}
         applyA();getA("/api/rallies").andExpect(status().isUnauthorized());assertEquals(3,rallies.count());assertEquals(1,migrations.count());assertNull(users.findById("user-a").get().getTokenExpiresAtEpochMillis());
     }
+    @Test void rollbackRequiresSupportForSelfDeactivatedAccounts() throws Exception {
+        prepareA();
+        applyA();
+        sql.update("update auth_users set active=false,self_deactivated_at=1 where id='user-a'");
+        try (Connection db = source.getConnection()) {
+            assertThrows(IllegalArgumentException.class, () -> LegacyCrewMigrationTool.checkRollback(db, jar("old-compat", true)));
+            LegacyCrewMigrationTool.checkRollback(db, jar("lifecycle", true, true));
+        }
+    }
     @Test void ambiguousMembersKeepTheirExistingBoundedLegacyAccessUntilAnExplicitDecision() throws Exception {
         AuthUserEntity third=new AuthUserEntity();third.setId("third");third.setEmail("third@migration.invalid");third.setPasswordHash("unused");third.setToken("third-token");third.setTokenExpiresAtEpochMillis(System.currentTimeMillis()+60000);third.setTeamProfileId("legacy-a");users.save(third);
         prepareA();assertThrows(IllegalArgumentException.class,this::applyA);
@@ -133,5 +142,14 @@ class LegacyCrewMigrationIntegrationTest {
             assertEquals(2,LegacyCrewMigrationTool.count(restored,"select count(*) from notes"));assertEquals(1,LegacyCrewMigrationTool.count(restored,"select count(*) from offline_recce_syncs where id='original-receipt'"));
         }
     }
-    Path jar(String name,boolean supported) throws Exception {Path path=WORK.resolve(name+UUID.randomUUID()+".jar");Manifest m=new Manifest();m.getMainAttributes().putValue("Manifest-Version","1.0");if(supported)m.getMainAttributes().putValue("Recce-Authorization",LegacyCrewMigrationTool.CAPABILITY);try(JarOutputStream out=new JarOutputStream(Files.newOutputStream(path),m)){}return path;}
+    Path jar(String name, boolean supported) throws Exception { return jar(name, supported, false); }
+    Path jar(String name, boolean supported, boolean lifecycle) throws Exception {
+        Path path = WORK.resolve(name + UUID.randomUUID() + ".jar");
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
+        if (supported) manifest.getMainAttributes().putValue("Recce-Authorization", LegacyCrewMigrationTool.CAPABILITY);
+        if (lifecycle) manifest.getMainAttributes().putValue("Recce-Account-Lifecycle", "ownership-lifecycle-v1");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(path), manifest)) {}
+        return path;
+    }
 }

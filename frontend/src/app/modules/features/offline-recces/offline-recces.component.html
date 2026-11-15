@@ -13,12 +13,13 @@
           pedidos ao backend.
         </p>
         <p
-          *ngIf="!isOnlineMode"
+          *ngIf="!isOnlineMode && !contextChanged"
           class="text-xs text-amber-400 mt-2 font-semibold"
         >
           Modo offline ativo: podes continuar, criar outro reconhecimento ou
           eliminar sessões locais.
         </p>
+        <p *ngIf="contextChanged" role="alert">A sessão mudou. Atualiza esta página para continuar.</p>
       </div>
 
       <div class="flex flex-wrap gap-2">
@@ -26,6 +27,7 @@
           type="button"
           class="accent-button px-4 py-2"
           (click)="startNewRecce()"
+          [disabled]="contextChanged"
         >
           Novo reconhecimento
         </button>
@@ -33,6 +35,7 @@
           type="button"
           class="soft-button px-4 py-2"
           (click)="loadSessions()"
+          [disabled]="contextChanged"
         >
           Atualizar
         </button>
@@ -68,15 +71,15 @@
     </div>
 
     <div
-      *ngIf="!isLoading && visibleSessions.length === 0"
+      *ngIf="!isLoading && !contextChanged && visibleSessions.length === 0"
       class="surface-card rounded-xl p-8 text-center"
     >
       <div class="text-sm font-bold text-white">
         Sem reconhecimentos offline pendentes
       </div>
       <p class="text-xs text-slate-400 mt-2">
-        Quando finalizares um reconhecimento local, ele aparece aqui. Depois de
-        sincronizado, e removido deste dispositivo.
+        Os reconhecimentos guardados neste contexto aparecem aqui. Gravações antigas
+        sem titular confirmado ficam preservadas no dispositivo.
       </p>
       <button
         type="button"
@@ -154,11 +157,16 @@
           </div>
 
           <div class="lg:col-span-3 flex flex-wrap lg:justify-end gap-2">
+            <p *ngIf="session.destination?.newPec as target" class="w-full text-xs text-slate-300">
+              Destino guardado · {{ target.name }}
+            </p>
             <select
+              *ngIf="!session.destination?.newPec"
               class="form-input min-w-48 px-3 py-2 text-sm"
               [(ngModel)]="selectedPecIds[session.id]"
               [disabled]="
                 !isOnlineMode ||
+                !!session.pecId || !!session.destination ||
                 session.status === 'synced' ||
                 session.status === 'syncing' ||
                 isLoadingPecs
@@ -193,7 +201,7 @@
               {{
                 syncingSessionId === session.id
                   ? "A sincronizar"
-                  : "Sincronizar"
+                  : session.destination ? "Repetir sincronização" : "Sincronizar"
               }}
             </button>
             <button
@@ -205,12 +213,14 @@
                 syncingSessionId === session.id
               "
               (click)="openCreatePec(session)"
+              *ngIf="!session.pecId && !session.destination"
             >
               Criar PEC
             </button>
             <button
               type="button"
               class="danger-button icon-button"
+              [disabled]="session.status === 'syncing'"
               title="Eliminar"
               (click)="deleteSession(session)"
             >
@@ -271,6 +281,7 @@
               >
               <input [id]="'offline-pec-name-' + session.id" [attr.aria-labelledby]="'offline-pec-name-label-' + session.id"
                 type="text"
+                maxlength="255"
                 class="themed-input w-full rounded-xl px-3 py-2 text-sm"
                 [(ngModel)]="draft.name"
                 [disabled]="syncingSessionId === session.id"

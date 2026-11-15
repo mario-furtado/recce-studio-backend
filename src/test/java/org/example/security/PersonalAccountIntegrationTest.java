@@ -25,7 +25,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(classes = Main.class, properties = {
-    "recce.test-user.enabled=false", "recce.account.enabled=true",
+    "recce.test-user.enabled=false", "recce.account.enabled=true", "recce.crews.enabled=true",
+    "recce.crews.transfer.enabled=true",
     "spring.datasource.url=jdbc:h2:mem:personal-accounts;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
     "spring.jpa.hibernate.ddl-auto=create-drop", "spring.jpa.show-sql=false", "recce.storage.type=local"
 })
@@ -39,12 +40,24 @@ class PersonalAccountIntegrationTest {
     @Autowired TeamCarRepository cars;
     @Autowired AccountChallengeRepository challenges;
     @Autowired AccountRateLimitRepository limits;
+    @Autowired RallyRepository rallies;
+    @Autowired RallyReadGrantRepository grants;
+    @Autowired RallyInvitationRepository invitations;
+    @Autowired CrewRepository crews;
+    @Autowired CrewTransferRepository transfers;
+    @Autowired LegacyCrewMigrationRepository migrationReceipts;
     @MockBean AccountMailer mail;
     @MockBean Clock clock;
     AtomicLong now = new AtomicLong();
     List<String[]> inbox = new CopyOnWriteArrayList<>();
     final String password = "personal-password-2026";
     @BeforeEach void setup() {
+        invitations.deleteAll();
+        grants.deleteAll();
+        rallies.deleteAll();
+        transfers.deleteAll();
+        migrationReceipts.deleteAll();
+        crews.deleteAll();
         users.deleteAll(); challenges.deleteAll(); limits.deleteByIdNot(AccountRateLimiter.GUARD);
         inbox.clear(); now.set(1800000000000L); when(clock.millis()).thenAnswer(i -> now.get()); when(mail.isConfigured()).thenReturn(true);
         doAnswer(i -> { inbox.add(new String[]{i.getArgument(0), i.getArgument(1), i.getArgument(2)}); return null; }).when(mail).send(anyString(), anyString(), anyString());
@@ -63,6 +76,148 @@ class PersonalAccountIntegrationTest {
     String signup(String email) throws Exception { String token=request("register",email); confirm("verify-email",token,password).andExpect(status().isNoContent()); return login(email,password); }
     String login(String email,String pass) throws Exception {
         return json.readTree(postBody("login",body("email",email,"password",pass),"192.0.2.12").andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).path("token").asText();
+    }
+    @Test void deactivationFreezesOwnershipWithoutRevokingGrantedReadAndAllowsVerifiedRecovery() throws Exception {
+        String email = "owner@example.invalid";
+        String session = signup(email);
+        String readerSession = signup("reader@example.invalid");
+        String owner = "Bearer " + session;
+        String reader = "Bearer " + readerSession;
+        String crew = json.readTree(http.perform(post("/api/crews").header("Authorization", owner)
+                .header("Idempotency-Key", "create-owner-crew-01").contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Equipa de ensaio").toString())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).path("id").asText();
+        String rally = json.readTree(http.perform(post("/api/rallies").header("Authorization", owner)
+                .header("X-Crew-Id", crew).contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Rali de ensaio", "location", "Local de ensaio", "surface", "TERRA").toString())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).path("id").asText();
+        grants.save(RallyReadGrantEntity.fromInvitation(users.findByEmailIgnoreCase("reader@example.invalid").get(),
+                rallies.findById(rally).get(), "fixture", now.get()));
+        String shared = "/api/shared-rallies/" + rally;
+        String oldProof = request("password-reset/request", email);
+        http.perform(post("/api/auth/deactivate").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                .content(body("password", "wrong-password").toString())).andExpect(status().isForbidden());
+        assertTrue(users.findByEmailIgnoreCase(email).get().isActive());
+        when(mail.isConfigured()).thenReturn(false);
+        http.perform(post("/api/auth/deactivate").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                .content(body("password", password).toString())).andExpect(status().isServiceUnavailable());
+        when(mail.isConfigured()).thenReturn(true);
+        http.perform(post("/api/auth/deactivate").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                .content(body("password", password).toString())).andExpect(status().isNoContent());
+        http.perform(get("/api/auth/me").header("Authorization", owner)).andExpect(status().isUnauthorized());
+        http.perform(put("/api/rallies/" + rally + "/archive").header("Authorization", owner).header("X-Crew-Id", crew))
+                .andExpect(status().isUnauthorized());
+        http.perform(put("/api/rallies/" + rally + "/archive").header("Authorization", reader).header("X-Crew-Id", crew))
+                .andExpect(status().isNotFound());
+        http.perform(get(shared).header("Authorization", reader)).andExpect(status().isOk());
+        postBody("login", body("email", email, "password", password), "192.0.2.12").andExpect(status().isBadRequest());
+        confirm("password-reset/confirm", oldProof, password).andExpect(status().isBadRequest());
+        String newProof = request("password-reset/request", email);
+        confirm("password-reset/confirm", newProof, password).andExpect(status().isNoContent());
+        confirm("password-reset/confirm", newProof, password).andExpect(status().isBadRequest());
+        http.perform(get("/api/auth/me").header("Authorization", owner)).andExpect(status().isUnauthorized());
+        String fresh = "Bearer " + login(email, password);
+        http.perform(get("/api/crews").header("Authorization", fresh)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(crew));
+        http.perform(get(shared).header("Authorization", reader)).andExpect(status().isOk());
+        assertNull(users.findByEmailIgnoreCase(email).get().getSelfDeactivatedAt());
+    }
+
+    @Test void transferRequiresTheVerifiedRecipientAndPreservesRallyAndReadGrant() throws Exception {
+        String owner = "Bearer " + signup("transfer-owner@example.invalid");
+        String recipient = "Bearer " + signup("transfer-recipient@example.invalid");
+        String reader = "Bearer " + signup("transfer-reader@example.invalid");
+        String ownerId = users.findByEmailIgnoreCase("transfer-owner@example.invalid").get().getId();
+        String recipientId = users.findByEmailIgnoreCase("transfer-recipient@example.invalid").get().getId();
+        String crew = field(http.perform(post("/api/crews").header("Authorization", owner)
+                .header("Idempotency-Key", "transfer-owner-crew").contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Tripulação").toString())).andExpect(status().isOk()), "id");
+        String rally = field(http.perform(post("/api/rallies").header("Authorization", owner)
+                .header("X-Crew-Id", crew).contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Rali", "location", "Local", "surface", "TERRA").toString())).andExpect(status().isOk()), "id");
+        long grant = grants.save(RallyReadGrantEntity.fromInvitation(users.findByEmailIgnoreCase("transfer-reader@example.invalid").get(),
+                rallies.findById(rally).get(), "fixture", now.get())).getId();
+        String invitation = invitations.save(new RallyInvitationEntity(rallies.findById(rally).get(), ownerId,
+                "Tripulação", "pending@example.invalid", null, now.get(), now.get() + 60000)).getId();
+        String path = "/api/crews/" + crew + "/transfer";
+        ObjectNode request = body("email", "transfer-recipient@example.invalid", "password", password);
+        String transfer = field(transferPost(path, owner, request, "192.0.2.30").andExpect(status().isOk()), "id");
+        assertEquals(transfer, field(transferPost(path, owner, request, "192.0.2.30").andExpect(status().isOk()), "id"));
+        http.perform(get("/api/crews/transfers").header("Authorization", reader)).andExpect(jsonPath("$.length()").value(0));
+        http.perform(get("/api/crews/transfers").header("Authorization", recipient)).andExpect(jsonPath("$[0].id").value(transfer));
+        String accept = "/api/crews/transfers/" + transfer + "/accept";
+        transferPost(accept, reader, body("password", password), "192.0.2.31").andExpect(status().isNotFound());
+        transferPost(accept, recipient, body("password", "wrong-password"), "192.0.2.32").andExpect(status().isForbidden());
+        assertEquals(ownerId, crews.findById(crew).get().ownerAccountId);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Integer> call = () -> transferPost(accept, recipient, body("password", password), "192.0.2.32")
+                    .andReturn().getResponse().getStatus();
+            for (Future<Integer> result : pool.invokeAll(Arrays.asList(call, call))) assertEquals(204, result.get().intValue());
+        } finally { pool.shutdownNow(); }
+        assertEquals(1, transfers.count());
+        assertEquals(1, crews.count());
+        assertEquals(ownerId, crews.findById(crew).get().creatorId());
+        assertEquals(recipientId, crews.findById(crew).get().ownerAccountId);
+        assertEquals(crew, rallies.findById(rally).get().getTeamProfileId());
+        assertTrue(grants.findById(grant).get().isActive());
+        assertEquals("CANCELLED", invitations.findById(invitation).get().getState());
+        http.perform(get("/api/shared-rallies/" + rally).header("Authorization", reader)).andExpect(status().isOk());
+        http.perform(get("/api/crews").header("Authorization", owner)).andExpect(jsonPath("$.length()").value(0));
+        http.perform(put("/api/rallies/" + rally + "/archive").header("Authorization", owner).header("X-Crew-Id", crew))
+                .andExpect(status().isNotFound());
+        http.perform(put("/api/rallies/" + rally + "/archive").header("Authorization", recipient).header("X-Crew-Id", crew))
+                .andExpect(status().isOk());
+        http.perform(post("/api/crews").header("Authorization", owner)
+                .header("Idempotency-Key", "transfer-owner-crew").contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Tripulação").toString())).andExpect(status().isConflict());
+    }
+
+    private ResultActions transferPost(String path, String bearer, ObjectNode body, String address) throws Exception {
+        return http.perform(post(path).with(r -> { r.setRemoteAddr(address); return r; })
+                .header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON).content(body.toString()));
+    }
+
+    private String field(ResultActions result, String name) throws Exception {
+        return json.readTree(result.andReturn().getResponse().getContentAsByteArray()).path(name).asText();
+    }
+
+    @Test void migratedCrewKeepsProvenanceAndNeverFallsBackToThePreviousOwner() throws Exception {
+        String owner = "Bearer " + signup("migrated-owner@example.invalid");
+        String recipient = "Bearer " + signup("migrated-recipient@example.invalid");
+        AuthUserEntity original = users.findByEmailIgnoreCase("migrated-owner@example.invalid").get();
+        String crew = field(http.perform(post("/api/crews").header("Authorization", owner)
+                .header("Idempotency-Key", "migrated-owner-crew").contentType(MediaType.APPLICATION_JSON)
+                .content(body("name", "Equipa convertida").toString())).andExpect(status().isOk()), "id");
+        LegacyCrewMigrationEntity receipt = new LegacyCrewMigrationEntity();
+        receipt.teamProfileId = crew;
+        receipt.ownerAccountId = original.getId();
+        receipt.manifestDigest = "manifest";
+        receipt.sourceDigest = "source";
+        receipt.backupDigest = "backup";
+        receipt.approvalReference = "isolated-fixture";
+        receipt.approvedBy = "fixture";
+        migrationReceipts.save(receipt);
+        original.setLegacyCrewMigrated(true);
+        original.setEmailVerified(null);
+        users.save(original);
+        http.perform(get("/api/auth/me").header("Authorization", owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.hasWorkspace").value(true));
+        String request = "/api/crews/" + crew + "/transfer";
+        ObjectNode data = body("email", "migrated-recipient@example.invalid", "password", password);
+        String first = field(transferPost(request, owner, data, "192.0.2.40").andExpect(status().isOk()), "id");
+        transferPost(request + "/cancel", owner, body("password", password), "192.0.2.40").andExpect(status().isNoContent());
+        transferPost("/api/crews/transfers/" + first + "/accept", recipient, body("password", password), "192.0.2.41")
+                .andExpect(status().isNotFound());
+        String second = field(transferPost(request, owner, data, "192.0.2.40").andExpect(status().isOk()), "id");
+        transferPost("/api/crews/transfers/" + second + "/accept", recipient, body("password", password), "192.0.2.41")
+                .andExpect(status().isNoContent());
+        assertEquals(original.getId(), migrationReceipts.findById(crew).get().ownerAccountId);
+        http.perform(get("/api/auth/me").header("Authorization", owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.hasWorkspace").value(false));
+        http.perform(get("/api/rallies").header("Authorization", owner)).andExpect(status().isForbidden());
+        http.perform(get("/api/rallies").header("Authorization", recipient).header("X-Crew-Id", crew))
+                .andExpect(status().isOk());
     }
     @Test void verifiesWithoutCreatingTeamAndPersonalIdentityDoesNotGrantLegacyAccess() throws Exception {
         long teamCount=teams.count(), carCount=cars.count();

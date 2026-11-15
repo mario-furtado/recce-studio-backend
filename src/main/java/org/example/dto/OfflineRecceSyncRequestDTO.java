@@ -4,6 +4,8 @@ import java.util.List;
 
 public class OfflineRecceSyncRequestDTO {
     private String sessionId;
+    private String accountId;
+    private String crewId;
     private String deviceId;
     private String userEmail;
     private String temporaryName;
@@ -18,6 +20,10 @@ public class OfflineRecceSyncRequestDTO {
     private List<GpsPointDTO> gpsTrack;
 
     public String getSessionId() { return sessionId; }
+    public String getAccountId() { return accountId; }
+    public void setAccountId(String accountId) { this.accountId = accountId; }
+    public String getCrewId() { return crewId; }
+    public void setCrewId(String crewId) { this.crewId = crewId; }
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     public String getDeviceId() { return deviceId; }

@@ -181,8 +181,16 @@ public final class LegacyCrewMigrationTool {
         Set<String> available=tables(db);boolean converted=available.contains("CREWS")&&count(db,"select count(*) from crews")>0;
         converted|=available.contains("LEGACY_CREW_MIGRATIONS")&&count(db,"select count(*) from legacy_crew_migrations")>0;
         if(available.contains("AUTH_USERS")&&columns(db,"AUTH_USERS").contains("LEGACY_CREW_MIGRATED"))converted|=count(db,"select count(*) from auth_users where legacy_crew_migrated=true")>0;
+        boolean lifecycle = available.contains("CREW_TRANSFERS") && count(db, "select count(*) from crew_transfers") > 0;
+        if (available.contains("AUTH_USERS") && columns(db, "AUTH_USERS").contains("SELF_DEACTIVATED_AT")) {
+            lifecycle |= count(db, "select count(*) from auth_users where self_deactivated_at is not null") > 0;
+        }
         try(JarFile artifact=new JarFile(jar.toFile())) {
             if(converted&&(artifact.getManifest()==null||!CAPABILITY.equals(artifact.getManifest().getMainAttributes().getValue("Recce-Authorization"))))throw refused("Rollback recusado: artefacto não declara autorização compatível.");
+            if (lifecycle && (artifact.getManifest() == null || !"ownership-lifecycle-v1".equals(
+                    artifact.getManifest().getMainAttributes().getValue("Recce-Account-Lifecycle")))) {
+                throw refused("Rollback recusado: artefacto não suporta transferências e recuperação de contas desativadas.");
+            }
         }
     }
     public static Connection connect(Path database,String user,String password) throws Exception {

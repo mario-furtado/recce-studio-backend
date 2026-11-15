@@ -16,6 +16,7 @@ public interface AuthUserRepository extends JpaRepository<AuthUserEntity, String
     Optional<AuthUserEntity> findByTokenAndActiveTrue(String token);
     boolean existsByEmailIgnoreCase(String email);
     boolean existsByLegacyCrewMigratedTrue();
+    boolean existsByIdAndTokenAndActiveTrueAndTokenExpiresAtEpochMillisGreaterThan(String id, String token, long now);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from AuthUserEntity u where lower(u.email) = lower(:email)")

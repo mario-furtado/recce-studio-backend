@@ -57,6 +57,21 @@ public class OfflineRecceSyncEntity {
     @Column(name = "team_profile_id")
     private String teamProfileId;
 
+    @Column(length = 64)
+    private String ownerAccountId;
+
+    @Column(length = 2048)
+    private String requestedDestination;
+
+    private Boolean audioReceived;
+
+    public String getOwnerAccountId() { return ownerAccountId; }
+    public void setOwnerAccountId(String ownerAccountId) { this.ownerAccountId = ownerAccountId; }
+    public String getRequestedDestination() { return requestedDestination; }
+    public void setRequestedDestination(String requestedDestination) { this.requestedDestination = requestedDestination; }
+    public boolean isAudioReceived() { return Boolean.TRUE.equals(audioReceived); }
+    public void setAudioReceived(boolean audioReceived) { this.audioReceived = audioReceived; }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 

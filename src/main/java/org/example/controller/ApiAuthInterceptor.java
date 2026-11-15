@@ -35,6 +35,7 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
         if (authenticatedUser.isPresent()) {
             AuthUserEntity user = authenticatedUser.get();
             request.setAttribute(TenantContext.ACCOUNT_ID_ATTRIBUTE, user.getId());
+            request.setAttribute(TenantContext.BEARER_TOKEN_ATTRIBUTE, token);
             request.setAttribute(TenantContext.USER_EMAIL_ATTRIBUTE, user.getEmail());
             Class<?> controller=handler instanceof org.springframework.web.method.HandlerMethod
                 ? ((org.springframework.web.method.HandlerMethod)handler).getBeanType() : null;
@@ -52,8 +53,7 @@ public class ApiAuthInterceptor implements HandlerInterceptor {
                 org.example.entity.CrewEntity crew;
                 try { crew=crews.requireOwned(user.getId(),contexts.get(0).trim()); }
                 catch (org.springframework.dao.DataAccessException ex) { throw new org.example.service.AccountFlowException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível validar a tripulação. Tenta novamente."); }
-                // Use the mapped handler, not the raw URL: Spring accepts matrix parameters.
-                if (controller!=null && OfflineRecceSyncController.class.isAssignableFrom(controller)) throw new org.example.service.AccountFlowException(org.springframework.http.HttpStatus.FORBIDDEN,"A sincronização offline de novas tripulações ainda não está disponível.");
+                request.setAttribute(OfflineRecceSyncController.EXPLICIT_CREW, true);
                 request.setAttribute(TenantContext.TEAM_PROFILE_ID_ATTRIBUTE,crew.id);
                 response.setHeader("Cache-Control","no-store");
                 return true;

@@ -182,7 +182,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                    <archive><manifestEntries><Recce-Authorization>crew-compat-v1</Recce-Authorization></manifestEntries></archive>
+                    <archive>
+                        <manifestEntries>
+                            <Recce-Authorization>crew-compat-v1</Recce-Authorization>
+                            <Recce-Account-Lifecycle>ownership-lifecycle-v1</Recce-Account-Lifecycle>
+                        </manifestEntries>
+                    </archive>
                 </configuration>
             </plugin>
         </plugins>

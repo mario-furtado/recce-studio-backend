@@ -3,7 +3,7 @@ import { CanActivateFn, Router } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { SharedProperties } from '../shared/shared-properties';
-import { getCrewContext, hasStaleCrewContext } from '../services/crew-context';
+import { hasStaleCrewContext } from '../services/crew-context';
 
 const offlineAllowedPaths = ['/recce-mode', '/offline-recces', '/settings', '/tutorial'];
 
@@ -19,11 +19,6 @@ export const authGuard: CanActivateFn = (_route, state) => {
   const path = state.url.split('?')[0];
   const accountScoped = /^\/(shared-rallies|notifications|rally-history)(?:\/|$)/.test(path);
   if (hasStaleCrewContext() && path !== '/account' && !accountScoped) return router.createUrlTree(['/account']);
-  // Offline ownership has no crew dimension until P09. Never adopt old local data.
-  if (getCrewContext() && (['/new-recce', '/recce-mode', '/offline-recces'].some(p => path === p || path.startsWith(p + '/')) || shared.connectionMode$.value === 'offline')) {
-    return path === '/account' ? true : router.createUrlTree(['/account']);
-  }
-
   if (auth.isOfflineSession() && shared.connectionMode$.value !== 'offline') {
     shared.setConnectionMode('offline', { silent: true });
   }

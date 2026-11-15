@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { ClickMarker, GpsTrackPoint } from './tracking.service';
 import { AuthService } from './auth.service';
+import { OfflineRecceSyncRequest } from './pecs.service';
+
+export type OfflineDestination = Pick<OfflineRecceSyncRequest, 'pecId' | 'rallyId' | 'newPec'>;
 
 export type OfflineRecceStatus = 'draft' | 'ready_to_sync' | 'syncing' | 'synced' | 'conflict';
 
@@ -8,6 +11,11 @@ export interface OfflineRecceSession {
   id: string;
   deviceId: string;
   userEmail: string | null;
+  ownerAccountId?: string | null;
+  crewId?: string | null;
+  destination?: OfflineDestination;
+  syncReceiptId?: string;
+  syncLeaseUntil?: number;
   status: OfflineRecceStatus;
   temporaryName: string;
   pecId?: string;
@@ -45,7 +53,7 @@ interface CreateOfflineSessionInput {
 })
 export class OfflineRecceStoreService {
   private readonly dbName = 'recce-studio-offline';
-  private readonly dbVersion = 1;
+  private readonly dbVersion = 2;
   private readonly sessionsStore = 'recceSessions';
   private readonly audioStore = 'recceAudio';
   private readonly deviceIdKey = 'recce_device_id';
@@ -56,10 +64,15 @@ export class OfflineRecceStoreService {
 
   async createSession(input: CreateOfflineSessionInput): Promise<OfflineRecceSession> {
     const now = new Date().toISOString();
+    this.requireOwner();
+    const identity = this.auth.getOfflineIdentity();
+    if (identity && !identity.crewId) throw new Error('Escolhe uma tripulação antes de começar o reconhecimento.');
     const session: OfflineRecceSession = {
       id: this.createId('offline-recce'),
       deviceId: this.getDeviceId(),
-      userEmail: this.requireOwner(),
+      userEmail: this.auth.getEmail()?.trim().toLowerCase() ?? null,
+      ownerAccountId: identity?.accountId ?? null,
+      crewId: identity?.crewId ?? null,
       status: 'draft',
       temporaryName: input.temporaryName || this.defaultSessionName(input.pecName),
       pecId: input.pecId,
@@ -89,7 +102,7 @@ export class OfflineRecceStoreService {
       gpsTrack: this.cloneGpsTrack(gpsTrack),
     };
 
-    await this.putSession(nextSession);
+    await this.writeSession(nextSession, false, false, 'draft');
     return nextSession;
   }
 
@@ -100,25 +113,26 @@ export class OfflineRecceStoreService {
     gpsTrack: GpsTrackPoint[] = [],
   ): Promise<OfflineRecceSession | null> {
     const session = await this.getSession(sessionId);
-    if (!session) return null;
+    if (!session || session.status !== 'draft') return null;
 
     const now = new Date().toISOString();
     let audioBlobId = session.audioBlobId;
     let audioMimeType = session.audioMimeType;
     let audioSize = session.audioSize;
 
+    let recording: OfflineAudioRecord | undefined;
     if (audioBlob) {
       audioBlobId = this.createId('audio');
       audioMimeType = audioBlob.type || 'audio/webm';
       audioSize = audioBlob.size;
-      await this.putAudio({
+      recording = {
         id: audioBlobId,
         sessionId,
         blob: audioBlob,
         mimeType: audioMimeType,
         size: audioSize,
         createdAt: now,
-      });
+      };
     }
 
     const completed: OfflineRecceSession = {
@@ -135,7 +149,7 @@ export class OfflineRecceStoreService {
       audioSize,
     };
 
-    await this.putSession(completed);
+    await this.writeSession(completed, false, false, 'draft', recording);
     return completed;
   }
 
@@ -173,32 +187,41 @@ export class OfflineRecceStoreService {
     return session?.audioBlobId === audioBlobId && this.canAccessSession(session) ? audio.blob : null;
   }
 
-  async deleteSession(id: string): Promise<void> {
+  async deleteSession(id: string, sync?: { session: OfflineRecceSession; token: string }): Promise<void> {
     const session = await this.getSession(id);
     if (!session) throw new Error('Sessão indisponível para esta conta.');
-    await this.writeSession(session, false, true);
+    if (!sync && session.status === 'syncing') throw new Error('Aguarda a conclusão da sincronização.');
+    if (sync) this.requireSyncContext(sync.session, sync.token);
+    await this.writeSession(session, false, true, session.status, undefined, sync?.session, sync?.token);
   }
 
-  async markSessionSyncing(id: string): Promise<OfflineRecceSession | null> {
+  async markSessionSyncing(id: string, target?: OfflineDestination, leaseUntil?: number): Promise<OfflineRecceSession | null> {
     const session = await this.getSession(id);
     if (!session || session.status !== 'ready_to_sync') return null;
+    if (target && ((session.pecId && session.pecId !== target.pecId)
+        || (session.destination && JSON.stringify(session.destination) !== JSON.stringify(target)))) {
+      throw new Error('Repete a sincronização para o destino original.');
+    }
 
     const nextSession: OfflineRecceSession = {
       ...session,
       status: 'syncing',
       updatedAt: new Date().toISOString(),
       syncError: undefined,
+      destination: session.destination ?? target,
+      syncLeaseUntil: leaseUntil,
     };
 
-    await this.putSession(nextSession);
+    await this.writeSession(nextSession, false, false, 'ready_to_sync');
     return nextSession;
   }
 
-  async runSessionSync(id: string, operation: (session: OfflineRecceSession) => Promise<void>): Promise<boolean> {
+  async runSessionSync(id: string, operation: (session: OfflineRecceSession) => Promise<void>, target?: OfflineDestination): Promise<boolean> {
     const result = await this.withSyncLock(id, async () => {
       this.activeSyncs.add(id);
       try {
-        const session = await this.markSessionSyncing(id);
+        const lease = navigator.locks ? undefined : Date.now() + 120_000;
+        const session = await this.markSessionSyncing(id, target, lease);
         if (!session || !this.canAccessSession(session)) return false;
         await operation(session);
         return true;
@@ -213,7 +236,7 @@ export class OfflineRecceStoreService {
     const owner = this.currentOwner();
     if (!owner) return;
     for (const session of await this.listSessions()) {
-      if (session.status !== 'syncing' || !this.sameOwner(session.userEmail, owner)) continue;
+      if (session.status !== 'syncing') continue;
       await this.withSyncLock(session.id, async () => {
         const db = await this.openDb();
         await new Promise<void>((resolve, reject) => {
@@ -223,7 +246,8 @@ export class OfflineRecceStoreService {
           request.onsuccess = () => {
             const current = request.result as OfflineRecceSession | undefined;
             if (current?.status === 'syncing' && !this.activeSyncs.has(current.id)
-              && this.sameOwner(current.userEmail, owner) && this.sameOwner(this.currentOwner(), owner)) {
+              && (current.syncLeaseUntil ?? 0) <= Date.now()
+              && this.canAccessSession(current) && this.currentOwner() === owner) {
               store.put({ ...current, status: 'ready_to_sync', updatedAt: new Date().toISOString(),
                 syncError: 'A sincronização foi interrompida. Tenta novamente.' });
             }
@@ -245,28 +269,55 @@ export class OfflineRecceStoreService {
     return operation();
   }
 
-  private sameOwner(left: string | null, right: string | null): boolean {
-    return !!left?.trim() && !!right?.trim() && left.trim().toLowerCase() === right.trim().toLowerCase();
+  canAccessSession(session: OfflineRecceSession): boolean {
+    const owner = this.currentOwner();
+    if (!owner) return false;
+    if (this.auth.isOfflineSession()) {
+      return session.ownerAccountId == null && session.userEmail === 'offline@recce.local';
+    }
+    return !!session.ownerAccountId && owner === JSON.stringify([session.ownerAccountId, session.crewId ?? null]);
   }
 
-  canAccessSession(session: OfflineRecceSession): boolean {
-    return this.sameOwner(session.userEmail, this.currentOwner());
+  requireSyncContext(session: OfflineRecceSession, expectedToken?: string): string {
+    const token = this.auth.getToken();
+    if (!token || (expectedToken !== undefined && token !== expectedToken)
+        || !session.ownerAccountId || !session.crewId || !this.canAccessSession(session)) {
+      throw new Error('Volta à conta e à tripulação originais para sincronizar esta sessão.');
+    }
+    if (session.status === 'syncing' && session.syncLeaseUntil && session.syncLeaseUntil <= Date.now()) {
+      throw new Error('O tempo da sincronização terminou. Repete o envio.');
+    }
+    return token;
+  }
+
+  async rememberReceipt(attempt: OfflineRecceSession, token: string, receiptId: string): Promise<void> {
+    const session = await this.getSession(attempt.id);
+    if (!session || (session.syncReceiptId && session.syncReceiptId !== receiptId)) {
+      throw new Error('O recibo não corresponde à sessão local.');
+    }
+    await this.writeSession({ ...session, syncReceiptId: receiptId }, false, false, 'syncing', undefined, attempt, token);
+  }
+
+  captureContext(): string | null {
+    const owner = this.currentOwner();
+    if (!owner || (!this.auth.isOfflineSession() && !this.auth.getOfflineIdentity()?.crewId)) return null;
+    return JSON.stringify([owner, this.auth.getToken()]);
   }
 
   private currentOwner(): string | null {
     if (!this.auth.isAuthenticated()) return null;
-    const email = this.auth.getEmail()?.trim().toLowerCase();
-    if (!email || (email === 'offline@recce.local') !== this.auth.isOfflineSession()) return null;
-    return email;
+    if (this.auth.isOfflineSession()) return 'offline';
+    const identity = this.auth.getOfflineIdentity();
+    return identity ? JSON.stringify([identity.accountId, identity.crewId]) : null;
   }
 
   private requireOwner(): string {
     const owner = this.currentOwner();
-    if (!owner) throw new Error('Inicia sessão ou entra explicitamente em modo offline.');
+    if (!owner) throw new Error('Volta a iniciar sessão para confirmar a tua conta, ou entra em modo offline.');
     return owner;
   }
 
-  async markSessionReadyToSync(id: string, syncError?: string): Promise<OfflineRecceSession | null> {
+  async markSessionReadyToSync(id: string, syncError?: string, attempt?: OfflineRecceSession): Promise<OfflineRecceSession | null> {
     const session = await this.getSession(id);
     if (!session) return null;
 
@@ -275,9 +326,10 @@ export class OfflineRecceStoreService {
       status: 'ready_to_sync',
       updatedAt: new Date().toISOString(),
       syncError,
+      syncLeaseUntil: undefined,
     };
 
-    await this.putSession(nextSession);
+    await this.writeSession(nextSession, false, false, attempt ? 'syncing' : undefined, undefined, attempt);
     return nextSession;
   }
 
@@ -311,9 +363,11 @@ export class OfflineRecceStoreService {
     await this.writeSession(session, create);
   }
 
-  private async writeSession(session: OfflineRecceSession, create: boolean, remove = false): Promise<void> {
+  private async writeSession(session: OfflineRecceSession, create: boolean, remove = false,
+      expectedStatus?: OfflineRecceStatus, recording?: OfflineAudioRecord,
+      attempt?: OfflineRecceSession, token?: string): Promise<void> {
     const owner = this.requireOwner();
-    if (!this.sameOwner(session.userEmail, owner)) throw new Error('Sessão indisponível para esta conta.');
+    if (!this.canAccessSession(session)) throw new Error('Sessão indisponível para esta conta.');
     const db = await this.openDb();
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction([this.sessionsStore, this.audioStore], 'readwrite');
@@ -321,8 +375,11 @@ export class OfflineRecceStoreService {
       const request = sessions.get(session.id);
       request.onsuccess = () => {
         const stored = request.result as OfflineRecceSession | undefined;
-        if (!this.sameOwner(this.currentOwner(), owner)
-          || (create ? !!stored : !stored || !this.sameOwner(stored.userEmail, owner))) {
+        if (this.currentOwner() !== owner
+          || (create ? !!stored : !stored || !this.canAccessSession(stored))
+          || (attempt && (stored?.syncLeaseUntil !== attempt.syncLeaseUntil || stored?.updatedAt !== attempt.updatedAt))
+          || (token !== undefined && token !== this.auth.getToken())
+          || (expectedStatus && stored?.status !== expectedStatus)) {
           transaction.abort();
           return;
         }
@@ -332,23 +389,24 @@ export class OfflineRecceStoreService {
             const audio = transaction.objectStore(this.audioStore);
             const recording = audio.get(stored.audioBlobId);
             recording.onsuccess = () => {
+              if (owner !== this.currentOwner() || (token !== undefined && token !== this.auth.getToken())) {
+                transaction.abort();
+                return;
+              }
               if ((recording.result as OfflineAudioRecord | undefined)?.sessionId === session.id) {
                 audio.delete(stored.audioBlobId!);
               }
             };
           }
-        } else sessions.put(session);
+        } else {
+          if (recording) transaction.objectStore(this.audioStore).put(recording);
+          sessions.put(session);
+        }
       };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error || new Error('Sessão indisponível ou transação interrompida.'));
     });
-  }
-
-  private async putAudio(audio: OfflineAudioRecord): Promise<void> {
-    const session = await this.getSession(audio.sessionId);
-    if (!session || !this.canAccessSession(session)) throw new Error('Sessão indisponível para esta conta.');
-    await this.request<IDBValidKey>(this.audioStore, 'readwrite', (store) => store.put(audio));
   }
 
   private request<T>(
@@ -358,7 +416,7 @@ export class OfflineRecceStoreService {
   ): Promise<T> {
     const owner = this.currentOwner();
     return this.openDb().then((db) => new Promise<T>((resolve, reject) => {
-      if (!this.sameOwner(owner, this.currentOwner())) {
+      if (!owner || owner !== this.currentOwner()) {
         reject(new Error('A conta local mudou ou não está autenticada.'));
         return;
       }
@@ -366,7 +424,7 @@ export class OfflineRecceStoreService {
       const store = transaction.objectStore(storeName);
       const request = operation(store);
 
-      transaction.oncomplete = () => this.sameOwner(owner, this.currentOwner())
+      transaction.oncomplete = () => owner === this.currentOwner()
         ? resolve(request.result) : reject(new Error('A conta local mudou.'));
       request.onerror = () => reject(request.error);
       transaction.onerror = () => reject(transaction.error);
@@ -384,6 +442,11 @@ export class OfflineRecceStoreService {
       }
 
       const request = indexedDB.open(this.dbName, this.dbVersion);
+      let blocked = false;
+      request.onblocked = () => {
+        blocked = true;
+        reject(new Error('Fecha as outras janelas da aplicação para atualizar o armazenamento offline.'));
+      };
 
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -399,10 +462,16 @@ export class OfflineRecceStoreService {
         }
       };
 
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (blocked) { db.close(); return; }
+        db.onversionchange = () => { db.close(); this.dbPromise = null; };
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
     });
 
+    this.dbPromise = this.dbPromise.catch(error => { this.dbPromise = null; throw error; });
     return this.dbPromise;
   }
 

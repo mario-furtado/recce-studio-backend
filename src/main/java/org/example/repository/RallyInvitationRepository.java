@@ -29,4 +29,5 @@ public interface RallyInvitationRepository extends JpaRepository<RallyInvitation
 
     boolean existsByRallyIdAndRecipientEmailAndStateAndExpiresAtGreaterThan(String rally, String email, String state, long now);
     boolean existsByRallyIdAndInviterIdAndRecipientEmailAndState(String rally, String inviter, String email, String state);
+    List<RallyInvitationEntity> findByRallyIdAndStateAndExpiresAtGreaterThan(String rally, String state, long now);
 }

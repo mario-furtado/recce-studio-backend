@@ -16,7 +16,10 @@ public class PersonalAccountController {
     private final AccountRateLimiter limiter;
     private final AuthService auth;
     private final CrewService crews;
-    public PersonalAccountController(PersonalAccountService accounts, AccountRateLimiter limiter, AuthService auth, CrewService crews) { this.accounts = accounts; this.limiter = limiter; this.auth = auth; this.crews=crews; }
+    private final CrewTransferService transfers;
+    public PersonalAccountController(PersonalAccountService accounts, AccountRateLimiter limiter, AuthService auth, CrewService crews, CrewTransferService transfers) {
+        this.accounts = accounts; this.limiter = limiter; this.auth = auth; this.crews=crews; this.transfers=transfers;
+    }
     @GetMapping("/account-options")
     public ResponseEntity<?> options() { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Collections.singletonMap("available", accounts.available())); }
     @PostMapping({"/register", "/verification/request"})
@@ -46,13 +49,37 @@ public class PersonalAccountController {
     }
     @GetMapping("/me")
     public ResponseEntity<?> me(@RequestHeader(value = "Authorization", required = false) String authorization) {
-        String token = authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7).trim() : null;
-        if (!auth.isTokenValid(token)) throw new AccountFlowException(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada.");
-        AuthUserEntity user = auth.findActiveUserByToken(token).orElseThrow(() -> new AccountFlowException(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada."));
+        AuthUserEntity user = requireAccount(bearer(authorization));
         Map<String, Object> result = new LinkedHashMap<>(); result.put("id", user.getId()); result.put("email", user.getEmail());
         result.put("emailVerified", Boolean.TRUE.equals(user.getEmailVerified())); result.put("hasWorkspace", org.springframework.util.StringUtils.hasText(auth.getWorkspaceTeamProfileId(user)));
         result.put("crewsEnabled",crews.enabled());
+        result.put("deactivationAvailable", accounts.deactivationAvailable(user));
+        result.put("crewTransfersEnabled", transfers.enabled());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+    }
+
+    @PostMapping("/deactivate")
+    public ResponseEntity<?> deactivate(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                        @RequestBody JsonNode body, HttpServletRequest request) {
+        String token = bearer(authorization);
+        AuthUserEntity user = requireAccount(token);
+        fields(body, "password");
+        String password = text(body, "password");
+        limiter.check("DEACTIVATE", user.getEmail(), request.getRemoteAddr());
+        accounts.deactivate(user.getId(), token, password);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    private String bearer(String authorization) {
+        return authorization != null && authorization.startsWith("Bearer ") ? authorization.substring(7).trim() : null;
+    }
+
+    private AuthUserEntity requireAccount(String token) {
+        if (auth.isTokenValid(token)) {
+            return auth.findActiveUserByToken(token)
+                    .orElseThrow(() -> new AccountFlowException(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada."));
+        }
+        throw new AccountFlowException(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada.");
     }
     private void fields(JsonNode value, String... fields) {
         if (value == null || !value.isObject()) throw new IllegalArgumentException("Pedido inválido.");

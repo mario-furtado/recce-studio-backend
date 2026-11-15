@@ -60,7 +60,7 @@ public class AuthService {
         user.setTeamProfileId(savedProfile.getId());
         authUserRepository.save(user);
 
-        return new AuthResponseDTO(user.getToken(), user.getEmail(), savedProfile);
+        return new AuthResponseDTO(user.getToken(), user.getEmail(), user.getId(), savedProfile);
     }
 
     @Transactional
@@ -78,12 +78,13 @@ public class AuthService {
         issueToken(user);
         authUserRepository.save(user);
         String workspace=getWorkspaceTeamProfileId(user);
-        return new AuthResponseDTO(user.getToken(), user.getEmail(), StringUtils.hasText(workspace) ? teamProfileService.getProfile(workspace) : null);
+        return new AuthResponseDTO(user.getToken(), user.getEmail(), user.getId(), StringUtils.hasText(workspace) ? teamProfileService.getProfile(workspace) : null);
     }
 
     public boolean isTokenValid(String token) {
         return findActiveUserByToken(token)
-                .filter(user -> { String workspace=getWorkspaceTeamProfileId(user); return Boolean.TRUE.equals(user.getEmailVerified()) || StringUtils.hasText(workspace); })
+                .filter(user -> { String workspace=getWorkspaceTeamProfileId(user); return Boolean.TRUE.equals(user.getEmailVerified())
+                        || Boolean.TRUE.equals(user.getLegacyCrewMigrated()) || StringUtils.hasText(workspace); })
                 .isPresent();
     }
 

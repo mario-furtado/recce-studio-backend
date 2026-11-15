@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-JUrKaZa3r4HUML1HR9nrAUPkTuvQ14y5KyctTvUxXts='; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Hipóteses comerciais · Recce Studio</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font: 100%/1.5 Inter, system-ui, sans-serif;
+      color: #f2f4f8;
+      background: #10141b;
+      accent-color: #ff5266;
+    }
+    body { margin: 0; }
+    main { max-width: 56rem; margin: auto; padding: clamp(1rem, 4vw, 3rem); }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(1.8rem, 5vw, 2.75rem); line-height: 1.15; }
+    h2 { font-size: 1.25rem; }
+    header { border-left: .25rem solid #ff5266; padding-left: 1rem; margin-bottom: 2rem; }
+    p, small { color: #bcc7d7; }
+    header p, section p { margin-top: .5rem; }
+    section { padding: 1.25rem 0; border-bottom: 1px solid #364253; }
+    fieldset { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+    legend { padding: 0; font-weight: 700; margin-bottom: .5rem; }
+    label { cursor: pointer; }
+    input[type="radio"] { margin: 0; flex: none; }
+    select, button { font: inherit; color: inherit; background: #1b2430; border: 1px solid #64748b; border-radius: .5rem; padding: .6rem .8rem; }
+    select { display: block; width: 100%; margin-top: .4rem; }
+    button { cursor: pointer; margin-top: 1rem; }
+    :focus-visible { outline: 2px solid #ff9da9; outline-offset: .2rem; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
+    .option { display: flex; gap: .65rem; align-items: flex-start; padding: .75rem; border: 1px solid #64748b; border-radius: .6rem; background: #1b2430; }
+    .option input { margin-top: .4rem; }
+    .option small { display: block; margin-top: .25rem; font-size: .9rem; }
+    .option:has(:checked) { border-color: #ff5266; }
+    .choices { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; }
+    .choices label { display: inline-flex; align-items: center; gap: .45rem; min-height: 2.75rem; }
+    .result { margin-top: 1rem; padding: .8rem 1rem; border-left: .2rem solid #ff5266; background: #1b2430; }
+    .result p { margin-top: .2rem; }
+    @media (max-width: 36rem) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Por rali ou anual?</h1>
+    <p>Simulação Recce Studio com dados fictícios, sem pagamentos nem registo de respostas.</p>
+  </header>
+  <form id="pilot" autocomplete="off">
+    <fieldset>
+      <legend>Hipótese a simular</legend>
+      <div class="grid">
+        <label class="option">
+          <input type="radio" name="model" value="rally" aria-labelledby="rally-label" aria-describedby="rally-description" checked>
+          <span><strong id="rally-label">Por rali</strong><small id="rally-description">Uma compra para um rali específico. Imagina que participas numa única prova.</small></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="model" value="annual" aria-labelledby="annual-label" aria-describedby="annual-description">
+          <span><strong id="annual-label">Anual</strong><small id="annual-description">Uma subscrição por ano. Imagina que participas em várias provas na época.</small></span>
+        </label>
+      </div>
+    </fieldset>
+    <section aria-labelledby="scenario-heading">
+      <h2 id="scenario-heading">Consulta do rali e exportação do caderno</h2>
+      <p>O exemplo pressupõe um caderno já publicado.</p>
+      <div class="grid">
+        <label>Perfil no rali de exemplo
+          <select name="role">
+            <option value="owner">Proprietário</option>
+            <option value="reader">Leitor autorizado</option>
+            <option value="revoked">Leitor com acesso revogado</option>
+            <option value="outsider">Pessoa sem acesso</option>
+          </select>
+        </label>
+        <fieldset>
+          <legend>Estado comercial simulado</legend>
+          <div class="choices">
+            <label><input type="radio" name="state" value="active" checked> Ativa</label>
+            <label><input type="radio" name="state" value="expired"> Expirada</label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="result" role="status" aria-atomic="true">
+        <strong id="scenario"></strong>
+        <p id="access"></p>
+      </div>
+    </section>
+    <section>
+      <fieldset>
+        <legend>Qual escolherias?</legend>
+        <div class="choices">
+          <label><input type="radio" name="preference" value="rally"> Por rali</label>
+          <label><input type="radio" name="preference" value="annual"> Anual</label>
+          <label><input type="radio" name="preference" value="neither"> Nenhum</label>
+          <label><input type="radio" name="preference" value="undecided"> Ainda não sei</label>
+        </div>
+      </fieldset>
+      <button id="restart-pilot" type="button">Reiniciar simulação</button>
+    </section>
+  </form>
+  <noscript><p>Ativa o JavaScript para veres o resultado da simulação.</p></noscript>
+</main>
+<script>
+  const pilot = document.getElementById('pilot');
+  const scenario = document.getElementById('scenario');
+  const access = document.getElementById('access');
+  const roleResults = {
+    owner: 'Consulta e exportação disponíveis para o proprietário.',
+    reader: 'Consulta e exportação disponíveis com a permissão de leitura existente.',
+    revoked: 'Consulta e exportação indisponíveis. O acesso continua revogado.',
+    outsider: 'Consulta e exportação indisponíveis. É necessária uma permissão de acesso.',
+  };
+
+  function render() {
+    const { model, role, state } = pilot.elements;
+    const modelLabel = model.value === 'annual' ? 'Anual' : 'Por rali';
+    const stateLabel = state.value === 'expired' ? 'expirada' : 'ativa';
+    scenario.textContent = modelLabel + ' · Hipótese ' + stateLabel;
+    access.textContent = roleResults[role.value];
+  }
+
+  pilot.addEventListener('change', event => {
+    if (event.target.name !== 'preference') render();
+  });
+  document.getElementById('restart-pilot').addEventListener('click', () => {
+    pilot.reset();
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

@@ -49,7 +49,8 @@ describe('AUD-REC-002 audio preservation', () => {
       request.addEventListener('success', () => connections.push(request.result));
       return request;
     });
-    auth = { getEmail: () => 'owner@example.test',
+    auth = { getEmail: () => 'owner@example.test', getToken: () => 'fixture-token',
+      getOfflineIdentity: () => ({ accountId: auth.getEmail()!, crewId: 'crew-fixture' }),
       isAuthenticated: () => true, isOfflineSession: () => false } as AuthService;
     store = new OfflineRecceStoreService(auth);
     const draft = await store.createSession({ temporaryName: 'Audio fixture' });

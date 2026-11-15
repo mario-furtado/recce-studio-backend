@@ -207,7 +207,7 @@ describe('AUD-REC-001 GPS startup recovery', () => {
 
   it('leaves the recce page idle without starting audio or offline persistence on denial', async () => {
     const shared = { error: jasmine.createSpy('error'), connectionMode$: new BehaviorSubject('online') };
-    const store = { createSession: jasmine.createSpy('createSession') };
+    const store = { createSession: jasmine.createSpy('createSession'), captureContext: () => 'account-crew-fixture' };
     const page = new RecceModeComponent(service, {} as never, {} as never, {} as never,
       shared as unknown as SharedProperties, store as never, {} as never);
     const internal = page as unknown as { primeAudioCue(): void; startAudioCapture(): Promise<boolean> };

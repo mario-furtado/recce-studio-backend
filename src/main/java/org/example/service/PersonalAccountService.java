@@ -10,6 +10,7 @@ import org.springframework.mail.MailException;
 import java.time.Clock;
 import java.security.SecureRandom;
 import java.util.*;
+import javax.persistence.EntityManager;
 
 @Service
 public class PersonalAccountService {
@@ -19,9 +20,11 @@ public class PersonalAccountService {
     private final AccountMailer mailer;
     private final Clock clock;
     private final boolean enabled;
+    private final EntityManager entities;
     private final SecureRandom random = new SecureRandom();
-    public PersonalAccountService(AuthUserRepository users, AccountChallengeRepository challenges, AccountRateLimitRepository limits, AccountMailer mailer, Clock clock, @Value("${recce.account.enabled:false}") boolean enabled) {
+    public PersonalAccountService(AuthUserRepository users, AccountChallengeRepository challenges, AccountRateLimitRepository limits, AccountMailer mailer, Clock clock, EntityManager entities, @Value("${recce.account.enabled:false}") boolean enabled) {
         this.users = users; this.challenges = challenges; this.limits = limits; this.mailer = mailer; this.clock = clock; this.enabled = enabled;
+        this.entities = entities;
     }
     public boolean available() { return enabled && mailer.isConfigured(); }
     public void requireAvailable() {
@@ -51,7 +54,7 @@ public class PersonalAccountService {
         AccountChallengeEntity challenge = new AccountChallengeEntity();
         String token = nonce(); challenge.tokenHash = AccountPasswords.digest(token); challenge.email = email; challenge.purpose = purpose;
         challenge.expiresAt = Math.addExact(clock.millis(), "VERIFY".equals(purpose) ? 86400000L : 1800000L);
-        if ("RESET".equals(purpose) && user != null && user.isActive()) {
+        if ("RESET".equals(purpose) && user != null && canRecover(user)) {
             challenge.userId = user.getId(); challenge.credentialVersion = version(user);
         }
         challenges.save(challenge);
@@ -81,12 +84,47 @@ public class PersonalAccountService {
             user.setToken(nonce()); user.setTokenExpiresAtEpochMillis(null); users.save(user);
         } else {
             AuthUserEntity user = challenge.userId == null ? null : users.lockById(challenge.userId).orElse(null);
-            if (user == null || !user.isActive() || !user.getEmail().equalsIgnoreCase(challenge.email) || version(user) != challenge.credentialVersion) throw invalid();
+            if (user == null || !canRecover(user) || !user.getEmail().equalsIgnoreCase(challenge.email) || version(user) != challenge.credentialVersion) throw invalid();
             user.setPasswordHash(AccountPasswords.encode(password)); user.setCredentialVersion(Math.addExact(version(user), 1));
-            user.setTokenExpiresAtEpochMillis(null); users.save(user);
+            user.setTokenExpiresAtEpochMillis(null);
+            user.setSelfDeactivatedAt(null);
+            user.setActive(true);
+            users.save(user);
         }
         challenge.used = true; challenges.save(challenge);
     }
     private long version(AuthUserEntity user) { return user.getCredentialVersion() == null ? 0 : user.getCredentialVersion(); }
+    private boolean canRecover(AuthUserEntity user) {
+        return user.isActive() || (user.getSelfDeactivatedAt() != null && Boolean.TRUE.equals(user.getEmailVerified()));
+    }
+
+    public boolean deactivationAvailable(AuthUserEntity user) {
+        return available() && Boolean.TRUE.equals(user.getEmailVerified());
+    }
+
+    @Transactional
+    public void deactivate(String accountId, String token, String password) {
+        requireAvailable();
+        AuthUserEntity user = users.lockById(accountId).orElseThrow(this::invalidSession);
+        entities.refresh(user);
+        Long expiry = user.getTokenExpiresAtEpochMillis();
+        if (!user.isActive() || !token.equals(user.getToken()) || expiry == null || expiry <= clock.millis()) {
+            throw invalidSession();
+        }
+        if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+            throw new AccountFlowException(HttpStatus.FORBIDDEN, "É necessário um email verificado para poder reativar a conta.");
+        }
+        if (!AccountPasswords.matches(password, user.getPasswordHash())) {
+            throw new AccountFlowException(HttpStatus.FORBIDDEN, "A password atual está incorreta.");
+        }
+        user.setCredentialVersion(Math.addExact(version(user), 1));
+        user.setSelfDeactivatedAt(clock.millis());
+        user.setActive(false);
+        user.setTokenExpiresAtEpochMillis(null);
+    }
+
+    private AccountFlowException invalidSession() {
+        return new AccountFlowException(HttpStatus.UNAUTHORIZED, "Sessão inválida ou expirada.");
+    }
     private AccountFlowException invalid() { return new AccountFlowException(HttpStatus.BAD_REQUEST, "O link não é válido ou expirou. Pede um novo link."); }
 }

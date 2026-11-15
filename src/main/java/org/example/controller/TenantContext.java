@@ -9,6 +9,7 @@ public class TenantContext {
     public static final String TEAM_PROFILE_ID_ATTRIBUTE = "recce.auth.teamProfileId";
     public static final String USER_EMAIL_ATTRIBUTE = "recce.auth.userEmail";
     public static final String ACCOUNT_ID_ATTRIBUTE = "recce.auth.accountId";
+    public static final String BEARER_TOKEN_ATTRIBUTE = "recce.auth.bearerToken";
 
     private final HttpServletRequest request;
 
@@ -25,6 +26,7 @@ public class TenantContext {
     }
 
     public String requireAccountId() { return requireAttribute(ACCOUNT_ID_ATTRIBUTE, "Sessão inválida."); }
+    public String requireBearerToken() { return requireAttribute(BEARER_TOKEN_ATTRIBUTE, "Sessão inválida."); }
 
     private String requireAttribute(String name, String message) {
         Object value = request.getAttribute(name);

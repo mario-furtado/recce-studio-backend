@@ -73,7 +73,7 @@ export class SidebarComponent {
       this.isQuickPanelOpen = false;
       this.shared.info(
         'Inicia sessao online',
-        'A sessao offline fica no dispositivo. Entra para sincronizar com o backend.',
+        'As sessões anónimas ficam neste dispositivo. Entra para trabalhar com a tua tripulação.',
       );
       this.router.navigate(['/login']);
       return;

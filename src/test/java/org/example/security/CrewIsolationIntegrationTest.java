@@ -1,6 +1,7 @@
 package org.example.security;
 
 import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.example.Main;
 import org.example.entity.*;
 import org.example.repository.*;
@@ -12,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.*;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.util.*;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,6 +29,7 @@ class CrewIsolationIntegrationTest {
     @Autowired AuthUserRepository users; @Autowired CrewRepository crews; @Autowired TeamProfileRepository profiles;
     @Autowired TeamCarRepository cars; @Autowired RallyRepository rallies; @Autowired PecRepository pecs;
     @Autowired NoteRepository notes; @Autowired OfflineRecceSyncRepository syncs;
+    @Autowired TransactionTemplate transactions;
     @BeforeEach void setup() {
         notes.deleteAll(); syncs.deleteAll(); pecs.deleteAll(); rallies.deleteAll(); cars.deleteAll(); crews.deleteAll(); profiles.deleteAll(); users.deleteAll();
         for(String id:Arrays.asList("a","b","third","legacy")) {
@@ -146,6 +149,83 @@ class CrewIsolationIntegrationTest {
         call(get("/api/crews"),"a",null).andExpect(status().isOk());
         call(get("/api/crews;v=1"),"a",null).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
     }
+    @Test void offlineReceiptBindsTheAccountCrewDestinationAndAudio() throws Exception {
+        String a = crew("a", "A"), b = crew("a", "B"), foreign = crew("b", "Foreign");
+        String ra = rally(a), pa = pec(a, ra), pb = pec(b, rally(b));
+        String sync = "/api/offline-recces/sync";
+        ObjectNode payload = json.createObjectNode().put("sessionId", "p09-session").put("accountId", "a")
+                .put("crewId", a).put("pecId", pa).put("userEmail", "b@crew.invalid");
+        call(body(post(sync), payload.toString()), "b", a).andExpect(status().isNotFound());
+        call(body(post(sync), payload.toString()), "a", b).andExpect(status().isNotFound());
+        String receipt = field(call(body(post(sync), payload.toString()), "a", a).andExpect(status().isOk()), "syncId");
+        assertEquals("a", syncs.findById(receipt).get().getOwnerAccountId());
+        assertEquals("a@crew.invalid", syncs.findById(receipt).get().getUserEmail());
+        call(body(post(sync), payload.deepCopy().put("crewId", b).put("pecId", pb).toString()), "a", b)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.syncId").doesNotExist());
+        call(body(post(sync), payload.deepCopy().put("pecId", pb).toString()), "a", a)
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.pecId").doesNotExist());
+        String audio = sync + "/" + receipt + "/audio";
+        call(receiptAudio(audio, "b", foreign, 2), "b", foreign).andExpect(status().isNotFound());
+        call(receiptAudio(audio, "a", b, 2), "a", b).andExpect(status().isNotFound());
+        call(put("/api/rallies/" + ra + "/archive"), "a", a).andExpect(status().isOk());
+        call(receiptAudio(audio, "a", a, 2), "a", a).andExpect(status().isConflict());
+        call(delete("/api/rallies/" + ra + "/archive"), "a", a).andExpect(status().isOk());
+        call(multipart("/api/pecs/" + pa + "/audio").file(new MockMultipartFile("file", "old.webm", "audio/webm", new byte[]{1})), "a", a)
+                .andExpect(status().isOk());
+        transactions.executeWithoutResult(transaction -> {
+            try {
+                call(receiptAudio(audio, "a", a, 9), "a", a).andExpect(status().isNoContent());
+                transaction.setRollbackOnly();
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
+        });
+        assertFalse(syncs.findById(receipt).get().isAudioReceived());
+        call(get("/api/pecs/" + pa + "/audio"), "a", a).andExpect(content().bytes(new byte[]{1}));
+        call(receiptAudio(audio, "a", a, 2), "a", a).andExpect(status().isNoContent());
+        call(receiptAudio(audio, "a", a, 3), "a", a).andExpect(status().isNoContent());
+        call(get("/api/pecs/" + pa + "/audio"), "a", a).andExpect(content().bytes(new byte[]{2}));
+        AuthUserEntity renamed = users.findById("a").get();
+        renamed.setEmail("renamed@crew.invalid");
+        users.save(renamed);
+        assertEquals(receipt, field(call(body(post(sync), payload.toString()), "a", a).andExpect(status().isOk()), "syncId"));
+        call(body(post(sync), payload.deepCopy().put("sessionId", "newer-capture").toString()), "a", a).andExpect(status().isOk());
+        call(body(post(sync), payload.toString()), "a", a).andExpect(status().isConflict());
+        call(receiptAudio(audio, "a", a, 4), "a", a).andExpect(status().isConflict());
+        call(get("/api/pecs/" + pa + "/audio"), "a", a).andExpect(content().bytes(new byte[]{2}));
+        call(delete("/api/pecs/" + pa), "a", a).andExpect(status().isNoContent());
+        call(body(post(sync), payload.toString()), "a", a).andExpect(status().isNotFound());
+        call(receiptAudio(audio, "a", a, 4), "a", a).andExpect(status().isNotFound());
+        assertEquals(2, syncs.count());
+    }
+
+    @Test void simultaneousOfflineRetriesCreateOnePecAndRejectChangedNewPecParameters() throws Exception {
+        String a = crew("a", "A"), ra = rally(a);
+        ObjectNode payload = json.createObjectNode().put("accountId", "a").put("crewId", a)
+                .put("sessionId", "p09-new-pec").put("rallyId", ra);
+        payload.putObject("newPec").put("number", 1).put("name", "Offline").put("distanceKm", 2);
+        String requestBody = payload.toString();
+        String endpoint = "/api/offline-recces/sync";
+        Callable<String> send = () -> field(call(body(post(endpoint), requestBody), "a", a).andExpect(status().isOk()), "syncId");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> first = executor.submit(send);
+            Future<String> second = executor.submit(send);
+            assertEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+        ((ObjectNode) payload.get("newPec")).put("name", "Different PEC");
+        call(body(post(endpoint), payload.toString()), "a", a).andExpect(status().isConflict());
+        assertEquals(1, pecs.count());
+        assertEquals(1, syncs.count());
+    }
+
+    private MockHttpServletRequestBuilder receiptAudio(String path, String account, String crew, int content) {
+        return multipart(path).file(new MockMultipartFile("file", "audio.webm", "audio/webm", new byte[]{(byte) content}))
+                .param("accountId", account).param("crewId", crew);
+    }
+
     @Test void countsStayInTheCrewButDictionaryRulesStayPersonal() throws Exception {
         String a=crew("a","A"),b=crew("a","B"),other=crew("b","Other"); String ra=rally(a); pec(a,ra); pec(a,ra);
         call(get("/api/team-profile/stats"),"a",a).andExpect(status().isOk()).andExpect(jsonPath("$.totalPecs").value(2));

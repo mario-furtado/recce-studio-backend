@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Observable, tap, timeout } from 'rxjs';
 import { API_BASE_URL } from './api.config';
 import { SharedProperties } from '../shared/shared-properties';
-import { clearCrewContext, getCrewContext } from './crew-context';
+import { clearCrewContext, getCrewContext, hasStaleCrewContext } from './crew-context';
 
 export interface AuthPayload {
   email: string;
@@ -19,7 +19,8 @@ export interface AuthPayload {
 export interface AuthResponse {
   token: string;
   email: string;
-  profile?: unknown;
+  accountId?: string;
+  profile?: { id?: string } | null;
 }
 
 @Injectable({
@@ -30,6 +31,7 @@ export class AuthService {
   private readonly tokenKey = 'recce_auth_token';
   private readonly emailKey = 'recce_auth_email';
   private readonly personalKey = 'recce_auth_personal';
+  private readonly offlineIdentityKey = 'recce_auth_offline_identity';
   private readonly offlineToken = 'offline-session';
 
   constructor(
@@ -49,6 +51,7 @@ export class AuthService {
   enterOffline(): void {
     clearCrewContext();
     localStorage.removeItem(this.personalKey);
+    localStorage.removeItem(this.offlineIdentityKey);
     localStorage.setItem(this.tokenKey, this.offlineToken);
     localStorage.setItem(this.emailKey, 'offline@recce.local');
   }
@@ -75,11 +78,22 @@ export class AuthService {
 
   isPersonalAccount(): boolean { return localStorage.getItem(this.personalKey) === 'true' && !getCrewContext(); }
 
+  getOfflineIdentity(): { accountId: string; crewId: string | null } | null {
+    if (this.isOfflineSession() || hasStaleCrewContext()) return null;
+    try {
+      const identity = JSON.parse(localStorage.getItem(this.offlineIdentityKey) ?? 'null');
+      if (typeof identity?.accountId !== 'string' || !identity.accountId || !identity.token
+          || identity.token !== this.getToken()) return null;
+      return { accountId: identity.accountId, crewId: getCrewContext()?.id ?? identity.workspaceId ?? null };
+    } catch { return null; }
+  }
+
   clearSession(): void {
     clearCrewContext();
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.emailKey);
     localStorage.removeItem(this.personalKey);
+    localStorage.removeItem(this.offlineIdentityKey);
   }
 
   logout(): void {
@@ -113,5 +127,8 @@ export class AuthService {
     localStorage.setItem(this.tokenKey, response.token);
     localStorage.setItem(this.emailKey, response.email);
     localStorage.setItem(this.personalKey, String(response.profile === null));
+    localStorage.setItem(this.offlineIdentityKey, JSON.stringify({
+      token: response.token, accountId: response.accountId, workspaceId: response.profile?.id,
+    }));
   }
 }

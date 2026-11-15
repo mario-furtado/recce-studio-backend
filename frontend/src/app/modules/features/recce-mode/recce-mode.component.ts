@@ -1,3 +1,4 @@
+import { offlineTransferError, sendOfflineAudio, sendOfflineNotes } from '../../core/services/offline-recce-transfer';
 import {
   Component,
   OnDestroy,
@@ -23,7 +24,6 @@ import {
   OfflineRecceStoreService,
 } from '../../core/services/offline-recce-store.service';
 import { PecService } from '../../core/services/pecs.service';
-import { firstValueFrom } from 'rxjs';
 
 interface RecceCompletion {
   markers: ClickMarker[];
@@ -138,6 +138,11 @@ export class RecceModeComponent implements OnInit, OnDestroy {
   async toggleRecording(): Promise<void> {
     if (this.destroyed || this.isSaving || this.isWaitingGps) return;
     if (!this.isRecording && !this.pendingCompletion && !this.mediaRecorder) {
+      const capture = this.offlineStore.captureContext();
+      if (!capture) {
+        this.shared.error('Sessão indisponível', 'Inicia sessão e escolhe uma tripulação, ou entra em modo offline.');
+        return;
+      }
       if (this.resumeSession) {
         const current = await this.offlineStore.getSession(this.resumeSession.id).catch(() => null);
         if (!current || !this.offlineStore.canAccessSession(current) || current.status !== 'draft') {
@@ -157,10 +162,11 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         this.resumeSession?.gpsTrack || [],
       );
       const audioReady = gpsReady ? await this.startAudioCapture() : false;
-      this.isWaitingGps = false;
-      if (this.destroyed) return;
+      if (this.destroyed) { this.isWaitingGps = false; return; }
 
-      if (this.resumeSession && !this.offlineStore.canAccessSession(this.resumeSession)) {
+      if (capture !== this.offlineStore.captureContext()
+          || (this.resumeSession && !this.offlineStore.canAccessSession(this.resumeSession))) {
+        this.isWaitingGps = false;
         await this.stopAudioCapture();
         this.trackingService.stopRecce();
         this.resumeSession = null;
@@ -170,11 +176,17 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       }
 
       if (gpsReady) {
-        this.isRecording = true;
         this.resetVoiceBuffers();
         this.offlineSaveQueue = this.startOfflineSession();
         await this.offlineSaveQueue;
+        this.isWaitingGps = false;
         if (this.destroyed) return;
+        if (!this.offlineSessionId || capture !== this.offlineStore.captureContext()) {
+          await this.stopAudioCapture();
+          this.trackingService.stopRecce();
+          return;
+        }
+        this.isRecording = true;
         this.restoreResumeCounters();
         this.startTimer(this.resumeSession?.durationSeconds || 0);
         if (audioReady) {
@@ -185,23 +197,18 @@ export class RecceModeComponent implements OnInit, OnDestroy {
         } else {
           this.speechStatus = this.speechSupported ? 'Push to talk pronto' : 'Transcricao indisponivel neste browser';
         }
-      }
+      } else this.isWaitingGps = false;
     } else {
       // FINALIZAR PEC
       this.isSaving = true;
       try {
         const completed = await this.finishLocalRecording();
         if (!completed || this.destroyed) return;
-        const { markers: finalMarkers, gpsTrack: finalGpsTrack, audioBlob, session: completedSession } = completed;
-        const syncStatus = await this.syncCompletedSessionIfOnline(
-          completedSession,
-          finalMarkers,
-          finalGpsTrack,
-          audioBlob,
-        );
+        const completedSession = completed.session;
+        const syncStatus = await this.syncCompletedSessionIfOnline(completedSession);
 
-        if (syncStatus === 'offline') {
-          this.storeLocalCompletion(finalMarkers, finalGpsTrack, completedSession.id);
+        if (syncStatus === 'offline' && !this.isStandaloneOfflineRecce()) {
+          localStorage.setItem(`recce_session_id_${this.pecId}`, completedSession.id);
         }
 
         this.isSaving = false;
@@ -700,7 +707,7 @@ export class RecceModeComponent implements OnInit, OnDestroy {
       console.error('Erro ao criar sessao offline:', error);
       this.resumeSession = null;
       this.offlineSessionId = null;
-      this.shared.error('Erro no armazenamento offline', 'O reconhecimento continua, mas pode nao ficar guardado no dispositivo.');
+      this.shared.error('Erro no armazenamento offline', 'Confirma a sessão e o espaço disponível antes de começares a gravar.');
     }
   }
 
@@ -757,105 +764,40 @@ export class RecceModeComponent implements OnInit, OnDestroy {
 
   private async syncCompletedSessionIfOnline(
     session: OfflineRecceSession | null,
-    markers: ClickMarker[],
-    gpsTrack: ReturnType<TrackingService['getGpsTrack']>,
-    audioBlob: Blob | null,
   ): Promise<'synced' | 'partial' | 'offline'> {
     if (!session || !this.shouldSyncImmediately()) {
-      this.shared.success('Reconhecimento guardado offline', 'Fica disponivel para sincronizar quando estiver online.');
+      this.shared.success('Reconhecimento guardado offline', session?.ownerAccountId
+        ? 'Fica disponível para sincronizar na tripulação original.'
+        : 'A gravação fica disponível no modo offline deste dispositivo.');
       return 'offline';
     }
 
+    let result: 'synced' | 'partial' | 'offline' = 'offline';
+    const target = { pecId: this.pecId };
     try {
-      const current = await this.offlineStore.getSession(session.id);
-      if (!current || !this.offlineStore.canAccessSession(current)) return 'offline';
-      const response = await firstValueFrom(
-        this.pecService.syncOfflineRecce({
-          sessionId: session.id,
-          deviceId: session.deviceId,
-          userEmail: session.userEmail,
-          temporaryName: session.temporaryName,
-          pecId: this.pecId,
-          createdAt: session.createdAt,
-          finishedAt: session.finishedAt,
-          notesCount: markers.length,
-          durationSeconds: session.durationSeconds,
-          markers,
-          gpsTrack,
-        }),
-      );
-
-      const audioUploaded = await this.uploadAudioBlob(response.pecId, audioBlob);
-      if (!audioUploaded) {
-        await this.offlineStore.markSessionReadyToSync(
-          session.id,
-          'Notas e GPS sincronizados, mas falhou o envio do audio.',
-        );
-        this.shared.error(
-          'Audio nao sincronizado',
-          'Notas e GPS foram guardados no backend. O audio fica local para tentar novamente.',
-        );
-        return 'partial';
-      }
-
-      await this.offlineStore.deleteSession(session.id);
-      this.clearLocalCompletion();
-      this.shared.success('Reconhecimento sincronizado', response.pecName || response.pecId);
-      return 'synced';
+      const token = this.offlineStore.requireSyncContext(session);
+      await this.offlineStore.runSessionSync(session.id, async current => {
+        try {
+          const receipt = await sendOfflineNotes(this.offlineStore, this.pecService, current, target, token);
+          if (!await sendOfflineAudio(this.offlineStore, this.pecService, current, receipt, token)) {
+            await this.offlineStore.markSessionReadyToSync(session.id, 'Notas sincronizadas. O áudio fica local para tentar novamente.', current);
+            this.shared.error('Áudio não sincronizado', 'O reconhecimento fica guardado para tentares novamente.');
+            result = 'partial';
+            return;
+          }
+          this.offlineStore.requireSyncContext(current, token);
+          await this.offlineStore.deleteSession(session.id, { session: current, token });
+          this.shared.success('Reconhecimento sincronizado', receipt.pecName || receipt.pecId);
+          result = 'synced';
+        } catch (error) {
+          await this.offlineStore.markSessionReadyToSync(session.id, offlineTransferError(error), current);
+          this.shared.info('Reconhecimento guardado offline', offlineTransferError(error));
+        }
+      }, target);
     } catch (error) {
-      console.error('Erro ao sincronizar reconhecimento online:', error);
-      await this.offlineStore.markSessionReadyToSync(
-        session.id,
-        'Falha ao enviar para o backend.',
-      );
-      this.shared.success('Reconhecimento guardado offline', 'Nao foi possivel contactar o backend. Podes sincronizar depois.');
-      return 'offline';
+      this.shared.info('Reconhecimento guardado offline', offlineTransferError(error));
     }
-  }
-
-  private async uploadAudioBlob(pecId: string, audioBlob: Blob | null): Promise<boolean> {
-    if (!audioBlob) return true;
-
-    try {
-      await firstValueFrom(
-        this.pecService.uploadAudio(
-          pecId,
-          audioBlob,
-          this.audioFileNameFromMime(audioBlob.type),
-        ),
-      );
-      return true;
-    } catch (error) {
-      console.error('Erro ao enviar audio do reconhecimento:', error);
-      return false;
-    }
-  }
-
-  private audioFileNameFromMime(mimeType?: string): string {
-    const normalized = (mimeType || '').toLowerCase();
-    if (normalized.includes('mp4') || normalized.includes('aac')) return 'recce-audio.m4a';
-    if (normalized.includes('mpeg') || normalized.includes('mp3')) return 'recce-audio.mp3';
-    if (normalized.includes('ogg')) return 'recce-audio.ogg';
-    if (normalized.includes('wav')) return 'recce-audio.wav';
-    return 'recce-audio.webm';
-  }
-
-  private storeLocalCompletion(
-    markers: ClickMarker[],
-    gpsTrack: ReturnType<TrackingService['getGpsTrack']>,
-    sessionId: string | null,
-  ): void {
-    localStorage.setItem(`recce_timestamps_${this.pecId}`, JSON.stringify(markers));
-    localStorage.setItem(`recce_gps_track_${this.pecId}`, JSON.stringify(gpsTrack));
-    if (sessionId) {
-      localStorage.setItem(`recce_session_id_${this.pecId}`, sessionId);
-    }
-  }
-
-  private clearLocalCompletion(): void {
-    localStorage.removeItem(`recce_timestamps_${this.pecId}`);
-    localStorage.removeItem(`recce_gps_track_${this.pecId}`);
-    localStorage.removeItem(`recce_session_id_${this.pecId}`);
+    return result;
   }
 
   private shouldSyncImmediately(): boolean {

@@ -54,6 +54,8 @@ export interface PecPatch {
 
 export interface OfflineRecceSyncRequest {
   sessionId: string;
+  accountId?: string;
+  crewId?: string;
   deviceId: string;
   userEmail: string | null;
   temporaryName: string;
@@ -186,9 +188,15 @@ export class PecService {
     return this.http.delete<PecAssets>(`${this.apiUrl}/${pecId}/video`);
   }
 
-  uploadAudio(pecId: string, file: Blob, fileName = 'recce-audio.webm'): Observable<PecAssets> {
+  uploadAudio(pecId: string, file: Blob, fileName = 'recce-audio.webm',
+      receipt?: { id: string; accountId: string; crewId: string }): Observable<PecAssets> {
     const formData = new FormData();
     formData.append('file', file, fileName);
+    if (receipt) {
+      formData.append('accountId', receipt.accountId);
+      formData.append('crewId', receipt.crewId);
+      return this.http.post<PecAssets>(`${API_BASE_URL}/api/offline-recces/sync/${encodeURIComponent(receipt.id)}/audio`, formData);
+    }
     return this.http.post<PecAssets>(`${this.apiUrl}/${pecId}/audio`, formData);
   }
 
