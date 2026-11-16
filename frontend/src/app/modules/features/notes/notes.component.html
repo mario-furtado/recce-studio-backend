@@ -88,19 +88,22 @@
         />
       </label>
 
-      <label class="block">
-        <span class="text-xs font-bold uppercase text-slate-400">
-          Grupo
-        </span>
-        <input
-          type="text"
-          name="category"
-          [(ngModel)]="form.category"
-          class="themed-input mt-1 w-full px-4 py-3"
-          placeholder="curvas"
-          title="Grupo opcional para organizar as regras"
-        />
-      </label>
+      <div>
+        <label class="block">
+          <span class="text-xs font-bold uppercase text-slate-400">Grupo</span>
+          <select name="category" [ngModel]="creatingGroup ? null : form.category"
+            (ngModelChange)="selectGroup($event)" class="themed-input mt-1 w-full px-4 py-3">
+            <option value="">Sem grupo</option>
+            <option *ngFor="let category of groupOptions" [ngValue]="category">{{ groupLabel(category) }}</option>
+            <option [ngValue]="null">Outro</option>
+          </select>
+        </label>
+        <label *ngIf="creatingGroup" class="block mt-2">
+          <span class="text-xs font-bold uppercase text-slate-400">Nome do novo grupo</span>
+          <input type="text" name="newCategory" [(ngModel)]="form.category" required maxlength="120"
+            class="themed-input mt-1 w-full px-4 py-3">
+        </label>
+      </div>
 
       <div class="flex flex-wrap items-center gap-2">
         <label
@@ -112,7 +115,7 @@
         </label>
         <button
           type="submit"
-          [disabled]="isSaving"
+          [disabled]="isSaving || (creatingGroup && !form.category?.trim())"
           class="accent-button px-4 py-3 rounded-xl text-sm font-black disabled:opacity-50"
           [attr.title]="editingRuleId ? 'Guardar alteracoes' : 'Adicionar regra'"
         >

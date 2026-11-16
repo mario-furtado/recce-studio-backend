@@ -50,8 +50,39 @@ class SharedRallyIntegrationTest {
     @Autowired PecRepository pecs;
     @Autowired NotebookPreferencesRepository preferences;
     @Autowired TransactionTemplate transactions;
+    @Autowired RallyInvitationRepository invitations;
 
     private String crew, rally, pec, sibling, siblingPec, shared, ownerPec, noteId;
+
+    @Test
+    void accountSharingSummaryIsOwnerScopedAndIncludesArchivedRalliesAndPendingInvitations() throws Exception {
+        String summary = "/api/invitations/managed-rallies";
+        owner(put("/api/rallies/" + rally + "/archive")).andExpect(status().isOk());
+        long now = System.currentTimeMillis();
+        invitations.save(new org.example.entity.RallyInvitationEntity(rallies.findById(sibling).get(), "owner",
+                "Sharing crew", "pending@sharing.invalid", null, now, now + 60000));
+        invitations.save(new org.example.entity.RallyInvitationEntity(rallies.findById(sibling).get(), "owner",
+                "Sharing crew", "expired@sharing.invalid", null, now - 2000, now - 1000));
+        String unshared = rally("Rali sem partilha");
+        owner(get(summary)).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(rally))
+                .andExpect(jsonPath("$.items[0].archivedAt").isNumber())
+                .andExpect(jsonPath("$.items[0].crewId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].activeReaders").value(1))
+                .andExpect(jsonPath("$.items[1].pendingInvitations").value(1))
+                .andExpect(jsonPath("$.items[1].activeReaders").value(0));
+        owner(get(summary).param("sharedOnly", "false")).andExpect(jsonPath("$.items[2].id").value(unshared));
+        reader(get(summary).param("sharedOnly", "false").param("actor", "owner").header("X-Crew-Id", crew))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        call(get(summary), "stranger", null).andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        http.perform(get(summary)).andExpect(status().isUnauthorized());
+        owner(get(summary).param("page", "-1")).andExpect(status().isBadRequest());
+        long grant = grants.findByRecipientIdAndRallyId("reader", rally).get().getId();
+        owner(payload(post("/api/rallies/" + rally + "/access/" + grant + "/revoke"), "{\"reason\":\"OTHER\"}"))
+                .andExpect(status().isNoContent());
+        owner(get(summary)).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(sibling));
+    }
 
     @Test
     void archiveKeepsGrantPublicationAndPreviousStatusAcrossRetriesAndRestoration() throws Exception {

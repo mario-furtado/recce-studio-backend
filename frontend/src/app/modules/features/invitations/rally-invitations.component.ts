@@ -10,6 +10,11 @@ import { ConfirmDialogService } from '../../core/shared/components/confirm-dialo
   selector: 'app-rally-invitations',
   imports: [CommonModule, FormsModule],
   template: `
+    <p *ngIf="showLoadError && !available && status" role="status">{{ status }}</p>
+    <div *ngIf="showLoadError && error && !available">
+      <p role="alert">{{ error }}</p>
+      <button type="button" class="soft-button rounded-lg px-3 py-2" (click)="load(0)">Tentar carregar convites</button>
+    </div>
     <details *ngIf="available" class="border-t border-slate-700 mt-3">
       <summary class="cursor-pointer font-bold min-h-11 py-3">Convites de leitura</summary>
       <p class="text-sm text-slate-300">Apenas este rali. O destinatário recebe o convite na aplicação após verificar o endereço.</p>
@@ -41,6 +46,7 @@ import { ConfirmDialogService } from '../../core/shared/components/confirm-dialo
 })
 export class RallyInvitationsComponent implements OnInit {
   @Input({ required: true }) rallyId!: string;
+  @Input() showLoadError = false;
   private readonly api = inject(InvitationApi);
   private readonly destroyRef = inject(DestroyRef);
   private readonly dialog = inject(ConfirmDialogService);
@@ -57,6 +63,7 @@ export class RallyInvitationsComponent implements OnInit {
   ngOnInit() { this.load(0); }
 
   load(page: number) {
+    this.error = '';
     this.busy = true;
     this.api.sent(this.rallyId, page).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
@@ -66,9 +73,10 @@ export class RallyInvitationsComponent implements OnInit {
         this.hasMore = result.hasMore;
         this.busy = false;
       },
-      error: () => {
+      error: response => {
         this.busy = false;
-        if (this.available) this.error = 'Não foi possível atualizar os convites.';
+        if (this.showLoadError && response.status === 403) this.status = 'O envio de convites está indisponível.';
+        else this.error = 'Não foi possível carregar os convites.';
       },
     });
   }

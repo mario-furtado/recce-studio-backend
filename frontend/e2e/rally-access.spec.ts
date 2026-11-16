@@ -28,7 +28,17 @@ test('FEAT-023 revokes a grant while the reader has the published notebook open'
   expect((await request.put(api + '/pecs/' + pec.id + '/book-publication', {
     headers: owner, data: { page: defaultNotebook().page, cover: defaultBookCover(), notes: [] },
   })).ok()).toBeTruthy();
-  expect((await request.post(api + '/rallies/' + rally.id + '/invitations', { headers: owner, data: { email } })).status()).toBe(202);
+  await page.goto('/account');
+  const sharing = page.getByRole('region', { name: 'Partilhas', exact: true });
+  await expect(page.getByRole('heading', { name: 'Conta e segurança' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Subscrição', exact: true })).toContainText('ainda não está disponível');
+  await sharing.getByLabel('Mostrar todos os meus ralis').check();
+  const ownRally = sharing.getByRole('listitem').filter({ hasText: 'Rali a revogar FEAT023' });
+  await ownRally.getByRole('button', { name: 'Gerir partilha de Rali a revogar FEAT023', exact: true }).click();
+  await ownRally.getByText('Convites de leitura', { exact: true }).click();
+  await ownRally.getByLabel('Email do destinatário').fill(email);
+  await ownRally.getByRole('button', { name: 'Enviar convite', exact: true }).click();
+  await expect(ownRally.getByText('Pendente', { exact: false }).filter({ hasText: 'Até' })).toBeVisible();
 
   const readerPage = await browser.newPage({ viewport: { width: 390, height: 850 } });
   try {
@@ -43,12 +53,18 @@ test('FEAT-023 revokes a grant while the reader has the published notebook open'
     const print = readerPage.getByRole('button', { name: 'Imprimir / Guardar PDF' });
     await expect(print).toBeEnabled();
 
+    expect((await request.put(api + '/rallies/' + rally.id + '/archive', { headers: owner })).ok()).toBeTruthy();
     await page.goto('/rally/' + rally.id);
-    await page.getByText('Acessos ao rali', { exact: true }).click();
+    await expect(page.getByText('Acessos ao rali', { exact: true })).toBeVisible();
+    await page.goto('/account');
+    await expect(sharing.getByRole('listitem').filter({ hasText: 'Rali a revogar FEAT023' })).toContainText('Arquivado');
+    await sharing.getByRole('button', { name: 'Gerir partilha de Rali a revogar FEAT023', exact: true }).click();
     await page.getByLabel('Motivo da revogação').selectOption({ label: 'Fim da colaboração' });
     await page.getByRole('button', { name: 'Revogar acesso de ' + email }).click();
     const dialog = page.getByRole('dialog', { name: 'Revogar acesso de leitura?' });
     await expect(dialog).toContainText('ficheiros já descarregados');
+    await expect(dialog).toContainText('Rali a revogar FEAT023');
+    await expect(dialog).toContainText(email);
     await dialog.getByRole('button', { name: 'Revogar acesso', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Acesso revogado.' })).toBeVisible();
     await page.getByText('Histórico de acessos', { exact: true }).click();

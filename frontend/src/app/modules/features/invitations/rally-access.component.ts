@@ -9,7 +9,12 @@ import { ConfirmDialogService } from '../../core/shared/components/confirm-dialo
   selector: 'app-rally-access',
   imports: [CommonModule, FormsModule],
   template: `
-    <details *ngIf="available" class="border-t border-slate-700 mt-3">
+    <p *ngIf="expanded && !available && busy" role="status">A carregar acessos…</p>
+    <div *ngIf="expanded && error && !available">
+      <p role="alert">{{ error }}</p>
+      <button type="button" class="soft-button rounded-lg px-3 py-2" (click)="load(0)">Tentar carregar acessos</button>
+    </div>
+    <details *ngIf="available" [open]="expanded" class="border-t border-slate-700 mt-3">
       <summary class="cursor-pointer font-bold min-h-11 py-3">Acessos ao rali</summary>
       <p class="text-sm text-slate-300">Concessões de leitura deste rali.</p>
       <p *ngIf="status" role="status">{{ status }}</p>
@@ -59,6 +64,8 @@ import { ConfirmDialogService } from '../../core/shared/components/confirm-dialo
 })
 export class RallyAccessComponent implements OnInit {
   @Input({ required: true }) rallyId!: string;
+  @Input({ required: true }) rallyName!: string;
+  @Input() expanded = false;
   private readonly api = inject(InvitationApi);
   private readonly dialog = inject(ConfirmDialogService);
   private readonly destroyRef = inject(DestroyRef);
@@ -89,6 +96,7 @@ export class RallyAccessComponent implements OnInit {
   ngOnInit() { this.load(0); }
 
   load(page: number) {
+    this.error = '';
     this.busy = true;
     this.api.grants(this.rallyId, page).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
@@ -100,7 +108,7 @@ export class RallyAccessComponent implements OnInit {
       },
       error: () => {
         this.busy = false;
-        if (this.available) this.error = 'Não foi possível atualizar os acessos.';
+        this.error = 'Não foi possível carregar os acessos.';
       },
     });
   }
@@ -129,7 +137,7 @@ export class RallyAccessComponent implements OnInit {
     this.error = this.status = '';
     const confirmed = await this.dialog.confirm({
       title: 'Revogar acesso de leitura?',
-      message: `Os próximos pedidos de ${grant.recipientEmail} a este rali serão recusados.`,
+      message: `${grant.recipientEmail} deixará de poder consultar «${this.rallyName}» e exportar o caderno.`,
       detail: 'Os ficheiros já descarregados, os dados já recebidos e os pedidos em curso podem continuar disponíveis.',
       confirmText: 'Revogar acesso',
       tone: 'danger',

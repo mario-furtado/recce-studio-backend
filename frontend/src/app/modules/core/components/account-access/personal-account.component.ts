@@ -8,24 +8,19 @@ import { API_BASE_URL } from '../../services/api.config';
 import { AuthService } from '../../services/auth.service';
 import { CrewManagerComponent } from './crew-manager.component';
 import { clearCrewContext, getCrewContext, hasStaleCrewContext } from '../../services/crew-context';
+import { AccountSharingComponent } from '../../../features/invitations/account-sharing.component';
 
 @Component({
-  selector: 'app-personal-account', standalone: true, imports: [CommonModule, FormsModule, RouterLink, CrewManagerComponent],
-  template: `<section class="glass-panel p-6 rounded-2xl max-w-3xl mx-auto">
-    <h1 class="text-2xl font-black mb-4">A minha conta</h1>
+  selector: 'app-personal-account', standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink, CrewManagerComponent, AccountSharingComponent],
+  template: `<div class="max-w-3xl mx-auto space-y-4">
+    <h1 class="text-2xl font-black">A minha conta</h1>
     <p *ngIf="!loaded && !error" role="status">A carregar conta…</p>
     <p *ngIf="error" role="alert">{{ error }}</p>
-    <ng-container *ngIf="loaded"><p>{{ email }}</p><p class="mt-3">{{ verified ? 'Email verificado' : 'Conta existente' }}</p>
-    <p *ngIf="!hasWorkspace && !crewsEnabled" class="mt-4">Ainda não tens uma tripulação associada.</p>
-    <p *ngIf="crewsEnabled" class="mt-4">Escolhe uma tripulação para abrir os teus ralis.</p>
-    <div class="flex flex-wrap gap-3 mt-4">
-      <a *ngIf="hasWorkspace || crewSelected" routerLink="/pecs" class="soft-button px-4 py-3 rounded-lg">Abrir os meus ralis</a>
-      <a *ngIf="crewsEnabled" routerLink="/shared-rallies" class="soft-button px-4 py-3 rounded-lg">Ralis partilhados comigo</a>
-      <a *ngIf="crewsEnabled" routerLink="/rally-history" class="soft-button px-4 py-3 rounded-lg">Histórico de ralis</a>
-    </div></ng-container>
-    <div *ngIf="staleSelection" class="mt-4"><p role="alert">A sessão mudou. Limpa a seleção anterior ou escolhe uma tripulação.</p><button type="button" class="soft-button rounded-lg px-4 py-3 mt-2" (click)="clearSelection()">Limpar seleção anterior</button></div>
-    <app-crew-manager *ngIf="loaded && crewsEnabled" [transfersEnabled]="transfersEnabled"></app-crew-manager>
-    <div class="mt-6"><a routerLink="/recover-access" class="soft-button px-4 py-3 rounded-lg inline-block">Recuperar acesso</a></div>
+    <section *ngIf="loaded" aria-labelledby="security-title" class="glass-panel p-5 md:p-6 rounded-2xl">
+    <h2 id="security-title" class="text-xl font-bold">Conta e segurança</h2>
+    <p class="mt-2 break-all">{{ email }} <span class="text-sm text-slate-300">· {{ verified ? 'Email verificado' : 'Conta existente' }}</span></p>
+    <div class="mt-4"><a routerLink="/recover-access" class="soft-button px-4 py-3 rounded-lg inline-block">Recuperar acesso</a></div>
     <details *ngIf="loaded && deactivationAvailable" class="mt-6">
       <summary class="cursor-pointer text-red-300 font-semibold">Desativar conta</summary>
       <form (ngSubmit)="deactivate()" class="mt-3 space-y-3">
@@ -38,8 +33,25 @@ import { clearCrewContext, getCrewContext, hasStaleCrewContext } from '../../ser
         <button class="soft-button px-4 py-3 rounded-lg" type="submit" [disabled]="deactivating || !password">Confirmar desativação</button>
       </form>
     </details>
+    </section>
+    <section *ngIf="loaded" aria-labelledby="subscription-title" class="glass-panel p-5 md:p-6 rounded-2xl">
+      <h2 id="subscription-title" class="text-xl font-bold">Subscrição</h2>
+      <p class="mt-2 text-sm text-slate-300">A gestão de subscrições ainda não está disponível.</p>
+    </section>
+    <app-account-sharing *ngIf="loaded && crewsEnabled" class="block" />
+    <section *ngIf="loaded && !crewsEnabled" aria-labelledby="sharing-unavailable-title" class="glass-panel p-5 md:p-6 rounded-2xl">
+      <h2 id="sharing-unavailable-title" class="text-xl font-bold">Partilhas</h2>
+      <p class="mt-2 text-sm text-slate-300">A gestão de partilhas requer tripulações ativas nesta instância.</p>
+      <p *ngIf="!hasWorkspace" class="mt-2 text-sm text-slate-300">Ainda não tens uma tripulação associada.</p>
+    </section>
+    <section *ngIf="loaded && (crewsEnabled || hasWorkspace || crewSelected || staleSelection)" class="glass-panel p-5 md:p-6 rounded-2xl">
+      <div *ngIf="staleSelection"><p role="alert">A sessão mudou. Limpa a seleção anterior ou escolhe uma tripulação.</p><button type="button" class="soft-button rounded-lg px-4 py-3 mt-2" (click)="clearSelection()">Limpar seleção anterior</button></div>
+      <p *ngIf="crewsEnabled" class="text-sm">Escolhe uma tripulação para abrir os teus ralis.</p>
+      <app-crew-manager *ngIf="crewsEnabled" [transfersEnabled]="transfersEnabled" />
+      <a *ngIf="hasWorkspace || crewSelected" routerLink="/pecs" class="soft-button px-4 py-3 rounded-lg inline-block mt-4">Abrir os meus ralis</a>
+    </section>
     <button *ngIf="error" type="button" (click)="load()" class="soft-button px-4 py-3 rounded-lg mt-3">Tentar novamente</button>
-  </section>`,
+  </div>`,
 })
 export class PersonalAccountComponent implements OnInit, OnDestroy {
   email = ''; verified = false; hasWorkspace = false; loaded = false; error = '';

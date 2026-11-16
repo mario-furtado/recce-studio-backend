@@ -52,6 +52,8 @@ export class NotesComponent implements OnInit, OnDestroy {
   systemError = '';
   rules: CustomNoteDictionaryRule[] = [];
   groups: NoteRuleGroup[] = [];
+  groupOptions: string[] = [];
+  creatingGroup = false;
   form: CustomNoteDictionaryRule = this.emptyForm();
   editingRuleId: string | null = null;
   isLoading = false;
@@ -85,6 +87,8 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.subscriptions.add(
       this.noteDictionary.rules$.subscribe(() => {
         this.rules = this.noteDictionary.getDisplayRules();
+        this.groupOptions = Array.from(new Set(this.rules.map(rule => rule.category || '').filter(Boolean)))
+          .sort((a, b) => this.groupLabel(a).localeCompare(this.groupLabel(b), 'pt'));
         this.rebuildGroups();
       }),
     );
@@ -205,6 +209,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   }
 
   editRule(rule: CustomNoteDictionaryRule): void {
+    this.creatingGroup = false;
     this.editingRuleId = rule.id || null;
     this.form = {
       id: rule.id,
@@ -225,8 +230,18 @@ export class NotesComponent implements OnInit, OnDestroy {
   }
 
   cancelEdit(): void {
+    this.creatingGroup = false;
     this.editingRuleId = null;
     this.form = this.emptyForm();
+  }
+
+  selectGroup(category: string | null): void {
+    this.creatingGroup = category === null;
+    this.form.category = category ?? '';
+  }
+
+  groupLabel(category: string): string {
+    return Object.hasOwn(this.categoryLabels, category) ? this.categoryLabels[category] : this.titleCase(category);
   }
 
   toggleRule(rule: CustomNoteDictionaryRule): void {
@@ -347,6 +362,11 @@ export class NotesComponent implements OnInit, OnDestroy {
   private normalizeForm(): CustomNoteDictionaryRule | null {
     const phrase = this.form.phrase.trim();
     const symbol = this.form.symbol.trim();
+    const category = this.form.category?.trim() || '';
+    if (this.creatingGroup && !category) {
+      this.shared.error('Grupo incompleto', 'Escreve o nome do novo grupo.');
+      return null;
+    }
     if (!phrase || !symbol) {
       this.shared.error(
         'Regra incompleta',
@@ -358,7 +378,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     return {
       phrase,
       symbol,
-      category: this.form.category?.trim() || '',
+      category,
       meaning: this.form.meaning?.trim() || '',
       enabled: this.form.enabled !== false,
     };
@@ -381,7 +401,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.groups = Array.from(groupsByCategory.entries())
       .map(([key, groupRows]) => ({
         key,
-        label: this.categoryLabels[key] || this.titleCase(key),
+        label: this.groupLabel(key),
         rows: groupRows.sort((a, b) => a.phraseLabel.localeCompare(b.phraseLabel)),
         total: groupRows.length,
         enabled: groupRows.filter((row) => row.enabled).length,
@@ -475,7 +495,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   private titleCase(value: string): string {
     return value
       .replace(/[-_]+/g, ' ')
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+      .replace(/(^|\s)\p{L}/gu, (start) => start.toUpperCase());
   }
 
   private finishSave(title: string, message: string): void {

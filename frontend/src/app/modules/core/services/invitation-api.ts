@@ -43,6 +43,16 @@ export interface AccessEvent {
 
 interface AccessPage<T> { items: T[]; hasMore: boolean; }
 
+export interface ManagedRally {
+  id: string;
+  name: string;
+  crewName: string;
+  status: string;
+  archivedAt: number | null;
+  activeReaders: number;
+  pendingInvitations: number;
+}
+
 export interface InvitationPage {
   items: Invitation[];
   hasMore: boolean;
@@ -60,6 +70,9 @@ export class InvitationApi {
   private invitation(id: string) { return this.base + '/invitations/' + encodeURIComponent(id); }
 
   options() { return this.http.get<{ enabled: boolean }>(this.base + '/invitations/options'); }
+  managedRallies(sharedOnly: boolean, page: number) {
+    return this.http.get<AccessPage<ManagedRally>>(this.base + '/invitations/managed-rallies', { params: { sharedOnly, page } });
+  }
   received(page = 0) { return this.http.get<InvitationPage>(this.base + '/notifications', { params: { page } }); }
   unread() { return this.http.get<{ unread: number }>(this.base + '/notifications/unread'); }
   sent(id: string, page: number) { return this.http.get<InvitationPage>(this.rally(id), { params: { page } }); }

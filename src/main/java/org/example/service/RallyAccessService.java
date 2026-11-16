@@ -36,6 +36,14 @@ public class RallyAccessService {
     }
 
     @Transactional(readOnly = true)
+    public AccessPage<RallyRepository.SharingSummary> sharingSummary(String actor, int page, boolean sharedOnly) {
+        if (!crews.enabled()) throw new AccountFlowException(HttpStatus.FORBIDDEN, "A gestão de acessos está indisponível.");
+        Slice<RallyRepository.SharingSummary> result = rallies.findSharingSummary(actor, clock.millis(), sharedOnly, page(page));
+        result.stream().map(RallyRepository.SharingSummary::getCrewId).distinct().forEach(id -> crews.requireOwned(actor, id));
+        return new AccessPage<>(result);
+    }
+
+    @Transactional(readOnly = true)
     public AccessPage<GrantView> list(String actor, String rallyId, int page) {
         requireOwner(actor, rallyId);
         return new AccessPage<>(grants.findByRallyIdOrderByActiveDescIdDesc(rallyId, page(page)).map(GrantView::new));

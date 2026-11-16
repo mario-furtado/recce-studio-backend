@@ -32,6 +32,13 @@ public class RallyInvitationController {
         return access.list(tenant.requireAccountId(), rallyId, page);
     }
 
+    @GetMapping("/invitations/managed-rallies")
+    public RallyAccessService.AccessPage<org.example.repository.RallyRepository.SharingSummary> sharingSummary(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "true") boolean sharedOnly) {
+        return access.sharingSummary(tenant.requireAccountId(), page, sharedOnly);
+    }
+
     @GetMapping("/rallies/{rallyId}/access/history")
     public RallyAccessService.AccessPage<RallyAccessEventEntity> history(@PathVariable String rallyId,
                                                                          @RequestParam(defaultValue = "0") int page) {

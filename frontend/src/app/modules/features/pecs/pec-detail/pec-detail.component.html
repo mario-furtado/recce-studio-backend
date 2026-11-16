@@ -74,21 +74,28 @@
     <!-- BOTÕES DE TOGGLE (ALTERNAR MODO) -->
     <div
       *ngIf="isEditingPec"
-      class="note-edit-panel w-full sm:w-auto grid grid-cols-1 sm:grid-cols-5 gap-2 p-3"
+      class="note-edit-panel w-full sm:w-auto grid grid-cols-1 sm:grid-cols-5 gap-2 p-3 management-list"
       (click)="$event.stopPropagation()"
     >
+    <label class="management-field">Número da PEC
       <input aria-label="Número da PEC"
         type="number"
         [(ngModel)]="pecDraft.number"
         class="themed-input rounded-lg px-3 py-2 text-sm"
         placeholder="N."
       />
+      </label>
+    <label class="management-field">Nome da PEC
+
       <input aria-label="Nome da PEC"
         type="text"
         [(ngModel)]="pecDraft.name"
         class="themed-input sm:col-span-2 rounded-lg px-3 py-2 text-sm"
         placeholder="Nome da PEC"
       />
+    </label>
+    <label class="management-field">Distância da PEC (km)
+
       <input aria-label="Distância da PEC (km)"
         type="number"
         step="0.1"
@@ -96,6 +103,8 @@
         class="themed-input rounded-lg px-3 py-2 text-sm"
         placeholder="Km"
       />
+    </label>
+
       <div class="flex gap-2">
         <button
           type="button"
