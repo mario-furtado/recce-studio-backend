@@ -23,6 +23,21 @@ class SmtpAccountMailerTest {
         assertTrue(new SmtpAccountMailer(config(1).withProperty("recce.account.public-base-url","https://app.example.invalid")).isConfigured());
     }
     @Test void writesExpectedEmailOnlyToAnIsolatedLoopbackSmtpSimulator() throws Exception {
+        String proof="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        String text = smtpBody("RESET", proof);
+        assertTrue(text.contains("/reset-password#token="+proof));
+        assertFalse(text.contains("?token="));
+        String confirmation = smtpBody("VERIFY_CODE", "012345");
+        assertTrue(confirmation.contains("012345"));
+        assertTrue(confirmation.contains("5 minutos"));
+        assertTrue(confirmation.contains("Se não fizeste este pedido"));
+        assertFalse(confirmation.contains("#token="));
+        String welcome = smtpBody("WELCOME", "");
+        assertTrue(welcome.contains("conta está ativa"));
+        assertTrue(welcome.contains("http://localhost:4200/login"));
+    }
+
+    private String smtpBody(String purpose, String proof) throws Exception {
         try(ServerSocket server=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
             server.setSoTimeout(8000); ExecutorService executor=Executors.newSingleThreadExecutor();
             try {
@@ -41,13 +56,11 @@ class SmtpAccountMailerTest {
                         return data.toString();
                     }
                 });
-                String proof="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-                new SmtpAccountMailer(config(server.getLocalPort())).send("recipient@example.invalid","VERIFY",proof);
+                new SmtpAccountMailer(config(server.getLocalPort())).send("recipient@example.invalid",purpose,proof);
                 String sent=message.get(10,TimeUnit.SECONDS);
                 assertTrue(sent.contains("recipient@example.invalid"));
                 javax.mail.internet.MimeMessage decoded = new javax.mail.internet.MimeMessage(javax.mail.Session.getInstance(new java.util.Properties()), new ByteArrayInputStream(sent.getBytes(StandardCharsets.UTF_8)));
-                String text = decoded.getContent().toString();
-                assertTrue(text.contains("/verify-email#token="+proof)); assertFalse(text.contains("?token="));
+                return decoded.getContent().toString();
             } finally {executor.shutdownNow();}
         }
     }

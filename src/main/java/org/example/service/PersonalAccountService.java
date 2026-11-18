@@ -8,12 +8,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.mail.MailException;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import javax.persistence.EntityManager;
 
 @Service
 public class PersonalAccountService {
+    private static final String REGISTRATION = "REGISTRATION";
+    private static final long CODE_TTL = 5 * 60 * 1000L;
+    private static final long PENDING_TTL = 30 * 60 * 1000L;
     private final AuthUserRepository users;
     private final AccountChallengeRepository challenges;
     private final AccountRateLimitRepository limits;
@@ -45,20 +54,136 @@ public class PersonalAccountService {
         byte[] bytes = new byte[32]; random.nextBytes(bytes); StringBuilder value = new StringBuilder();
         for (byte b : bytes) value.append(String.format("%02x", b & 255)); return value.toString();
     }
+
     @Transactional
-    public void request(String purpose, String email) {
+    public RegistrationDelivery beginRegistration(String email, String password, String name, String dateOfBirth) {
         requireAvailable();
-        // Same delivery and public response for existing/non-existing/inactive accounts.
-        // VERIFY never resets an existing account; RESET is bound to the account/version now.
+        AuthUserEntity details = new AuthUserEntity();
+        applyPersonalDetails(details, name, dateOfBirth);
+        String requestId = nonce();
+        AccountChallengeEntity pending = new AccountChallengeEntity();
+        pending.tokenHash = AccountPasswords.digest(requestId);
+        pending.purpose = REGISTRATION;
+        pending.email = email;
+        pending.pendingDisplayName = details.getDisplayName();
+        pending.pendingDateOfBirth = details.getDateOfBirth();
+        pending.pendingPasswordHash = AccountPasswords.encode(password);
+        return issueRegistrationCode(pending, requestId);
+    }
+
+    @Transactional
+    public RegistrationDelivery resendRegistration(String requestId, String correctedEmail) {
+        requireAvailable();
+        lockAccountChanges();
+        AccountChallengeEntity pending = pendingRegistration(requestId);
+        if (correctedEmail != null) pending.email = correctedEmail;
+        return issueRegistrationCode(pending, requestId);
+    }
+
+    private RegistrationDelivery issueRegistrationCode(AccountChallengeEntity pending, String requestId) {
+        String code;
+        String digest;
+        do {
+            code = String.format(Locale.ROOT, "%06d", random.nextInt(1000000));
+            digest = registrationCodeDigest(requestId, code);
+        } while (digest.equals(pending.registrationCodeHash));
+        long now = clock.millis();
+        pending.registrationCodeHash = digest;
+        pending.registrationCodeExpiresAt = now + CODE_TTL;
+        pending.expiresAt = now + PENDING_TTL;
+        challenges.save(pending);
+        return new RegistrationDelivery(requestId, pending.email, code, pending.registrationCodeExpiresAt);
+    }
+
+    public String registrationSubject(String requestId) {
+        requireAvailable();
+        if (!requestId.matches("[a-f0-9]{64}")) throw expiredRegistration();
+        return challenges.pendingEmail(AccountPasswords.digest(requestId), REGISTRATION, clock.millis())
+                .orElseThrow(this::expiredRegistration);
+    }
+
+    private AccountChallengeEntity pendingRegistration(String requestId) {
+        if (requestId == null || !requestId.matches("[a-f0-9]{64}")) throw expiredRegistration();
+        return challenges.findById(AccountPasswords.digest(requestId))
+                .filter(pending -> REGISTRATION.equals(pending.purpose) && !pending.used && pending.expiresAt > clock.millis())
+                .orElseThrow(this::expiredRegistration);
+    }
+
+    private static String registrationCodeDigest(String requestId, String code) {
+        return AccountPasswords.digest(REGISTRATION + ":" + requestId + ":" + code);
+    }
+
+    @Transactional
+    public String confirmRegistration(String requestId, String code) {
+        requireAvailable();
+        lockAccountChanges();
+        AccountChallengeEntity pending = pendingRegistration(requestId);
+        if (pending.registrationCodeExpiresAt <= clock.millis()) {
+            throw new AccountFlowException(HttpStatus.BAD_REQUEST, "O código expirou. Pede um novo código.");
+        }
+        if (!code.matches("[0-9]{6}") || !MessageDigest.isEqual(
+                pending.registrationCodeHash.getBytes(StandardCharsets.US_ASCII),
+                registrationCodeDigest(requestId, code).getBytes(StandardCharsets.US_ASCII))
+                || users.existsByEmailIgnoreCase(pending.email)) {
+            throw new AccountFlowException(HttpStatus.BAD_REQUEST, "Não foi possível confirmar o código. Verifica-o ou recupera o acesso se já tens conta.");
+        }
+        AuthUserEntity user = new AuthUserEntity();
+        user.updatePersonalDetails(pending.pendingDisplayName, pending.pendingDateOfBirth);
+        saveVerifiedAccount(user, pending.email, pending.pendingPasswordHash);
+        challenges.delete(pending);
+        return pending.email;
+    }
+
+    private AccountFlowException expiredRegistration() {
+        return new AccountFlowException(HttpStatus.GONE, "O pedido de registo expirou. Volta a preencher o formulário.");
+    }
+
+    @Transactional
+    public long sendRegistrationCode(RegistrationDelivery delivery) {
+        try {
+            mailer.send(delivery.email, "VERIFY_CODE", delivery.code);
+        } catch (MailException ex) {
+            lockAccountChanges();
+            challenges.expireRegistrationCode(AccountPasswords.digest(delivery.requestId),
+                    registrationCodeDigest(delivery.requestId, delivery.code), clock.millis());
+            return 0;
+        }
+        return Math.max(0, (delivery.expiresAt - clock.millis() + 999) / 1000);
+    }
+
+    public void sendWelcome(String email) {
+        try {
+            mailer.send(email, "WELCOME", "");
+        } catch (MailException ex) {
+            // The account is already committed and can be used.
+        }
+    }
+
+    public static final class RegistrationDelivery {
+        public final String requestId;
+        private final String email;
+        private final String code;
+        private final long expiresAt;
+
+        private RegistrationDelivery(String requestId, String email, String code, long expiresAt) {
+            this.requestId = requestId;
+            this.email = email;
+            this.code = code;
+            this.expiresAt = expiresAt;
+        }
+    }
+    @Transactional
+    public void requestPasswordReset(String email) {
+        requireAvailable();
         AuthUserEntity user = users.findByEmailIgnoreCase(email).orElse(null);
         AccountChallengeEntity challenge = new AccountChallengeEntity();
-        String token = nonce(); challenge.tokenHash = AccountPasswords.digest(token); challenge.email = email; challenge.purpose = purpose;
-        challenge.expiresAt = Math.addExact(clock.millis(), "VERIFY".equals(purpose) ? 86400000L : 1800000L);
-        if ("RESET".equals(purpose) && user != null && canRecover(user)) {
+        String token = nonce(); challenge.tokenHash = AccountPasswords.digest(token); challenge.email = email; challenge.purpose = "RESET";
+        challenge.expiresAt = Math.addExact(clock.millis(), 1800000L);
+        if (user != null && canRecover(user)) {
             challenge.userId = user.getId(); challenge.credentialVersion = version(user);
         }
         challenges.save(challenge);
-        try { mailer.send(email, purpose, token); }
+        try { mailer.send(email, "RESET", token); }
         catch (MailException ex) {
             // Never return account-dependent SMTP failures or expose provider messages/tokens.
             // An undelivered proof is invalidated; client can retry with the same generic flow.
@@ -70,18 +195,18 @@ public class PersonalAccountService {
         return challenges.findById(AccountPasswords.digest(token)).map(c -> c.email).orElse("invalid-link");
     }
     @Transactional
-    public void confirm(String purpose, String token, String password) {
+    public void confirm(String purpose, String token, String password, String displayName, String dateOfBirth) {
         requireAvailable();
         // Serialize first-account creation and proof consumption across instances, not a JVM flag.
-        limits.lock(AccountRateLimiter.GUARD).orElseThrow(() -> new IllegalStateException("Proteção de pedidos indisponível."));
+        lockAccountChanges();
         if (token == null || !token.matches("[a-f0-9]{64}")) throw invalid();
         AccountChallengeEntity challenge = challenges.findById(AccountPasswords.digest(token)).orElseThrow(this::invalid);
         if (challenge.used || !purpose.equals(challenge.purpose) || challenge.expiresAt <= clock.millis()) throw invalid();
         if ("VERIFY".equals(purpose)) {
             if (users.existsByEmailIgnoreCase(challenge.email)) throw invalid();
-            AuthUserEntity user = new AuthUserEntity(); user.setId(UUID.randomUUID().toString()); user.setEmail(challenge.email);
-            user.setPasswordHash(AccountPasswords.encode(password)); user.setEmailVerified(true); user.setCredentialVersion(1L);
-            user.setToken(nonce()); user.setTokenExpiresAtEpochMillis(null); users.save(user);
+            AuthUserEntity user = new AuthUserEntity();
+            applyPersonalDetails(user, displayName, dateOfBirth);
+            saveVerifiedAccount(user, challenge.email, AccountPasswords.encode(password));
         } else {
             AuthUserEntity user = challenge.userId == null ? null : users.lockById(challenge.userId).orElse(null);
             if (user == null || !canRecover(user) || !user.getEmail().equalsIgnoreCase(challenge.email) || version(user) != challenge.credentialVersion) throw invalid();
@@ -92,6 +217,49 @@ public class PersonalAccountService {
             users.save(user);
         }
         challenge.used = true; challenges.save(challenge);
+    }
+
+    private void lockAccountChanges() {
+        limits.lock(AccountRateLimiter.GUARD).orElseThrow(() -> new IllegalStateException("Proteção de pedidos indisponível."));
+    }
+
+    private void saveVerifiedAccount(AuthUserEntity user, String email, String passwordHash) {
+        user.setId(UUID.randomUUID().toString());
+        user.setEmail(email);
+        user.setPasswordHash(passwordHash);
+        user.setEmailVerified(true);
+        user.setCredentialVersion(1L);
+        user.setToken(nonce());
+        user.setTokenExpiresAtEpochMillis(null);
+        users.save(user);
+    }
+
+    @Transactional
+    public AuthUserEntity updatePersonalDetails(String accountId, String token, String displayName, String dateOfBirth) {
+        AuthUserEntity user = requireCurrentSession(accountId, token);
+        applyPersonalDetails(user, displayName, dateOfBirth);
+        return user;
+    }
+
+    private void applyPersonalDetails(AuthUserEntity user, String displayName, String dateOfBirth) {
+        String name = displayName.trim();
+        if (!org.springframework.util.StringUtils.hasText(name) || name.length() > 120 || displayName.chars().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("Indica um nome válido até 120 caracteres.");
+        }
+        LocalDate birthDate;
+        try {
+            if (!dateOfBirth.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) throw invalidBirthDate();
+            birthDate = LocalDate.parse(dateOfBirth);
+        } catch (DateTimeParseException ex) {
+            throw invalidBirthDate();
+        }
+        LocalDate today = Instant.ofEpochMilli(clock.millis()).atOffset(ZoneOffset.UTC).toLocalDate();
+        if (birthDate.getYear() < 1 || birthDate.isAfter(today)) throw invalidBirthDate();
+        user.updatePersonalDetails(name, birthDate);
+    }
+
+    private IllegalArgumentException invalidBirthDate() {
+        return new IllegalArgumentException("Indica uma data de nascimento válida que não seja futura.");
     }
     private long version(AuthUserEntity user) { return user.getCredentialVersion() == null ? 0 : user.getCredentialVersion(); }
     private boolean canRecover(AuthUserEntity user) {
@@ -105,12 +273,7 @@ public class PersonalAccountService {
     @Transactional
     public void deactivate(String accountId, String token, String password) {
         requireAvailable();
-        AuthUserEntity user = users.lockById(accountId).orElseThrow(this::invalidSession);
-        entities.refresh(user);
-        Long expiry = user.getTokenExpiresAtEpochMillis();
-        if (!user.isActive() || !token.equals(user.getToken()) || expiry == null || expiry <= clock.millis()) {
-            throw invalidSession();
-        }
+        AuthUserEntity user = requireCurrentSession(accountId, token);
         if (!Boolean.TRUE.equals(user.getEmailVerified())) {
             throw new AccountFlowException(HttpStatus.FORBIDDEN, "É necessário um email verificado para poder reativar a conta.");
         }
@@ -121,6 +284,14 @@ public class PersonalAccountService {
         user.setSelfDeactivatedAt(clock.millis());
         user.setActive(false);
         user.setTokenExpiresAtEpochMillis(null);
+    }
+
+    private AuthUserEntity requireCurrentSession(String accountId, String token) {
+        AuthUserEntity user = users.lockById(accountId).orElseThrow(this::invalidSession);
+        entities.refresh(user);
+        Long expiry = user.getTokenExpiresAtEpochMillis();
+        if (!user.isActive() || !token.equals(user.getToken()) || expiry == null || expiry <= clock.millis()) throw invalidSession();
+        return user;
     }
 
     private AccountFlowException invalidSession() {

@@ -4,6 +4,7 @@ import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "auth_users")
@@ -14,6 +15,17 @@ public class AuthUserEntity {
 
     @Column(nullable = false, unique = true)
     private String email;
+
+    @Column(length = 120)
+    private String displayName;
+    private LocalDate dateOfBirth;
+
+    public String getDisplayName() { return displayName; }
+    public LocalDate getDateOfBirth() { return dateOfBirth; }
+    public void updatePersonalDetails(String displayName, LocalDate dateOfBirth) {
+        this.displayName = displayName;
+        this.dateOfBirth = dateOfBirth;
+    }
 
     @Column(nullable = false)
     private String passwordHash;

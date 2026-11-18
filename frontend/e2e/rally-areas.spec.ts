@@ -6,12 +6,17 @@ test('FEAT-024 alternates owned and READ rallies without changing the active cre
   const password = 'Rally-areas-password-2026';
   const email = `rally-areas-${Date.now()}@example.invalid`;
   const e2ePassword = process.env['RECCE_E2E_PASSWORD']!;
-  expect((await request.post(api + '/auth/register', { data: { email } })).status()).toBe(202);
+  const registration = await request.post(api + '/auth/register', { data: {
+    email, password, displayName: 'Conta de ensaio', dateOfBirth: '1990-02-28',
+  } });
+  expect(registration.status()).toBe(202);
   const mailbox = await request.get('http://127.0.0.1:18765/e2e/mailbox?email=' + encodeURIComponent(email), {
     headers: { 'X-E2E-Key': e2ePassword },
   });
   const [{ token }] = await mailbox.json();
-  expect((await request.post(api + '/auth/verify-email', { data: { token, password } })).status()).toBe(204);
+  expect((await request.post(api + '/auth/registration/confirm', { data: {
+    requestId: (await registration.json()).requestId, code: token,
+  } })).status()).toBe(204);
   const ownerLogin = await request.post(api + '/auth/login', { data: { email: 'migrated@e2e.invalid', password: e2ePassword } });
   const owner = { Authorization: 'Bearer ' + (await ownerLogin.json()).token };
   const rallyData = { surface: 'TERRA', year: 2026, location: 'Serra' };
@@ -35,7 +40,7 @@ test('FEAT-024 alternates owned and READ rallies without changing the active cre
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByText('Para criares o teu primeiro rali', { exact: false })).toBeVisible();
-  await page.getByRole('link', { name: 'Ralis partilhados comigo' }).click();
+  await page.getByRole('link', { name: 'Partilhados comigo', exact: true }).click();
   await expect(page.getByText('Ainda não tens ralis partilhados.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Criar novo rali' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Escolher tripulação' }).click();

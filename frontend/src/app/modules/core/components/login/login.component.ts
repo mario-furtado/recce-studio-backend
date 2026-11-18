@@ -16,6 +16,7 @@ import { SharedProperties } from '../../shared/shared-properties';
 export class LoginComponent {
   isLoading = false;
   errorMessage = '';
+  readonly accountNotice: string;
   isBrowserOffline = typeof navigator !== 'undefined' ? !navigator.onLine : false;
 
   form: AuthPayload = {
@@ -44,7 +45,10 @@ export class LoginComponent {
     private router: Router,
     private shared: SharedProperties,
   ) {
-    if (this.auth.isAuthenticated()) {
+    const confirmation = this.router.currentNavigation()?.extras.info;
+    this.accountNotice = confirmation === 'account-verified' ? 'Email confirmado. Já podes iniciar sessão.'
+      : confirmation === 'password-reset' ? 'Password atualizada. Inicia sessão com a nova password.' : '';
+    if (this.auth.isAuthenticated() && !this.accountNotice) {
       if (
         this.auth.isOfflineSession() &&
         this.shared.connectionMode$.value !== 'offline'

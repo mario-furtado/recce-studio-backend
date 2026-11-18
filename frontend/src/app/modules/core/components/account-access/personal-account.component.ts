@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
@@ -9,6 +9,11 @@ import { AuthService } from '../../services/auth.service';
 import { CrewManagerComponent } from './crew-manager.component';
 import { clearCrewContext, getCrewContext, hasStaleCrewContext } from '../../services/crew-context';
 import { AccountSharingComponent } from '../../../features/invitations/account-sharing.component';
+
+interface PersonalDetails {
+  displayName: string | null;
+  dateOfBirth: string | null;
+}
 
 @Component({
   selector: 'app-personal-account', standalone: true,
@@ -20,6 +25,18 @@ import { AccountSharingComponent } from '../../../features/invitations/account-s
     <section *ngIf="loaded" aria-labelledby="security-title" class="glass-panel p-5 md:p-6 rounded-2xl">
     <h2 id="security-title" class="text-xl font-bold">Conta e segurança</h2>
     <p class="mt-2 break-all">{{ email }} <span class="text-sm text-slate-300">· {{ verified ? 'Email verificado' : 'Conta existente' }}</span></p>
+    <form (ngSubmit)="saveDetails()" class="mt-4 space-y-3">
+      <h3 class="font-bold">Dados pessoais</h3>
+      <fieldset [disabled]="savingDetails" class="grid gap-3 sm:grid-cols-2">
+        <label>Nome<input name="displayName" autocomplete="name" maxlength="120" required
+          [(ngModel)]="displayName" class="themed-input block w-full rounded-lg p-3 mt-1"></label>
+        <label>Data de nascimento<input name="dateOfBirth" type="date" autocomplete="bday" min="0001-01-01" required
+          [(ngModel)]="dateOfBirth" class="themed-input block w-full rounded-lg p-3 mt-1"></label>
+      </fieldset>
+      <p *ngIf="detailsMessage" role="status">{{ detailsMessage }}</p>
+      <p *ngIf="detailsError" role="alert" class="text-red-300">{{ detailsError }}</p>
+      <button type="submit" class="soft-button px-4 py-3 rounded-lg" [disabled]="savingDetails || !displayName.trim() || !dateOfBirth">Guardar dados pessoais</button>
+    </form>
     <div class="mt-4"><a routerLink="/recover-access" class="soft-button px-4 py-3 rounded-lg inline-block">Recuperar acesso</a></div>
     <details *ngIf="loaded && deactivationAvailable" class="mt-6">
       <summary class="cursor-pointer text-red-300 font-semibold">Desativar conta</summary>
@@ -61,18 +78,36 @@ export class PersonalAccountComponent implements OnInit, OnDestroy {
   deactivating = false;
   password = '';
   deactivationError = '';
+  displayName = ''; dateOfBirth = '';
+  detailsMessage = ''; detailsError = ''; savingDetails = false;
   readonly crewSelected = !!getCrewContext();
   staleSelection = hasStaleCrewContext();
   clearSelection() { clearCrewContext(); location.assign('/account'); }
   private request?: Subscription;
   private deactivationRequest?: Subscription;
-  constructor(private http: HttpClient, private auth: AuthService, private router: Router) {}
+  private detailsRequest?: Subscription;
+  private readonly session: string | null;
+  constructor(private http: HttpClient, private auth: AuthService, private router: Router) {
+    this.session = auth.getToken();
+  }
   ngOnInit() { this.load(); }
+  @HostListener('window:storage')
+  checkSession(): boolean {
+    if (this.session === this.auth.getToken()) return true;
+    this.loaded = false;
+    this.displayName = this.dateOfBirth = this.email = this.password = '';
+    this.error = 'A sessão mudou. Abre a conta novamente.';
+    return false;
+  }
   load() {
+    if (!this.checkSession()) return;
     this.request?.unsubscribe(); this.error = ''; this.loaded = false;
-    this.request = this.http.get<{ email: string; emailVerified: boolean; hasWorkspace: boolean; crewsEnabled?: boolean; deactivationAvailable?: boolean; crewTransfersEnabled?: boolean }>(`${API_BASE_URL}/api/auth/me`).subscribe({
+    this.request = this.http.get<Partial<PersonalDetails> & { email: string; emailVerified: boolean; hasWorkspace: boolean; crewsEnabled?: boolean; deactivationAvailable?: boolean; crewTransfersEnabled?: boolean }>(`${API_BASE_URL}/api/auth/me`).subscribe({
       next: value => {
+        if (!this.checkSession()) return;
         this.email = value.email;
+        this.displayName = value.displayName ?? '';
+        this.dateOfBirth = value.dateOfBirth ?? '';
         this.verified = value.emailVerified;
         this.hasWorkspace = value.hasWorkspace;
         this.crewsEnabled = value.crewsEnabled === true;
@@ -81,6 +116,26 @@ export class PersonalAccountComponent implements OnInit, OnDestroy {
         this.loaded = true;
       },
       error: () => { this.error = 'Não foi possível carregar a conta. Tenta novamente.'; },
+    });
+  }
+  saveDetails() {
+    if (!this.checkSession() || !this.loaded || this.savingDetails || !this.displayName.trim() || !this.dateOfBirth) return;
+    this.detailsMessage = this.detailsError = '';
+    this.savingDetails = true;
+    this.detailsRequest = this.http.patch<PersonalDetails>(`${API_BASE_URL}/api/auth/me`, {
+      displayName: this.displayName.trim(), dateOfBirth: this.dateOfBirth,
+    }).subscribe({
+      next: value => {
+        this.savingDetails = false;
+        if (!this.checkSession()) return;
+        this.displayName = value.displayName ?? '';
+        this.dateOfBirth = value.dateOfBirth ?? '';
+        this.detailsMessage = 'Dados pessoais guardados.';
+      },
+      error: response => {
+        this.savingDetails = false;
+        if (this.checkSession()) this.detailsError = response.error?.message ?? 'Não foi possível guardar os dados pessoais.';
+      },
     });
   }
   deactivate() {
@@ -106,6 +161,7 @@ export class PersonalAccountComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.request?.unsubscribe();
     this.deactivationRequest?.unsubscribe();
+    this.detailsRequest?.unsubscribe();
     this.password = '';
   }
 }

@@ -43,7 +43,7 @@ describe('FEAT-002 login destinations', () => {
     auth.login.and.returnValue(of({ token: 'online-token', email: 'owner@example.test' }));
     store = jasmine.createSpyObj('OfflineRecceStoreService', ['listSessions']);
     store.listSessions.and.resolveTo([]);
-    router = jasmine.createSpyObj('Router', ['navigate']);
+    router = jasmine.createSpyObj('Router', ['navigate', 'currentNavigation']);
     router.navigate.and.resolveTo(true);
     const mode = new BehaviorSubject('online');
     shared = {

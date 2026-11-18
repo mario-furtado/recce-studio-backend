@@ -164,11 +164,13 @@ class RallyInvitationIntegrationTest {
         assertNull(invitations.findById(pending).get().getRecipientId());
         AtomicReference<String> proof = new AtomicReference<>();
         when(mail.isConfigured()).thenReturn(true);
-        doAnswer(call -> { proof.set(call.getArgument(2)); return null; }).when(mail).send(eq("new@invites.invalid"), eq("VERIFY"), anyString());
-        publicBody("/api/auth/register", json.createObjectNode().put("email", "new@invites.invalid")).andExpect(status().isAccepted());
-        assertEquals(accounts, users.count());
+        doAnswer(call -> { proof.set(call.getArgument(2)); return null; }).when(mail).send(eq("new@invites.invalid"), eq("VERIFY_CODE"), anyString());
         String password = "verified-invite-test-2026";
-        publicBody("/api/auth/verify-email", json.createObjectNode().put("token", proof.get()).put("password", password))
+        String requestId = body(publicBody("/api/auth/register", json.createObjectNode().put("email", "new@invites.invalid")
+                .put("password", password).put("displayName", "Leitor de ensaio").put("dateOfBirth", "1990-02-28"))
+                .andExpect(status().isAccepted())).path("requestId").asText();
+        assertEquals(accounts, users.count());
+        publicBody("/api/auth/registration/confirm", json.createObjectNode().put("requestId", requestId).put("code", proof.get()))
                 .andExpect(status().isNoContent());
         String token = body(publicBody("/api/auth/login", json.createObjectNode().put("email", "new@invites.invalid").put("password", password))
                 .andExpect(status().isOk())).path("token").asText();

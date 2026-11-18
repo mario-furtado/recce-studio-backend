@@ -10,7 +10,7 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS})
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH, RequestMethod.OPTIONS})
 public class PersonalAccountController {
     private final PersonalAccountService accounts;
     private final AccountRateLimiter limiter;
@@ -22,20 +22,49 @@ public class PersonalAccountController {
     }
     @GetMapping("/account-options")
     public ResponseEntity<?> options() { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Collections.singletonMap("available", accounts.available())); }
-    @PostMapping({"/register", "/verification/request"})
+    @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody JsonNode body, HttpServletRequest request) {
-        // Preserve the closed-beta response before parsing any registration fields.
         accounts.requireAvailable();
-        return request("VERIFY", body, request);
+        fields(body, "email", "password", "displayName", "dateOfBirth");
+        String email = accounts.normalizeEmail(text(body, "email"));
+        limiter.check("VERIFY_REQUEST", email, request.getRemoteAddr());
+        return registrationResponse(accounts.beginRegistration(email, text(body, "password"),
+                text(body, "displayName"), text(body, "dateOfBirth")));
+    }
+
+    @PostMapping("/registration/resend")
+    public ResponseEntity<?> resendRegistration(@RequestBody JsonNode body, HttpServletRequest request) {
+        accounts.requireAvailable();
+        fields(body, "requestId", "email");
+        String requestId = text(body, "requestId");
+        String email = body.has("email") ? accounts.normalizeEmail(text(body, "email")) : null;
+        limiter.check("VERIFY_REQUEST", email == null ? accounts.registrationSubject(requestId) : email, request.getRemoteAddr());
+        return registrationResponse(accounts.resendRegistration(requestId, email));
+    }
+
+    @PostMapping("/registration/confirm")
+    public ResponseEntity<?> confirmRegistration(@RequestBody JsonNode body, HttpServletRequest request) {
+        accounts.requireAvailable();
+        fields(body, "requestId", "code");
+        String requestId = text(body, "requestId");
+        limiter.check("VERIFY_CONFIRM", accounts.registrationSubject(requestId), request.getRemoteAddr());
+        String email = accounts.confirmRegistration(requestId, text(body, "code"));
+        accounts.sendWelcome(email);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    private ResponseEntity<?> registrationResponse(PersonalAccountService.RegistrationDelivery delivery) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("requestId", delivery.requestId);
+        body.put("remainingSeconds", accounts.sendRegistrationCode(delivery));
+        return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(body);
     }
     @PostMapping("/password-reset/request")
     public ResponseEntity<?> resetRequest(@RequestBody JsonNode body, HttpServletRequest request) {
         accounts.requireAvailable();
-        return request("RESET", body, request);
-    }
-    private ResponseEntity<?> request(String purpose, JsonNode body, HttpServletRequest request) {
         fields(body, "email"); String email = accounts.normalizeEmail(text(body, "email"));
-        limiter.check(purpose + "_REQUEST", email, request.getRemoteAddr()); accounts.request(purpose, email);
+        limiter.check("RESET_REQUEST", email, request.getRemoteAddr());
+        accounts.requestPasswordReset(email);
         return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(Collections.singletonMap("message", "Se o pedido for aplicável, receberás um email com instruções. Se não chegar, tenta novamente mais tarde."));
     }
     @PostMapping("/verify-email")
@@ -43,19 +72,42 @@ public class PersonalAccountController {
     @PostMapping("/password-reset/confirm")
     public ResponseEntity<?> reset(@RequestBody JsonNode body, HttpServletRequest request) { return confirm("RESET", body, request); }
     private ResponseEntity<?> confirm(String purpose, JsonNode body, HttpServletRequest request) {
-        fields(body, "token", "password"); String token = text(body, "token");
-        limiter.check(purpose + "_CONFIRM", accounts.limitSubject(token), request.getRemoteAddr()); accounts.confirm(purpose, token, text(body, "password"));
+        boolean verification = "VERIFY".equals(purpose);
+        if (verification) fields(body, "token", "password", "displayName", "dateOfBirth");
+        else fields(body, "token", "password");
+        String token = text(body, "token");
+        limiter.check(purpose + "_CONFIRM", accounts.limitSubject(token), request.getRemoteAddr());
+        accounts.confirm(purpose, token, text(body, "password"),
+                verification ? text(body, "displayName") : null, verification ? text(body, "dateOfBirth") : null);
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
     @GetMapping("/me")
     public ResponseEntity<?> me(@RequestHeader(value = "Authorization", required = false) String authorization) {
         AuthUserEntity user = requireAccount(bearer(authorization));
         Map<String, Object> result = new LinkedHashMap<>(); result.put("id", user.getId()); result.put("email", user.getEmail());
+        result.putAll(personalDetails(user));
         result.put("emailVerified", Boolean.TRUE.equals(user.getEmailVerified())); result.put("hasWorkspace", org.springframework.util.StringUtils.hasText(auth.getWorkspaceTeamProfileId(user)));
         result.put("crewsEnabled",crews.enabled());
         result.put("deactivationAvailable", accounts.deactivationAvailable(user));
         result.put("crewTransfersEnabled", transfers.enabled());
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+    }
+
+    @PatchMapping("/me")
+    public ResponseEntity<?> updateMe(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                      @RequestBody JsonNode body) {
+        String token = bearer(authorization);
+        AuthUserEntity user = requireAccount(token);
+        fields(body, "displayName", "dateOfBirth");
+        AuthUserEntity updated = accounts.updatePersonalDetails(user.getId(), token, text(body, "displayName"), text(body, "dateOfBirth"));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(personalDetails(updated));
+    }
+
+    private Map<String, Object> personalDetails(AuthUserEntity user) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("displayName", user.getDisplayName());
+        result.put("dateOfBirth", user.getDateOfBirth() == null ? null : user.getDateOfBirth().toString());
+        return result;
     }
 
     @PostMapping("/deactivate")

@@ -72,10 +72,65 @@ class PersonalAccountIntegrationTest {
         postBody(path,body("email",email),"192.0.2.10").andExpect(status().isAccepted()).andExpect(header().string("Cache-Control","no-store"));
         return inbox.get(inbox.size()-1)[2];
     }
-    ResultActions confirm(String path,String token,String pass) throws Exception { return postBody(path,body("token",token,"password",pass),"192.0.2.11"); }
-    String signup(String email) throws Exception { String token=request("register",email); confirm("verify-email",token,password).andExpect(status().isNoContent()); return login(email,password); }
+    ResultActions confirm(String path,String token,String pass) throws Exception {
+        ObjectNode input = body("token", token, "password", pass);
+        if ("verify-email".equals(path)) input.put("displayName", "Nome de ensaio").put("dateOfBirth", "1990-02-28");
+        return postBody(path, input, "192.0.2.11");
+    }
+    ObjectNode registration(String email, String pass) {
+        return body("email", email, "password", pass, "displayName", "Nome de ensaio", "dateOfBirth", "1990-02-28");
+    }
+    String startRegistration(String email, String pass) throws Exception {
+        return field(postBody("register", registration(email, pass), "192.0.2.10")
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.remainingSeconds").value(300))
+                .andExpect(header().string("Cache-Control", "no-store")), "requestId");
+    }
+    String latestCode() { return inbox.stream().filter(item -> "VERIFY_CODE".equals(item[1])).reduce((a, b) -> b).get()[2]; }
+    ResultActions confirmCode(String requestId, String code) throws Exception {
+        return postBody("registration/confirm", body("requestId", requestId, "code", code), "192.0.2.11");
+    }
+    String signup(String email) throws Exception {
+        String requestId = startRegistration(email, password);
+        confirmCode(requestId, latestCode()).andExpect(status().isNoContent());
+        return login(email, password);
+    }
     String login(String email,String pass) throws Exception {
         return json.readTree(postBody("login",body("email",email,"password",pass),"192.0.2.12").andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).path("token").asText();
+    }
+    @Test void validatesAndPersistsPersonalDetailsOnlyForTheVerifiedAccount() throws Exception {
+        String email = "details@example.invalid";
+        ObjectNode input = body("email", email, "password", password);
+        postBody("register", input, "192.0.2.11").andExpect(status().isBadRequest());
+        input.put("displayName", "  Érica Costa  ").put("dateOfBirth", "1991-02-29");
+        postBody("register", input, "192.0.2.11").andExpect(status().isBadRequest());
+        input.put("dateOfBirth", "2099-01-01");
+        postBody("register", input, "192.0.2.11").andExpect(status().isBadRequest());
+        assertEquals(0, users.count());
+        assertEquals(0, challenges.count());
+        input.put("dateOfBirth", "1992-02-29");
+        String requestId = field(postBody("register", input, "192.0.2.11").andExpect(status().isAccepted()), "requestId");
+        confirmCode(requestId, latestCode()).andExpect(status().isNoContent());
+        String session = "Bearer " + login(email, password);
+        http.perform(get("/api/auth/me").header("Authorization", session)).andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.displayName").value("Érica Costa"))
+                .andExpect(jsonPath("$.dateOfBirth").value("1992-02-29"));
+        String details = body("displayName", "Érica Ribeiro", "dateOfBirth", "1992-02-29").toString();
+        http.perform(patch("/api/auth/me").contentType(MediaType.APPLICATION_JSON).content(details)).andExpect(status().isUnauthorized());
+        String other = "Bearer " + signup("other-details@example.invalid");
+        String protectedId = users.findByEmailIgnoreCase(email).get().getId();
+        http.perform(patch("/api/auth/me").header("Authorization", other).contentType(MediaType.APPLICATION_JSON)
+                .content(body("displayName", "Outro nome", "dateOfBirth", "1992-02-29", "id", protectedId).toString()))
+                .andExpect(status().isBadRequest());
+        http.perform(get("/api/auth/me").header("Authorization", other)).andExpect(jsonPath("$.displayName").value("Nome de ensaio"));
+        assertEquals("Érica Costa", users.findById(protectedId).get().getDisplayName());
+        http.perform(patch("/api/auth/me").header("Authorization", session).contentType(MediaType.APPLICATION_JSON).content(details))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.displayName").value("Érica Ribeiro"));
+        String reset = request("password-reset/request", email);
+        confirm("password-reset/confirm", reset, password).andExpect(status().isNoContent());
+        http.perform(patch("/api/auth/me").header("Authorization", session).contentType(MediaType.APPLICATION_JSON).content(details))
+                .andExpect(status().isUnauthorized());
+        assertEquals("Érica Ribeiro", users.findById(protectedId).get().getDisplayName());
     }
     @Test void deactivationFreezesOwnershipWithoutRevokingGrantedReadAndAllowsVerifiedRecovery() throws Exception {
         String email = "owner@example.invalid";
@@ -221,10 +276,16 @@ class PersonalAccountIntegrationTest {
     }
     @Test void verifiesWithoutCreatingTeamAndPersonalIdentityDoesNotGrantLegacyAccess() throws Exception {
         long teamCount=teams.count(), carCount=cars.count();
-        String proof=request("register","  New@Example.invalid  "); assertEquals(0,users.count());
+        String proof=startRegistration("  New@Example.invalid  ", password); assertEquals(0,users.count());
         postBody("login",body("email","new@example.invalid","password",password),"192.0.2.12").andExpect(status().isBadRequest());
-        AccountChallengeEntity saved=challenges.findById(AccountPasswords.digest(proof)).get(); assertNotEquals(proof,saved.tokenHash); assertEquals(now.get()+86400000L,saved.expiresAt);
-        confirm("verify-email",proof,password).andExpect(status().isNoContent());
+        AccountChallengeEntity saved=challenges.findById(AccountPasswords.digest(proof)).get();
+        assertNotEquals(proof,saved.tokenHash);
+        assertEquals(now.get()+300000L,saved.registrationCodeExpiresAt.longValue());
+        assertNotEquals(latestCode(), saved.registrationCodeHash);
+        assertTrue(AccountPasswords.matches(password, saved.pendingPasswordHash));
+        assertNotEquals(password, saved.pendingPasswordHash);
+        confirmCode(proof,latestCode()).andExpect(status().isNoContent());
+        assertFalse(challenges.existsById(saved.tokenHash));
         String token=login("new@example.invalid",password); AuthUserEntity user=users.findByEmailIgnoreCase("new@example.invalid").get();
         assertNull(user.getTeamProfileId()); assertTrue(user.getEmailVerified()); assertEquals(teamCount,teams.count()); assertEquals(carCount,cars.count());
         assertEquals(now.get()+28800000L,user.getTokenExpiresAtEpochMillis().longValue());
@@ -235,12 +296,63 @@ class PersonalAccountIntegrationTest {
         http.perform(post("/api/rallies").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"spoof\",\"teamProfileId\":\"default\"}")).andExpect(status().isForbidden());
     }
     @Test void proofsArePurposeBoundExpiringAndSingleUse() throws Exception {
-        String proof=request("register","proof@example.invalid");
+        String proof=startRegistration("proof@example.invalid",password);
+        String firstCode=latestCode();
         confirm("password-reset/confirm",proof,password).andExpect(status().isBadRequest());
-        now.addAndGet(86400000L); confirm("verify-email",proof,password).andExpect(status().isBadRequest()); assertEquals(0,users.count());
-        String valid=request("verification/request","proof@example.invalid"); confirm("verify-email",valid,password).andExpect(status().isNoContent());
-        confirm("verify-email",valid,"changed-password-2026").andExpect(status().isBadRequest()); assertTrue(AccountPasswords.matches(password,users.findAll().get(0).getPasswordHash()));
+        confirm("verify-email",proof,password).andExpect(status().isBadRequest());
+        now.addAndGet(300000L);
+        confirmCode(proof,firstCode).andExpect(status().isBadRequest());
+        assertEquals(0,users.count());
+        postBody("registration/resend", body("requestId", proof), "192.0.2.20").andExpect(status().isAccepted());
+        String currentCode = latestCode();
+        assertNotEquals(firstCode, currentCode);
+        confirmCode(proof,firstCode).andExpect(status().isBadRequest());
+        now.addAndGet(299999L);
+        confirmCode(proof,currentCode).andExpect(status().isNoContent());
+        confirmCode(proof,currentCode).andExpect(status().isGone());
+        assertTrue(AccountPasswords.matches(password,users.findAll().get(0).getPasswordHash()));
         confirm("verify-email","not-a-proof",password).andExpect(status().isBadRequest());
+    }
+    @Test void acceptsPreviouslyIssuedVerificationLinksOnlyForTheirOriginalPurpose() throws Exception {
+        String token = String.join("", Collections.nCopies(64, "a"));
+        AccountChallengeEntity legacy = new AccountChallengeEntity();
+        legacy.tokenHash = AccountPasswords.digest(token);
+        legacy.purpose = "VERIFY";
+        legacy.email = "legacy-link@example.invalid";
+        legacy.expiresAt = now.get() + 86400000L;
+        challenges.save(legacy);
+        confirmCode(token, "123456").andExpect(status().isGone());
+        confirm("password-reset/confirm", token, password).andExpect(status().isBadRequest());
+        confirm("verify-email", token, password).andExpect(status().isNoContent());
+        confirm("verify-email", token, password).andExpect(status().isBadRequest());
+    }
+    @Test void bindsCodeToRequestAndInvalidatesItAfterCorrectingTheEmail() throws Exception {
+        String first = startRegistration("first@example.invalid", password);
+        String firstCode = latestCode();
+        String second = startRegistration("other@example.invalid", "other-password-2026");
+        String otherCode = latestCode();
+        String crossed = firstCode.equals(otherCode) ? (otherCode.equals("000000") ? "000001" : "000000") : firstCode;
+        confirmCode(second, crossed).andExpect(status().isBadRequest());
+        postBody("registration/resend", body("requestId", first, "email", "corrected@example.invalid"), "192.0.2.20")
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.requestId").value(first));
+        assertEquals("corrected@example.invalid", inbox.get(inbox.size() - 1)[0]);
+        confirmCode(first, firstCode).andExpect(status().isBadRequest());
+        confirmCode(first, latestCode()).andExpect(status().isNoContent());
+        assertFalse(users.existsByEmailIgnoreCase("first@example.invalid"));
+        assertFalse(users.existsByEmailIgnoreCase("other@example.invalid"));
+        login("corrected@example.invalid", password);
+    }
+    @Test void welcomeMailRunsAfterCommitAndItsFailureDoesNotPreventLogin() throws Exception {
+        String email = "welcome@example.invalid";
+        String requestId = startRegistration(email, password);
+        doAnswer(call -> {
+            assertTrue(users.findByEmailIgnoreCase(email).get().getEmailVerified());
+            assertFalse(challenges.existsById(AccountPasswords.digest(requestId)));
+            throw new MailSendException("simulated welcome failure");
+        }).when(mail).send(email, "WELCOME", "");
+        confirmCode(requestId, latestCode()).andExpect(status().isNoContent());
+        verify(mail, times(1)).send(email, "WELCOME", "");
+        login(email, password);
     }
     @Test void recoveryRevokesSessionAndOlderResetProofsWithoutChangingIdentityOrTeam() throws Exception {
         String old=signup("reset@example.invalid"); AuthUserEntity before=users.findByEmailIgnoreCase("reset@example.invalid").get();
@@ -254,9 +366,13 @@ class PersonalAccountIntegrationTest {
     }
     @Test void publicRequestsDoNotEnumerateOrOverwriteExistingInactiveOrMissingAccounts() throws Exception {
         signup("existing@example.invalid"); AuthUserEntity existing=users.findByEmailIgnoreCase("existing@example.invalid").get(); String hash=existing.getPasswordHash();
-        String a=postBody("register",body("email",existing.getEmail()),"192.0.2.20").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
-        String sent=inbox.get(inbox.size()-1)[2]; confirm("verify-email",sent,"attacker-password-2026").andExpect(status().isBadRequest());
-        String b=postBody("register",body("email","missing@example.invalid"),"192.0.2.20").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString(); assertEquals(a,b); assertFalse(a.contains(sent));
+        JsonNode a=json.readTree(postBody("register",registration(existing.getEmail(),"attacker-password-2026"),"192.0.2.20").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString());
+        String sent=latestCode(); confirmCode(a.path("requestId").asText(),sent).andExpect(status().isBadRequest());
+        JsonNode b=json.readTree(postBody("register",registration("missing@example.invalid",password),"192.0.2.20").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString());
+        assertEquals(a.path("remainingSeconds"),b.path("remainingSeconds"));
+        assertEquals(a.path("requestId").asText().length(),b.path("requestId").asText().length());
+        assertEquals(2,a.size()); assertEquals(a.size(),b.size());
+        assertFalse(a.has("code"));
         existing.setActive(false); users.save(existing);
         String c=postBody("password-reset/request",body("email",existing.getEmail()),"192.0.2.21").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
         String inactiveProof=inbox.get(inbox.size()-1)[2];
@@ -264,9 +380,13 @@ class PersonalAccountIntegrationTest {
         confirm("password-reset/confirm",inactiveProof,password).andExpect(status().isBadRequest()); assertEquals(hash,users.findById(existing.getId()).get().getPasswordHash());
     }
     @Test void rateLimitUsesSlidingEmailAndSocketIpWindowsAndIgnoresForwardedSpoofing() throws Exception {
-        for(int i=0;i<5;i++) postBody("register",body("email","limit@example.invalid"),"192.0.2."+(30+i)).andExpect(status().isAccepted());
-        postBody("register",body("email","LIMIT@example.invalid"),"192.0.2.40").andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","900"));
-        now.addAndGet(900000L); postBody("register",body("email","limit@example.invalid"),"192.0.2.40").andExpect(status().isAccepted());
+        String requestId = startRegistration("limit@example.invalid", password);
+        for(int i=0;i<4;i++) postBody("registration/resend",body("requestId",requestId),"192.0.2."+(30+i)).andExpect(status().isAccepted());
+        postBody("register",registration("LIMIT@example.invalid",password),"192.0.2.40").andExpect(status().isTooManyRequests()).andExpect(header().string("Retry-After","900"));
+        for(int i=0;i<5;i++) confirmCode(requestId,"bad-code").andExpect(status().isBadRequest());
+        confirmCode(requestId,latestCode()).andExpect(status().isTooManyRequests());
+        now.addAndGet(900000L);
+        postBody("register",registration("limit@example.invalid",password),"192.0.2.40").andExpect(status().isAccepted());
         limits.deleteByIdNot(AccountRateLimiter.GUARD);
         for(int i=0;i<5;i++) postBody("password-reset/request",body("email","limit"+i+"@example.invalid"),"192.0.2.50").andExpect(status().isAccepted());
         http.perform(post("/api/auth/password-reset/request").with(r->{r.setRemoteAddr("192.0.2.50");return r;}).header("X-Forwarded-For","198.51.100.99").contentType(MediaType.APPLICATION_JSON).content(body("email","new-limit@example.invalid").toString())).andExpect(status().isTooManyRequests());
@@ -275,29 +395,37 @@ class PersonalAccountIntegrationTest {
         postBody("register",body("email","bad\r\n@example.invalid"),"192.0.2.60").andExpect(status().isBadRequest());
         for(String address:new String[]{"Name <person@example.invalid>","one,two@example.invalid","person@example.invalid,other@example.invalid"}) postBody("register",body("email",address),"192.0.2.60").andExpect(status().isBadRequest());
         postBody("register",body("email","good@example.invalid","teamProfileId","default"),"192.0.2.60").andExpect(status().isBadRequest());
-        String proof=request("register","bounds@example.invalid");
-        confirm("verify-email",proof,"short").andExpect(status().isBadRequest()); assertFalse(challenges.findById(AccountPasswords.digest(proof)).get().used);
-        String longPass=String.join("",Collections.nCopies(129,"a")); confirm("verify-email",proof,longPass).andExpect(status().isBadRequest());
-        String valid=String.join("",Collections.nCopies(127,"a"))+"X"; confirm("verify-email",proof,valid).andExpect(status().isNoContent());
+        postBody("register",registration("bounds@example.invalid","short"),"192.0.2.60").andExpect(status().isBadRequest());
+        String longPass=String.join("",Collections.nCopies(129,"a"));
+        postBody("register",registration("bounds@example.invalid",longPass),"192.0.2.60").andExpect(status().isBadRequest());
+        assertEquals(0,challenges.count());
+        String valid=String.join("",Collections.nCopies(127,"a"))+"X";
+        String proof=startRegistration("bounds@example.invalid",valid);
+        confirmCode(proof,latestCode()).andExpect(status().isNoContent());
         AuthUserEntity user=users.findByEmailIgnoreCase("bounds@example.invalid").get(); assertTrue(AccountPasswords.matches(valid,user.getPasswordHash())); assertFalse(AccountPasswords.matches(valid.substring(0,127)+"Y",user.getPasswordHash()));
         String unicode=String.join("",Collections.nCopies(128,"é")); assertTrue(AccountPasswords.matches(unicode,AccountPasswords.encode(unicode)));
-        String spaced="a           "; String spacedProof=request("register","spaces@example.invalid");
-        confirm("verify-email",spacedProof,spaced).andExpect(status().isNoContent()); login("spaces@example.invalid",spaced);
+        String spaced="a           "; String spacedProof=startRegistration("spaces@example.invalid",spaced);
+        confirmCode(spacedProof,latestCode()).andExpect(status().isNoContent()); login("spaces@example.invalid",spaced);
     }
     @Test void deliveryFailureAndMissingConfigurationNeverExposeOrKeepUsableUndeliveredProofs() throws Exception {
         when(mail.isConfigured()).thenReturn(false);
         http.perform(get("/api/auth/account-options")).andExpect(jsonPath("$.available").value(false));
         postBody("register",body("email","none@example.invalid"),"192.0.2.70").andExpect(status().isServiceUnavailable()); verify(mail,never()).send(anyString(),anyString(),anyString());
         when(mail.isConfigured()).thenReturn(true); doThrow(new MailSendException("provider detail must not escape")).when(mail).send(anyString(),anyString(),anyString());
-        String response=postBody("register",body("email","failure@example.invalid"),"192.0.2.70").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
-        assertFalse(response.contains("provider")); assertEquals(0,challenges.count()); assertEquals(0,users.count());
+        String response=postBody("register",registration("failure@example.invalid",password),"192.0.2.70").andExpect(status().isAccepted()).andReturn().getResponse().getContentAsString();
+        assertFalse(response.contains("provider"));
+        JsonNode pending=json.readTree(response);
+        assertEquals(0,pending.path("remainingSeconds").asInt());
+        confirmCode(pending.path("requestId").asText(),"123456").andExpect(status().isBadRequest());
+        assertEquals(0,users.count());
     }
     @Test void competingProofUseCreatesOnlyOneAccount() throws Exception {
-        String proof=request("register","race@example.invalid"); ExecutorService pool=Executors.newFixedThreadPool(2);
+        String proof=startRegistration("race@example.invalid",password), code=latestCode(); ExecutorService pool=Executors.newFixedThreadPool(2);
         try {
-            Callable<Integer> call=()->confirm("verify-email",proof,password).andReturn().getResponse().getStatus();
+            Callable<Integer> call=()->confirmCode(proof,code).andReturn().getResponse().getStatus();
             List<Future<Integer>> futures=pool.invokeAll(Arrays.asList(call,call)); List<Integer> results=Arrays.asList(futures.get(0).get(),futures.get(1).get());
-            assertTrue(results.contains(204)); assertTrue(results.contains(400)); assertEquals(1,users.count());
+            assertTrue(results.contains(204)); assertTrue(results.contains(410)); assertEquals(1,users.count());
+            verify(mail,times(1)).send("race@example.invalid","WELCOME","");
         } finally { pool.shutdownNow(); }
     }
     @Test void loginQuotaRecoversAfterItsWindowWithoutChangingCredentials() throws Exception {
@@ -324,8 +452,8 @@ class PersonalAccountIntegrationTest {
         } finally { pool.shutdownNow(); }
     }
     @Test void cleanupRemovesOnlyExpiredProofsAndWindowsAndExplicitlyUnverifiedUsersCannotAuthenticate() throws Exception {
-        String old=request("register","expired@example.invalid"); now.addAndGet(86400000L);
-        String fresh=request("register","fresh@example.invalid"); assertFalse(challenges.existsById(AccountPasswords.digest(old))); assertTrue(challenges.existsById(AccountPasswords.digest(fresh)));
+        String old=startRegistration("expired@example.invalid",password); now.addAndGet(1800000L);
+        String fresh=startRegistration("fresh@example.invalid",password); assertFalse(challenges.existsById(AccountPasswords.digest(old))); assertTrue(challenges.existsById(AccountPasswords.digest(fresh)));
         signup("unverified@example.invalid"); AuthUserEntity user=users.findByEmailIgnoreCase("unverified@example.invalid").get(); String token=user.getToken();
         user.setEmailVerified(false); users.save(user);
         http.perform(get("/api/auth/validate").header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());

@@ -11,7 +11,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     !token ||
     token === 'offline-session' ||
     path === null ||
-    /^\/api\/auth\/(login|register|account-options|verification\/request|verify-email|password-reset\/(request|confirm))\/?$/.test(path)
+    /^\/api\/auth\/(login|register|account-options|registration\/(resend|confirm)|verify-email|password-reset\/(request|confirm))\/?$/.test(path)
   ) {
     return next(req);
   }

@@ -67,6 +67,8 @@
         </p>
       </div>
 
+      <p *ngIf="accountNotice" role="status" class="mt-4 text-sm">{{ accountNotice }}</p>
+
       <form
         *ngIf="!isBrowserOffline"
         class="mt-6 space-y-4"

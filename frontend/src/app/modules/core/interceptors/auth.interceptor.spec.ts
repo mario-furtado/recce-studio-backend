@@ -51,7 +51,7 @@ describe('AUD-SEC-004 API bearer destination', () => {
     });
   }
 
-  for (const path of ['/api/auth/login', '/api/auth/register', '/api/auth/login/?next=home', '/api/auth/account-options', '/api/auth/verification/request', '/api/auth/verify-email', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm']) {
+  for (const path of ['/api/auth/login', '/api/auth/register', '/api/auth/login/?next=home', '/api/auth/account-options', '/api/auth/registration/resend', '/api/auth/registration/confirm', '/api/auth/verify-email', '/api/auth/password-reset/request', '/api/auth/password-reset/confirm']) {
     it(`keeps public authentication request ${path} free of stored bearer tokens`, () => {
       expect(forwarded(`${API_BASE_URL}${path}`).headers.has('Authorization')).toBeFalse();
     });
@@ -123,11 +123,12 @@ describe('AUD-SEC-004 authentication HTTP lifecycle', () => {
   }
 
   it('requests registration without sending or replacing an existing session', () => {
-    auth.register({ email: 'driver@example.test' }).subscribe();
+    const payload = { email: 'driver@example.test', displayName: 'Piloto', dateOfBirth: '1990-01-01', password: 'registration-password' };
+    auth.register(payload).subscribe();
     const request = http.expectOne(`${API_BASE_URL}/api/auth/register`);
     expect(request.request.headers.has('Authorization')).toBeFalse();
-    expect(request.request.body).toEqual({ email: 'driver@example.test' });
-    request.flush({ message: 'Se aplicável, receberás instruções.' }, { status: 202, statusText: 'Accepted' });
+    expect(request.request.body).toEqual(payload);
+    request.flush({ requestId: 'registration-request', remainingSeconds: 300 }, { status: 202, statusText: 'Accepted' });
     expect(auth.getToken()).toBe('previous-token');
   });
 

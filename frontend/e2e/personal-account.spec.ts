@@ -14,15 +14,38 @@ test('FEAT-018 personal signup, verification, recovery and workspace isolation',
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/login'); await page.getByRole('link', { name: 'Criar conta', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Criar conta pessoal' })).toBeVisible();
-  await page.getByLabel('Email', { exact: true }).fill(email); await page.getByRole('button', { name: 'Pedir email', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Se o pedido for aplicável');
-  const verification = await proof('VERIFY');
-  await page.goto(`/verify-email#token=${verification}`); await expect(page).toHaveURL(/\/verify-email$/);
-  await page.getByLabel('Nova password', { exact: true }).fill(password); await page.getByLabel('Confirmar password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Confirmar password', exact: true }).click(); await expect(page.getByRole('status')).toContainText('Email confirmado');
-  await page.getByRole('link', { name: 'Voltar ao login' }).click(); await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByLabel('Email', { exact: true }).fill('typo-' + email);
+  await page.getByLabel('Nome', { exact: true }).fill('Érica de Ensaio');
+  await page.getByLabel('Data de nascimento', { exact: true }).fill('1992-02-29');
+  await page.getByLabel('Password', { exact: true }).fill(password); await page.getByLabel('Confirmar password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Enviar código de verificação', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Verifica o teu email' })).toBeVisible();
+  await expect(page.getByRole('timer')).toBeVisible();
+  await page.getByRole('button', { name: 'Corrigir email' }).click();
+  await page.getByLabel('Novo email').fill(email);
+  await page.getByRole('button', { name: 'Enviar código', exact: true }).click();
+  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  const verification = await proof('VERIFY_CODE');
+  await page.getByRole('button', { name: 'Reenviar código' }).click();
+  await expect(page.getByRole('status')).toContainText('Pediste um novo código');
+  await page.getByLabel('Código de verificação').fill(verification);
+  await page.getByRole('button', { name: 'Confirmar email' }).click();
+  await expect(page.getByRole('alert')).toContainText('Não foi possível confirmar o código');
+  await page.getByLabel('Código de verificação').fill(await proof('VERIFY_CODE'));
+  await page.getByRole('button', { name: 'Confirmar email' }).click();
+  await expect(page.getByRole('status')).toContainText('Email confirmado');
+  await expect(page).toHaveURL(/\/login$/);
+  expect(await proof('WELCOME')).toBe('');
+  await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click(); await expect(page).toHaveURL(/\/account$/);
   const account = page.locator('app-personal-account'); await expect(account).toContainText('Email verificado'); await expect(account).toContainText('Escolhe uma tripulação');
+  await expect(account.getByLabel('Nome', { exact: true })).toHaveValue('Érica de Ensaio');
+  await expect(account.getByLabel('Data de nascimento', { exact: true })).toHaveValue('1992-02-29');
+  await account.getByLabel('Nome', { exact: true }).fill('Érica Atualizada');
+  await account.getByRole('button', { name: 'Guardar dados pessoais' }).click();
+  await expect(account.getByText('Dados pessoais guardados.')).toBeVisible();
+  await page.reload();
+  await expect(account.getByLabel('Nome', { exact: true })).toHaveValue('Érica Atualizada');
   const oldToken = await page.evaluate(() => localStorage.getItem('recce_auth_token'));
   expect((await request.get(`${api}/api/rallies`, { headers: { Authorization: `Bearer ${oldToken}` } })).status()).toBe(403);
   await page.goto('/pecs'); await expect(page).toHaveURL(/\/account$/);
@@ -40,7 +63,7 @@ test('FEAT-018 personal signup, verification, recovery and workspace isolation',
   await page.getByRole('button', { name: 'Confirmar password', exact: true }).click(); await expect(page.getByRole('status')).toContainText('Password atualizada');
   expect((await request.get(`${api}/api/auth/validate`, { headers: { Authorization: `Bearer ${oldToken}` } })).status()).toBe(401);
   const reused = await request.post(`${api}/api/auth/password-reset/confirm`, { data: { token: recovery, password } }); expect(reused.status()).toBe(400);
-  await page.getByRole('link', { name: 'Voltar ao login' }).click(); await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('Email', { exact: true }).fill(email); await page.getByLabel('Password', { exact: true }).fill(replacement); await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page).toHaveURL(/\/account$/); await expect(account).toContainText('Email verificado');
 });
@@ -61,9 +84,14 @@ test('FEAT-027 transfers a crew and recovers a deactivated owner', async ({ page
     return messages.filter(item => item.purpose === purpose).at(-1)!.token;
   }
   async function signup(email: string) {
-    expect((await request.post(`${api}/api/auth/register`, { data: { email } })).status()).toBe(202);
-    const token = await proof(email, 'VERIFY');
-    expect((await request.post(`${api}/api/auth/verify-email`, { data: { token, password } })).status()).toBe(204);
+    const registration = await request.post(`${api}/api/auth/register`, { data: {
+      email, password, displayName: 'Conta de ensaio', dateOfBirth: '1990-02-28',
+    } });
+    expect(registration.status()).toBe(202);
+    const code = await proof(email, 'VERIFY_CODE');
+    expect((await request.post(`${api}/api/auth/registration/confirm`, { data: {
+      requestId: (await registration.json()).requestId, code,
+    } })).status()).toBe(204);
   }
   async function signIn(tab: typeof page, email: string) {
     await tab.goto('/login');
@@ -105,6 +133,7 @@ test('FEAT-027 transfers a crew and recovers a deactivated owner', async ({ page
     await other.getByLabel('Confirmar password', { exact: true }).fill(password);
     await other.getByRole('button', { name: 'Confirmar password', exact: true }).click();
     await expect(other.getByRole('status')).toContainText('Password atualizada');
+    await expect(other).toHaveURL(/\/login$/);
     await signIn(other, recipient);
     await expect(other.getByRole('button', { name: `Abrir tripulação ${name}` })).toBeVisible();
   } finally {

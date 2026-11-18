@@ -33,11 +33,14 @@ test('FEAT-022 owner invites an address before registration and the verified rea
   const mailbox = base + '/e2e/mailbox?email=' + encodeURIComponent(email);
   const headers = { 'X-E2E-Key': fixturePassword };
   expect(await (await request.get(mailbox, { headers })).json()).toEqual([]);
-  expect((await request.post(base + '/api/auth/register', { data: { email } })).status()).toBe(202);
+  const registration = await request.post(base + '/api/auth/register', {
+    data: { email, password, displayName: 'Leitor de ensaio', dateOfBirth: '1990-02-28' },
+  });
+  expect(registration.status()).toBe(202);
   const messages = await (await request.get(mailbox, { headers })).json() as { purpose: string; token: string }[];
-  expect(messages.map(message => message.purpose)).toEqual(['VERIFY']);
-  expect((await request.post(base + '/api/auth/verify-email', {
-    data: { token: messages[0].token, password },
+  expect(messages.map(message => message.purpose)).toEqual(['VERIFY_CODE']);
+  expect((await request.post(base + '/api/auth/registration/confirm', {
+    data: { requestId: (await registration.json()).requestId, code: messages[0].token },
   })).status()).toBe(204);
 
   const reader = await browser.newPage({ viewport: { width: 390, height: 850 } });

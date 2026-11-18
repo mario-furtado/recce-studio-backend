@@ -23,6 +23,11 @@ export interface AuthResponse {
   profile?: { id?: string } | null;
 }
 
+export interface RegistrationResponse {
+  requestId: string;
+  remainingSeconds: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -44,8 +49,16 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.apiUrl}/login`, payload).pipe(tap((response) => this.storeSession(response)));
   }
 
-  register(payload: Pick<AuthPayload, 'email'>): Observable<{ message: string }> {
-    return this.http.post<{ message: string }>(`${this.apiUrl}/register`, payload);
+  register(payload: Pick<AuthPayload, 'email' | 'password'> & { displayName: string; dateOfBirth: string }): Observable<RegistrationResponse> {
+    return this.http.post<RegistrationResponse>(`${this.apiUrl}/register`, payload);
+  }
+
+  resendRegistration(requestId: string, email?: string): Observable<RegistrationResponse> {
+    return this.http.post<RegistrationResponse>(`${this.apiUrl}/registration/resend`, { requestId, ...(email === undefined ? {} : { email }) });
+  }
+
+  confirmRegistration(requestId: string, code: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/registration/confirm`, { requestId, code });
   }
 
   enterOffline(): void {

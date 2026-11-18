@@ -40,12 +40,25 @@ public class SmtpAccountMailer implements AccountMailer {
         props.setProperty("mail.smtp.ssl.checkserveridentity", "true");
         props.setProperty("mail.smtp.connectiontimeout", "5000"); props.setProperty("mail.smtp.timeout", "5000"); props.setProperty("mail.smtp.writetimeout", "5000");
         props.setProperty("mail.debug", "false");
-        String base = env.getProperty("recce.account.public-base-url", "").replaceAll("/+$", "");
-        String route = "VERIFY".equals(purpose) ? "/verify-email" : "/reset-password";
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(env.getProperty("recce.account.mail-from")); message.setTo(email);
-        message.setSubject("VERIFY".equals(purpose) ? "Recce Studio — verificar email" : "Recce Studio — recuperar acesso");
-        message.setText("Foi pedido acesso para este endereço. Se foste tu, abre o link e define a tua password. O pedido só será aplicado se a conta estiver elegível. Se já tens conta, usa Recuperar acesso. Se não fizeste o pedido, ignora este email.\n\n" + base + route + "#token=" + token + "\n\nO link tem prazo e só pode ser usado uma vez. Nunca partilhes este link.");
+        String base = env.getProperty("recce.account.public-base-url", "").replaceAll("/+$", "");
+        switch (purpose) {
+            case "VERIFY_CODE":
+                message.setSubject("Recce Studio — código de verificação");
+                message.setText("Código de verificação: " + token
+                        + "\n\nO código é válido durante 5 minutos. Usa-o apenas na página onde iniciaste o teu registo. "
+                        + "Se não fizeste este pedido, ignora o email. Nunca partilhes o código.");
+                break;
+            case "WELCOME":
+                message.setSubject("Bem-vindo ao Recce Studio");
+                message.setText("O teu email foi confirmado e a tua conta está ativa.\n\nInicia sessão em " + base + "/login");
+                break;
+            default:
+                message.setSubject("Recce Studio — recuperar acesso");
+                message.setText("Foi pedido acesso para este endereço. Se foste tu, abre o link e define a tua password. O pedido só será aplicado se a conta estiver elegível. Se já tens conta, usa Recuperar acesso. Se não fizeste o pedido, ignora este email.\n\n"
+                        + base + "/reset-password#token=" + token + "\n\nO link tem prazo e só pode ser usado uma vez. Nunca partilhes este link.");
+        }
         sender.send(message);
     }
 }

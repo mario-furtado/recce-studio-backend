@@ -8,9 +8,14 @@ test.use({ launchOptions: {
 test('FEAT-019 / FEAT-026 isolates two crews and resumes offline audio in the original crew', async ({ page, request }) => {
   const api = 'http://127.0.0.1:18765';
   const email = `crew-${Date.now()}@example.invalid`, password = 'Crew-password-2026';
-  expect((await request.post(`${api}/api/auth/register`, { data: { email } })).status()).toBe(202);
+  const registration = await request.post(`${api}/api/auth/register`, { data: {
+    email, password, displayName: 'Conta de ensaio', dateOfBirth: '1990-02-28',
+  } });
+  expect(registration.status()).toBe(202);
   const mailbox = await (await request.get(`${api}/e2e/mailbox?email=${encodeURIComponent(email)}`, { headers: { 'X-E2E-Key': process.env['RECCE_E2E_PASSWORD']! } })).json() as { token: string }[];
-  expect((await request.post(`${api}/api/auth/verify-email`, { data: { token: mailbox[0].token, password } })).status()).toBe(204);
+  expect((await request.post(`${api}/api/auth/registration/confirm`, { data: {
+    requestId: (await registration.json()).requestId, code: mailbox[0].token,
+  } })).status()).toBe(204);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.context().grantPermissions(['geolocation']);
   await page.context().setGeolocation({ latitude: 38.7, longitude: -9.1 });
